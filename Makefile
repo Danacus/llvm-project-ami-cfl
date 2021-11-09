@@ -60,7 +60,7 @@ configure:
 	cd $(BUILDDIR_LLVM) && $(CMAKE) $(CMAKE_FLAGS_LLVM) $(SRCDIR_LLVM)
 
 .PHONY: build
-build: configure
+build:
 ifneq ($(CMAKE_GENERATOR), Ninja)
 	$(CMAKE) --build $(BUILDDIR_LLVM) -- -j$(JOBS)
 else
