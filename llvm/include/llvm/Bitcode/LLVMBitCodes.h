@@ -711,11 +711,8 @@ enum AttributeKindCodes {
   ATTR_KIND_PRESPLIT_COROUTINE = 83,
   ATTR_KIND_FNRETTHUNK_EXTERN = 84,
   ATTR_KIND_SKIP_PROFILE = 85,
-<<<<<<< HEAD
   ATTR_KIND_MEMORY = 86,
-=======
-  ATTR_KIND_SECRET = 86,
->>>>>>> d772325c98e4 (Add parameter attribute: secret)
+  ATTR_KIND_SECRET = 87,
 };
 
 enum ComdatSelectionKindCodes {

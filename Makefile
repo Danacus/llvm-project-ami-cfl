@@ -69,4 +69,4 @@ endif
 
 .PHONY: install
 install: build
-	$(CMAKE) --build $(BUILDDIR_SLLVM) --target install
+	$(CMAKE) --build $(BUILDDIR_LLVM) --target install
