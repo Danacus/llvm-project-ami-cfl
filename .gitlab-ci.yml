@@ -2,6 +2,8 @@ image: gcc
 
 build:
   stage: build 
+  only:
+    - schedules
   before_script:
      - apt update && apt -y install make cmake
   script:
@@ -17,5 +19,7 @@ build:
 # run tests using the binary built before
 test:
   stage: test
+  only:
+    - schedules
   script:
     - echo
