@@ -7,6 +7,7 @@ build:
   before_script:
      - apt update && apt -y install make cmake
   script:
+    - make configure
     - make build
   artifacts:
     paths:
