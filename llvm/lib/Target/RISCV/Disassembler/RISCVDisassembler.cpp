@@ -438,7 +438,8 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
   DecodeStatus Result;
 
   // It's a 32 bit instruction if bit 0 and 1 are 1.
-  if ( ((Bytes[0] & 0x3) == 0x3) || ((Bytes[0] & 0x1) == 0x1) ) {
+  //if ( ((Bytes[0] & 0x3) == 0x3) )
+  if ( true ) {
     if (Bytes.size() < 4) {
       Size = 0;
       return MCDisassembler::Fail;

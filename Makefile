@@ -70,3 +70,12 @@ endif
 .PHONY: install
 install: build
 	$(CMAKE) --build $(BUILDDIR_LLVM) --target install
+
+.PHONY: clean
+clean:
+	#$(RM) $(BUILDDIR)
+
+.PHONY: realclean
+realclean:
+	$(RM) $(BUILDDIR)
+	$(RM) $(INSTALLDIR)
