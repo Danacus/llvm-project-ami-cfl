@@ -5,7 +5,7 @@ build:
   only:
     - schedules
   before_script:
-     - apt update && apt -y install make cmake ninja-build
+     - apt update && apt -y install make cmake ninja-build gcc-multilib
   script:
     - mkdir build
     - mkdir install
