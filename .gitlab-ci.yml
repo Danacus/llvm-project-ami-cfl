@@ -5,10 +5,14 @@ build:
   only:
     - schedules
   before_script:
-     - apt update && apt -y install make cmake
+     - apt update && apt -y install make cmake ninja-build
   script:
-    - make configure
-    - make build
+    - mkdir build
+    - mkdir install
+    - cd build
+    - cmake -DCMAKE_INSTALL_PREFIX=../install -G Ninja -C ../clang/cmake/caches/DistributionExample.cmake ../llvm
+    - ninja stage2-distribution
+    - ninja stage2-install-distribution
   artifacts:
     paths:
       #- mybinary
