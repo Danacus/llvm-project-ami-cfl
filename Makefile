@@ -123,7 +123,7 @@ dist-deb: dist-install
 
 .PHONY: dist
 dist:
-$(MAKE) dist-install-deps
+	$(MAKE) dist-install-deps
 	$(MAKE) dist-configure-build
 	$(MAKE) dist-build
 	$(MAKE) dist-install
