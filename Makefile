@@ -7,7 +7,7 @@ MAKEFILE_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 BUILD_TYPE ?= Release # One of (Debug, Release)
 JOBS       ?= 1
 
-PACKAGE ?= morpheus-llvm
+PACKAGE ?= morpheus
 
 BUILDDIR     ?= $(MAKEFILE_DIR)build
 INSTALLDIR   ?= $(MAKEFILE_DIR)$(PACKAGE)
@@ -62,6 +62,8 @@ DIST_CMAKE_FLAGS_LLVM =
 DIST_CMAKE_FLAGS_LLVM += -G "$(strip $(CMAKE_GENERATOR))"
 DIST_CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(DISTINSTALLDIR)
 DIST_CMAKE_FLAGS_LLVM += -C $(SRCDIR_CLANG)/cmake/caches/DistributionExample.cmake
+DIST_CMAKE_FLAGS_LLVM += -S $(SRCDIR_LLVM)
+DIST_CMAKE_FLAGS_LLVM += -B $(DISTBUILDDIR_LLVM)
 
 #############################################################################
 
@@ -74,7 +76,7 @@ all:
 .PHONY: configure
 configure:
 	$(MKDIR) $(BUILDDIR_LLVM)
-	$(CMAKE) $(CMAKE_FLAGS_LLVM) $(SRCDIR_LLVM)
+	$(CMAKE) $(CMAKE_FLAGS_LLVM)
 
 .PHONY: build
 build:
