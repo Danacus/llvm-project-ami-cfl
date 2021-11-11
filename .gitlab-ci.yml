@@ -5,11 +5,12 @@ build:
   only:
     - schedules
   before_script:
-     - apt update && apt -y install make cmake ninja-build gcc-multilib
+     - apt update && apt -y install make cmake ninja-build gcc-multilib lsb-release
   script:
-     - make dist-configure
-     - make dist-build
-     - make dist-install
+    echo
+     #- make dist-configure
+     #- make dist-build
+     #- make dist-install
   artifacts:
     paths:
       #- mybinary
