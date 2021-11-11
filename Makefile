@@ -16,6 +16,7 @@ CMAKE_GENERATOR ?= Unix Makefiles # One of (Unix Makefiles, Ninja)
 
 MKDIR = mkdir -p
 CMAKE = cmake
+NICE = nice
 
 #############################################################################
 
@@ -64,9 +65,9 @@ configure:
 .PHONY: build
 build:
 ifneq ($(CMAKE_GENERATOR), Ninja)
-	$(CMAKE) --build $(BUILDDIR_LLVM) -- -j$(JOBS)
+	$(NICE) $(CMAKE) --build $(BUILDDIR_LLVM) -- -j$(JOBS)
 else
-	$(CMAKE) --build $(BUILDDIR_LLVM)
+	$(NICE) $(CMAKE) --build $(BUILDDIR_LLVM)
 endif
 
 .PHONY: install
