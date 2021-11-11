@@ -5,11 +5,11 @@ build:
   only:
     - schedules
   before_script:
-     - apt update
+     - apt-get update
      # Prevent interactive prompt when installing tzdata
-     - DEBIAN_FRONTEND=noninteractive apt -y install tzdata
+     - DEBIAN_FRONTEND=noninteractive apt-get -y install tzdata
      # Install essential build tools
-     - apt -y install build-essential
+     - apt-get -y install build-essential
   script:
      - make dist-deps
      - make dist-configure
