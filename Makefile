@@ -23,6 +23,7 @@ CMAKE_GENERATOR ?= Unix Makefiles # One of (Unix Makefiles, Ninja)
 MKDIR = mkdir -p
 CMAKE = cmake
 NICE = nice
+APT = apt -y
 
 #############################################################################
 
@@ -35,6 +36,12 @@ SRCDIR_CLANG  = $(MAKEFILE_DIR)clang
 BUILDDIR_LLVM = $(BUILDDIR)/llvm
 
 DISTBUILDDIR_LLVM = $(DISTBUILDDIR)/llvm
+
+DISTDEPS =
+DISTDEPS += cmake
+DISTDEPS += ninja-build
+DISTDEPS += gcc-multilib
+DISTDEPS += python3
 
 CMAKE_FLAGS_LLVM += -G "$(strip $(CMAKE_GENERATOR))"
 CMAKE_FLAGS_LLVM += -S $(SRCDIR_LLVM)
@@ -89,6 +96,10 @@ endif
 .PHONY: install
 install: build
 	$(CMAKE) --build $(BUILDDIR_LLVM) --target install
+
+.PHONY: dist-deps
+dist-deps:
+	$(APT) $(DISTDEPS)
 
 .PHONY: dist-configure
 dist-configure:
