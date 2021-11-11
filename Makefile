@@ -14,7 +14,7 @@ INSTALLDIR   ?= $(MAKEFILE_DIR)$(PACKAGE)
 
 DISTDIR        ?= $(MAKEFILE_DIR)dist
 DISTBUILDDIR   ?= $(DISTDIR)/build
-DISTINSTALLDIR ?= $(DISTDIR)/$(PACKAGE)
+DISTINSTALLDIR ?= $(DISTDIR)/$(PACKAGE)/usr/local/$(PACKAGE)
 
 CMAKE_GENERATOR ?= Unix Makefiles # One of (Unix Makefiles, Ninja)
 
@@ -112,6 +112,12 @@ dist-build:
 .PHONY: dist-install
 dist-install: dist-build
 	$(CMAKE) --build $(DISTBUILDDIR_LLVM) --target stage2-install-distribution
+
+.PHONY: dist
+	$(MAKE) dist-deps:
+	$(MAKE) dist-configure:
+	$(MAKE) dist-build:
+	$(MAKE) dist-install: dist-build
 
 .PHONY: clean
 clean:
