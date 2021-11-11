@@ -5,6 +5,7 @@ build:
   only:
     - schedules
   before_script:
+     - DEBIAN_FRONTEND=noninteractive
      - apt update
      - apt -y install build-essential cmake gcc-multilib
   script:
