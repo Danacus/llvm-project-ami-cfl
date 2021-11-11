@@ -8,9 +8,9 @@ build:
      - apt update && apt -y install make cmake ninja-build gcc-multilib
   script:
     - mkdir build
-    - mkdir install
+    - mkdir morpheus-llvm
     - cd build
-    - cmake -DCMAKE_INSTALL_PREFIX=../install -G Ninja -C ../clang/cmake/caches/DistributionExample.cmake ../llvm
+    - cmake -DCMAKE_INSTALL_PREFIX=../morpheus-llvm -G Ninja -C ../clang/cmake/caches/DistributionExample.cmake ../llvm
     - ninja stage2-distribution
     - ninja stage2-install-distribution
   artifacts:
