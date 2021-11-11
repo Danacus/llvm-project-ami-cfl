@@ -5,7 +5,7 @@ build:
   only:
     - schedules
   before_script:
-     - apt update && apt -y install make cmake ninja-build gcc-multilib lsb-release
+     - apt update && apt -y install make cmake ninja-build gcc-multilib
   script:
     echo
      #- make dist-configure
@@ -24,5 +24,7 @@ test:
   stage: test
   only:
     - schedules
+   before_script:
+    - apt update && apt -y install lsb-release
   script:
     - lsb_release -a
