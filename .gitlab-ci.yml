@@ -8,8 +8,9 @@ build:
      - apt update
      # Prevent interactive prompt when installing tzdata
      - DEBIAN_FRONTEND=noninteractive apt -y install tzdata
-     - apt -y install build-essential cmake ninja-build gcc-multilib
+     - apt -y install build-essential
   script:
+     - make dist-deps
      - make dist-configure
      - make dist-build
      - make dist-install
