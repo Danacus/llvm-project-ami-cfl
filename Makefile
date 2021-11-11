@@ -117,6 +117,7 @@ dist-install: dist-build
 .PHONY: dist-deb
 dist-deb: dist-install
 	$(MKDIR) $(DISTDIR)/$(PACKAGE)/DEBIAN
+	chmod g+w $(DISTDIR)/$(PACKAGE)/DEBIAN
 	cp control $(DISTDIR)/$(PACKAGE)/DEBIAN
 	cd $(DISTDIR) && dpkg-deb --build $(PACKAGE)
 
