@@ -23,7 +23,6 @@ CMAKE_GENERATOR ?= Unix Makefiles # One of (Unix Makefiles, Ninja)
 MKDIR = mkdir -p
 CMAKE = cmake
 NICE = nice
-APT = apt-get -y
 
 #############################################################################
 
@@ -99,7 +98,7 @@ install: build
 
 .PHONY: dist-deps
 dist-deps:
-	$(APT) $(DISTDEPS)
+	apt-get -y install $(DISTDEPS)
 
 .PHONY: dist-configure
 dist-configure:
