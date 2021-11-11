@@ -6,7 +6,7 @@ build:
     - schedules
   before_script:
      - apt update
-     - apt -y install build-essential gcc-multilib
+     - apt -y install build-essential cmake gcc-multilib
   script:
      - make dist-configure
      - make dist-build
