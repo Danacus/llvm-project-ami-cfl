@@ -24,7 +24,7 @@ test:
   stage: test
   only:
     - schedules
-   before_script:
+  before_script:
     - apt update && apt -y install lsb-release
   script:
     - lsb_release -a
