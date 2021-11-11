@@ -24,4 +24,4 @@ test:
   only:
     - schedules
   script:
-    - echo
+    - lsb_release -a
