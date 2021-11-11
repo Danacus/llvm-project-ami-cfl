@@ -8,6 +8,7 @@ build:
      - apt update
      # Prevent interactive prompt when installing tzdata
      - DEBIAN_FRONTEND=noninteractive apt -y install tzdata
+     # Install essential build tools
      - apt -y install build-essential
   script:
      - make dist-deps
