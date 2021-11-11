@@ -41,6 +41,7 @@ DISTDEPS += cmake
 DISTDEPS += ninja-build
 DISTDEPS += gcc-multilib
 DISTDEPS += python3
+DISTDEPS += python3-distutils
 
 CMAKE_FLAGS_LLVM += -G "$(strip $(CMAKE_GENERATOR))"
 CMAKE_FLAGS_LLVM += -S $(SRCDIR_LLVM)
