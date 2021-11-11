@@ -114,6 +114,7 @@ dist-install: dist-build
 	$(CMAKE) --build $(DISTBUILDDIR_LLVM) --target stage2-install-distribution
 
 .PHONY: dist
+dist:
 	$(MAKE) dist-deps:
 	$(MAKE) dist-configure:
 	$(MAKE) dist-build:
