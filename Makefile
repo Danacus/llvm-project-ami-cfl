@@ -108,7 +108,7 @@ dist-configure-build:
 
 .PHONY: dist-build
 dist-build:
-	$(CMAKE) --build $(DISTBUILDDIR_LLVM) --target stage2-distribution
+	$(NICE) $(CMAKE) --build $(DISTBUILDDIR_LLVM) --target stage2-distribution
 
 .PHONY: dist-install
 dist-install: dist-build
@@ -117,13 +117,13 @@ dist-install: dist-build
 .PHONY: dist-deb
 dist-deb: dist-install
 	$(MKDIR) $(DISTDIR)/$(PACKAGE)/DEBIAN
-	chmod g+w $(DISTDIR)/$(PACKAGE)/DEBIAN
+	chmod g-s $(DISTDIR)/$(PACKAGE)/DEBIAN
 	cp control $(DISTDIR)/$(PACKAGE)/DEBIAN
 	cd $(DISTDIR) && dpkg-deb --build $(PACKAGE)
 
 .PHONY: dist
 dist:
-	$(MAKE) dist-install-deps
+$(MAKE) dist-install-deps
 	$(MAKE) dist-configure-build
 	$(MAKE) dist-build
 	$(MAKE) dist-install
