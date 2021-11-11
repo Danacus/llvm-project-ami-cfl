@@ -79,8 +79,8 @@ all:
 	@echo JOBS=$(JOBS)
 	@echo CMAKE_GENERATOR=$(CMAKE_GENERATOR)
 
-.PHONY: configure
-configure:
+.PHONY: configure-build
+configure-build:
 	$(MKDIR) $(BUILDDIR_LLVM)
 	$(CMAKE) $(CMAKE_FLAGS_LLVM)
 
@@ -96,12 +96,12 @@ endif
 install: build
 	$(CMAKE) --build $(BUILDDIR_LLVM) --target install
 
-.PHONY: dist-deps
-dist-deps:
+.PHONY: dist-install-deps
+dist-install-deps:
 	apt-get -y install $(DISTDEPS)
 
-.PHONY: dist-configure
-dist-configure:
+.PHONY: dist-configure-build
+dist-configure-build:
 	$(MKDIR) $(DISTBUILDDIR)
 	$(CMAKE) $(DIST_CMAKE_FLAGS_LLVM) $(SRCDIR_LLVM)
 
@@ -115,10 +115,10 @@ dist-install: dist-build
 
 .PHONY: dist
 dist:
-	$(MAKE) dist-deps:
-	$(MAKE) dist-configure:
-	$(MAKE) dist-build:
-	$(MAKE) dist-install: dist-build
+	$(MAKE) dist-deps
+	$(MAKE) dist-configure-build
+	$(MAKE) dist-build
+	$(MAKE) dist-install
 
 .PHONY: clean
 clean:
