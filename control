@@ -1,0 +1,5 @@
+Package: morpheus
+Version: 0.1
+Maintainer: Hans Winderix
+Architecture: all
+Description: Morpheus toolchain
