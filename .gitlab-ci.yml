@@ -5,8 +5,9 @@ build:
   only:
     - schedules
   before_script:
-     - DEBIAN_FRONTEND=noninteractive
      - apt update
+     # Prevent interactive prompt when installing tzdata
+     - DEBIAN_FRONTEND=noninteractive apt -y install tzdata
      - apt -y install build-essential cmake gcc-multilib
   script:
      - make dist-configure
