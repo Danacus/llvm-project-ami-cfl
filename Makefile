@@ -23,7 +23,7 @@ CMAKE_GENERATOR ?= Unix Makefiles # One of (Unix Makefiles, Ninja)
 MKDIR = mkdir -p
 CMAKE = cmake
 NICE = nice
-APT = apt -y
+APT = apt-get -y
 
 #############################################################################
 
