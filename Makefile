@@ -115,7 +115,7 @@ dist-install: dist-build
 
 .PHONY: dist
 dist:
-	$(MAKE) dist-deps
+	$(MAKE) dist-install-deps
 	$(MAKE) dist-configure-build
 	$(MAKE) dist-build
 	$(MAKE) dist-install
