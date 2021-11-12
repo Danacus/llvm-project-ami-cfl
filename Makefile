@@ -4,20 +4,20 @@ CMAKE_FLAGS_LLVM =
 
 MAKEFILE_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-BUILD_TYPE ?= Release # One of (Debug, Release)
+BUILD_TYPE ?= Release
 JOBS       ?= 1
 
 PACKAGE ?= morpheus
 
 BUILDDIR     ?= $(MAKEFILE_DIR)build
-INSTALLDIR   ?= $(MAKEFILE_DIR)$(PACKAGE)
+INSTALLDIR   ?= $(MAKEFILE_DIR)install
 
 DISTDIR        ?= $(MAKEFILE_DIR)dist
 DISTBUILDDIR   ?= $(DISTDIR)/build
 DISTINSTALLDIR ?= $(DISTDIR)/$(PACKAGE)/usr/local/$(PACKAGE)
 
-CMAKE_GENERATOR ?= Unix Makefiles # One of (Unix Makefiles, Ninja)
-
+CMAKE_GENERATOR ?= Ninja
+ 
 #############################################################################
 
 MKDIR = mkdir -p
@@ -43,34 +43,29 @@ DISTDEPS += gcc-multilib
 DISTDEPS += python3
 DISTDEPS += python3-distutils
 
-CMAKE_FLAGS_LLVM += -G "$(strip $(CMAKE_GENERATOR))"
+CMAKE_FLAGS_LLVM += -G "$(CMAKE_GENERATOR)"
 CMAKE_FLAGS_LLVM += -S $(SRCDIR_LLVM)
-CMAKE_FLAGS_LLVM += -B $(BUILDDIR_LLVM)
 ifeq ($(CMAKE_GENERATOR), Ninja)
 CMAKE_FLAGS_LLVM += -DLLVM_PARALLEL_COMPILE_JOBS=$(JOBS)
 CMAKE_FLAGS_LLVM += -DLLVM_PARALLEL_LINK_JOBS=2
 endif
-CMAKE_FLAGS_LLVM += -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
-CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(INSTALLDIR)
-CMAKE_FLAGS_LLVM += -DLLVM_TARGETS_TO_BUILD="RISCV"
+CMAKE_FLAGS_LLVM += -DLLVM_TARGETS_TO_BUILD=RISCV
 CMAKE_FLAGS_LLVM += -DLLVM_ENABLE_PROJECTS="llvm;clang;lld"
 CMAKE_FLAGS_LLVM += -DLLVM_USE_LINKER=gold
 CMAKE_FLAGS_LLVM += -DLLVM_ENABLE_PLUGINS=ON
 CMAKE_FLAGS_LLVM += -DLLVM_USE_NEWPM=OFF
 
-#CMAKE_FLAGS_LLVM += -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-#CMAKE_FLAGS_LLVM += -DLLVM_ENABLE_ASSERTIONS=ON
-#CMAKE_FLAGS_LLVM += -DLLVM_CCACHE_BUILD=ON
-#For DEBUG builds, use shared libs, unless you have a lot of memory
-#CMAKE_FLAGS_LLVM += -DBUILD_SHARED_LIBS=ON
-#CMAKE_FLAGS_LLVM += -DLLVM_BUILD_LLVM_DYLIB=ON
+DEV_CMAKE_FLAGS_LLVM = $(CMAKE_FLAGS_LLVM)
+DEV_CMAKE_FLAGS_LLVM += -B $(BUILDDIR_LLVM)
+DEV_CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(INSTALLDIR)
+DEV_CMAKE_FLAGS_LLVM += -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 
-DIST_CMAKE_FLAGS_LLVM =
-DIST_CMAKE_FLAGS_LLVM += -G Ninja
-DIST_CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(DISTINSTALLDIR)
-DIST_CMAKE_FLAGS_LLVM += -C $(SRCDIR_CLANG)/cmake/caches/Morpheus.cmake
-DIST_CMAKE_FLAGS_LLVM += -S $(SRCDIR_LLVM)
+DIST_CMAKE_FLAGS_LLVM = $(CMAKE_FLAGS_LLVM)
 DIST_CMAKE_FLAGS_LLVM += -B $(DISTBUILDDIR_LLVM)
+DIST_CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(DISTINSTALLDIR)
+DIST_CMAKE_FLAGS_LLVM += -DCMAKE_BUILD_TYPE=Release
+DIST_CMAKE_FLAGS_LLVM += -DLLVM_DISTRIBUTION_COMPONENTS="clang;lld;llvm-objdump"
+DIST_CMAKE_FLAGS_LLVM += -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON
 
 #############################################################################
 
@@ -83,7 +78,7 @@ all:
 .PHONY: configure-build
 configure-build:
 	$(MKDIR) $(BUILDDIR_LLVM)
-	$(CMAKE) $(CMAKE_FLAGS_LLVM)
+	$(CMAKE) $(DEV_CMAKE_FLAGS_LLVM)
 
 .PHONY: build
 build:
@@ -94,7 +89,7 @@ else
 endif
 
 .PHONY: install
-install: build
+install:
 	$(CMAKE) --build $(BUILDDIR_LLVM) --target install
 
 .PHONY: dist-install-deps
@@ -108,17 +103,17 @@ dist-configure-build:
 
 .PHONY: dist-build
 dist-build:
-	$(NICE) $(CMAKE) --build $(DISTBUILDDIR_LLVM) --target stage2-distribution
+	$(NICE) $(CMAKE) --build $(DISTBUILDDIR_LLVM)
 
 .PHONY: dist-install
-dist-install: dist-build
-	$(CMAKE) --build $(DISTBUILDDIR_LLVM) --target stage2-install-distribution
+dist-install:
+	$(CMAKE) --build $(DISTBUILDDIR_LLVM) --target install-distribution
 
 .PHONY: dist-deb
 dist-deb: dist-install
 	$(MKDIR) $(DISTDIR)/$(PACKAGE)/DEBIAN
 	chmod g-s $(DISTDIR)/$(PACKAGE)/DEBIAN
-	cp control $(DISTDIR)/$(PACKAGE)/DEBIAN
+	cp morpheus/control $(DISTDIR)/$(PACKAGE)/DEBIAN
 	cd $(DISTDIR) && dpkg-deb --build $(PACKAGE)
 
 .PHONY: dist

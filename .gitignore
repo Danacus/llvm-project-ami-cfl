@@ -75,5 +75,5 @@ pythonenv*
 # Morpheus specific ignores
 #==============================================================================#
 Makefile.local
-morpheus
+install
 dist
