@@ -504,7 +504,37 @@ class BranchCC_rri<bits<3> funct3, string opcodestr>
   let isTerminator = 1;
 }
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+class ABranchCC_rri<bits<3> funct3, string opcodestr>
+    : RVInstB<funct3, OPC_ABRANCH, (outs),
+              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
+              opcodestr, "$rs1, $rs2, $imm12">,
+      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
+  let isBranch = 1;
+  let isTerminator = 1;
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+class IBranchCC_rri<bits<3> funct3, string opcodestr>
+    : RVInstB<funct3, OPC_IBRANCH, (outs),
+              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
+              opcodestr, "$rs1, $rs2, $imm12">,
+      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
+  let isBranch = 1;
+  let isTerminator = 1;
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+class DBranchCC_rri<bits<3> funct3, string opcodestr>
+    : RVInstB<funct3, OPC_DBRANCH, (outs),
+              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
+              opcodestr, "$rs1, $rs2, $imm12">,
+      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
+  let isBranch = 1;
+  let isTerminator = 1;
+}
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 class Load_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd), (ins GPRMem:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
@@ -552,8 +582,8 @@ class GALU_ri<bits<3> funct3, string opcodestr>
       Sched<[WriteIALU, ReadIALU]>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class EALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_EIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+class PALU_ri<bits<3> funct3, string opcodestr>
+    : RVInstI<funct3, OPC_OP_PIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, $rs1, $imm12">,
       Sched<[WriteIALU, ReadIALU]>;
 
@@ -634,9 +664,23 @@ def JALR : RVInstI<0b000, OPC_JALR, (outs GPR:$rd),
                    (ins GPR:$rs1, simm12:$imm12),
                    "jalr", "$rd, ${imm12}(${rs1})">,
            Sched<[WriteJalr, ReadJalr]>;
+
+let isCall = 1 in
+def MJAL : RVInstJ<OPC_MJAL, (outs GPR:$rd), (ins simm21_lsb0_jal:$imm20),
+                  "m.jal", "$rd, $imm20">, Sched<[WriteJal]>;
+
+let isCall = 1 in
+def MJALR : RVInstI<0b000, OPC_MJALR, (outs GPR:$rd),
+                   (ins GPR:$rs1, simm12:$imm12),
+                   "m.jalr", "$rd, ${imm12}(${rs1})">,
+           Sched<[WriteJalr, ReadJalr]>;
+
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
 def BEQ  : BranchCC_rri<0b000, "beq">;
+def ABEQ : ABranchCC_rri<0b000, "a.beq">;
+def IBEQ : IBranchCC_rri<0b000, "i.beq">;
+def DBEQ : DBranchCC_rri<0b000, "d.beq">;
 def BNE  : BranchCC_rri<0b001, "bne">;
 def BLT  : BranchCC_rri<0b100, "blt">;
 def BGE  : BranchCC_rri<0b101, "bge">;
@@ -661,7 +705,7 @@ let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def ADDI  : ALU_ri<0b000, "addi">;
 def MADDI : MALU_ri<0b000, "m.addi">;
 def GADDI : GALU_ri<0b000, "g.addi">;
-def EADDI : EALU_ri<0b000, "e.addi">;
+def PADDI : PALU_ri<0b000, "p.addi">;
 
 let IsSignExtendingOpW = 1 in {
 def SLTI  : ALU_ri<0b010, "slti">;
@@ -1885,3 +1929,9 @@ include "RISCVInstrInfoZicbo.td"
 
 include "RISCVInstrInfoXVentana.td"
 include "RISCVInstrInfoXTHead.td"
+
+//===----------------------------------------------------------------------===//
+// Non-standard extensions
+//===----------------------------------------------------------------------===//
+
+//include "RISCVInstrInfoXMimicry.td"

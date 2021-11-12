@@ -11,7 +11,7 @@ build:
      # Install essential build tools
      - apt-get -y install build-essential
   script:
-     - make dist
+     - make JOBS= dist
   artifacts:
     paths:
       - dist/morpheus.deb
