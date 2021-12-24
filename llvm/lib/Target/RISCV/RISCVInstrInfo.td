@@ -504,25 +504,17 @@ class BranchCC_rri<bits<3> funct3, string opcodestr>
   let isTerminator = 1;
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class ABranchCC_rri<bits<3> funct3, string opcodestr>
-    : RVInstB<funct3, OPC_ABRANCH, (outs),
-              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
-              opcodestr, "$rs1, $rs2, $imm12">,
-      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
-  let isBranch = 1;
-  let isTerminator = 1;
-}
-
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
 class Load_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd), (ins GPRMem:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-class PLoad_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
+class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
+    : RVInstR<funct7, 0b100, OPC_SYSTEM, (outs GPR:$rd),
+              (ins GPRMemZeroOffset:$rs1), opcodestr, "$rd, $rs1"> {
+  let rs2 = funct5;
+}
+}
 
 // Operands for stores are in the order srcreg, base, offset rather than
 // reflecting the order these fields are specified in the instruction
@@ -544,24 +536,6 @@ class HStore_rr<bits<7> funct7, string opcodestr>
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class ALU_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_OP_IMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class MALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_MIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class GALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_GIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class PALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_PIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, $rs1, $imm12">,
       Sched<[WriteIALU, ReadIALU]>;
 
@@ -633,10 +607,6 @@ def LUI : RVInstU<OPC_LUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
 def AUIPC : RVInstU<OPC_AUIPC, (outs GPR:$rd), (ins uimm20_auipc:$imm20),
                     "auipc", "$rd, $imm20">, Sched<[WriteIALU]>;
 
-def MARK : RVInstI<0b000, OPC_MARK, (outs),
-                   (ins simm12:$imm12),
-                   "mark", "${imm12}">, Sched<[]>;
-
 let isCall = 1 in
 def JAL : RVInstJ<OPC_JAL, (outs GPR:$rd), (ins simm21_lsb0_jal:$imm20),
                   "jal", "$rd, $imm20">, Sched<[WriteJal]>;
@@ -646,23 +616,10 @@ def JALR : RVInstI<0b000, OPC_JALR, (outs GPR:$rd),
                    (ins GPR:$rs1, simm12:$imm12),
                    "jalr", "$rd, ${imm12}(${rs1})">,
            Sched<[WriteJalr, ReadJalr]>;
-
-let isCall = 1 in
-def AJAL : RVInstJ<OPC_AJAL, (outs GPR:$rd), (ins simm21_lsb0_jal:$imm20),
-                  "a.jal", "$rd, $imm20">, Sched<[WriteJal]>;
-
-let isCall = 1 in
-def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
-                   (ins GPR:$rs1, simm12:$imm12),
-                   "a.jalr", "$rd, ${imm12}(${rs1})">,
-           Sched<[WriteJalr, ReadJalr]>;
-
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
 def BEQ  : BranchCC_rri<0b000, "beq">;
-def ABEQ : ABranchCC_rri<0b000, "a.beq">;
 def BNE  : BranchCC_rri<0b001, "bne">;
-def ABNE : ABranchCC_rri<0b001, "a.bne">;
 def BLT  : BranchCC_rri<0b100, "blt">;
 def BGE  : BranchCC_rri<0b101, "bge">;
 def BLTU : BranchCC_rri<0b110, "bltu">;
@@ -672,7 +629,6 @@ let IsSignExtendingOpW = 1 in {
 def LB  : Load_ri<0b000, "lb">, Sched<[WriteLDB, ReadMemBase]>;
 def LH  : Load_ri<0b001, "lh">, Sched<[WriteLDH, ReadMemBase]>;
 def LW  : Load_ri<0b010, "lw">, Sched<[WriteLDW, ReadMemBase]>;
-def PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
 def LBU : Load_ri<0b100, "lbu">, Sched<[WriteLDB, ReadMemBase]>;
 def LHU : Load_ri<0b101, "lhu">, Sched<[WriteLDH, ReadMemBase]>;
 }
@@ -685,9 +641,6 @@ def SW : Store_rri<0b010, "sw">, Sched<[WriteSTW, ReadStoreData, ReadMemBase]>;
 // a hint which is verified in isReallyTriviallyReMaterializable.
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def ADDI  : ALU_ri<0b000, "addi">;
-def MADDI : MALU_ri<0b000, "m.addi">;
-def GADDI : GALU_ri<0b000, "g.addi">;
-def PADDI : PALU_ri<0b000, "p.addi">;
 
 let IsSignExtendingOpW = 1 in {
 def SLTI  : ALU_ri<0b010, "slti">;
@@ -1919,4 +1872,4 @@ include "RISCVInstrInfoXTHead.td"
 def : InstAlias<"emm $offset",
                 (ABEQ X0, X0, simm13_lsb0:$offset)>;
 
-//include "RISCVInstrInfoXMimicry.td"
+include "RISCVInstrInfoXAMi.td"

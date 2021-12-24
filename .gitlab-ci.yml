@@ -11,6 +11,9 @@ build:
      # Install essential build tools
      - apt-get -y install build-essential
   script:
+     # Message from ICTS: CPU limit is implemented by using kernel throttling,
+     # so it’s imported to correctly set the maximum number of threats in the
+     # CI/CD jobs, otherwise the response-time will slow down.
      - make JOBS=10 dist
   artifacts:
     paths:
