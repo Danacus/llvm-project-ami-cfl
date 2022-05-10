@@ -70,8 +70,12 @@ def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
            Sched<[WriteJalr, ReadJalr]>;
 }
 
-def ABEQ : ABranchCC_rri<0b000, "a.beq">;
-def ABNE : ABranchCC_rri<0b001, "a.bne">;
+def ABEQ  : ABranchCC_rri<0b000, "a.beq">;
+def ABNE  : ABranchCC_rri<0b001, "a.bne">;
+def ABLT  : ABranchCC_rri<0b100, "a.blt">;
+def ABGE  : ABranchCC_rri<0b101, "a.bge">;
+def ABLTU : ABranchCC_rri<0b110, "a.bltu">;
+def ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
 
 def PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
 
