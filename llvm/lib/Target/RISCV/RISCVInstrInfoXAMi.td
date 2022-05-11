@@ -12,6 +12,7 @@ def OPC_PLOAD     : RISCVOpcode<"PLOAD",     0b0000010>;
 def OPC_OP_GIMM   : RISCVOpcode<"OP_GIMM",   0b0010000>;
 def OPC_OP_MIMM   : RISCVOpcode<"OP_MIMM",   0b0010001>;
 def OPC_OP_PIMM   : RISCVOpcode<"OP_PIMM",   0b0010010>;
+def OPC_OPM       : RISCVOpcode<"OPM",       0b0110001>;
 def OPC_ABRANCH   : RISCVOpcode<"ABRANCH",   0b1100001>;
 def OPC_AJALR     : RISCVOpcode<"AJALR",     0b1100101>;
 def OPC_AJAL      : RISCVOpcode<"AJAL",      0b1101101>;
@@ -54,6 +55,15 @@ class PALU_ri<bits<3> funct3, string opcodestr>
               opcodestr, "$rd, $rs1, $imm12">,
       Sched<[WriteIALU, ReadIALU]>;
 
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+class MALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
+             bit Commutable = 0>
+    : RVInstR<funct7, funct3, OPC_OPM, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+              opcodestr, "$rd, $rs1, $rs2"> {
+  let isCommutable = Commutable;
+}
+
+
 //===----------------------------------------------------------------------===//
 // Instructions
 //===----------------------------------------------------------------------===//
@@ -79,9 +89,14 @@ def ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
 
 def PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
 
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def MADDI : MALU_ri<0b000, "m.addi">;
 def GADDI : GALU_ri<0b000, "g.addi">;
 def PADDI : PALU_ri<0b000, "p.addi">;
+}
+
+def MADD  : MALU_rr<0b0000000, 0b000, "m.add", /*Commutable*/1>,
+            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MARK : RVInstI<0b000, OPC_MARK, (outs),
