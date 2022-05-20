@@ -102,6 +102,11 @@ def GADDI : GALU_ri<0b000, "g.addi">;
 def PADDI : PALU_ri<0b000, "p.addi">;
 }
 
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
+def MORI  : MALU_ri<0b110, "m.ori">;
+}
+
+
 def MADD  : MALU_rr<0b0000000, 0b000, "m.add", /*Commutable*/1>,
             Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
