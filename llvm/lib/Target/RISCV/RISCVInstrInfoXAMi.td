@@ -10,6 +10,7 @@
 
 def OPC_MLOAD     : RISCVOpcode<"MLOAD",     0b0000001>;
 def OPC_PLOAD     : RISCVOpcode<"PLOAD",     0b0000010>;
+def OPC_GLOAD     : RISCVOpcode<"GLOAD",     0b0000000>;
 def OPC_OP_GIMM   : RISCVOpcode<"OP_GIMM",   0b0010000>;
 def OPC_OP_MIMM   : RISCVOpcode<"OP_MIMM",   0b0010001>;
 def OPC_OP_PIMM   : RISCVOpcode<"OP_PIMM",   0b0010010>;
@@ -40,6 +41,9 @@ class MLoad_ri<bits<3> funct3, string opcodestr>
 
 class PLoad_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, ${imm12}(${rs1})">;
+class GLoad_ri<bits<3> funct3, string opcodestr>
+    : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 }
 
@@ -93,8 +97,11 @@ def ABGE  : ABranchCC_rri<0b101, "a.bge">;
 def ABLTU : ABranchCC_rri<0b110, "a.bltu">;
 def ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
 
+def GLB : GLoad_ri<0b000, "g.lb">, Sched<[WriteLDB, ReadMemBase]>;
 def MLW : MLoad_ri<0b010, "m.lw">, Sched<[WriteLDW, ReadMemBase]>;
 def PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
+def GLW : GLoad_ri<0b010, "g.lw">, Sched<[WriteLDW, ReadMemBase]>;
+def MLBU: MLoad_ri<0b100, "m.lbu">, Sched<[WriteLDB, ReadMemBase]>;
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def MADDI : MALU_ri<0b000, "m.addi">;
