@@ -16,6 +16,7 @@ def OPC_OP_MIMM   : RISCVOpcode<"OP_MIMM",   0b0010001>;
 def OPC_OP_PIMM   : RISCVOpcode<"OP_PIMM",   0b0010010>;
 def OPC_OPM       : RISCVOpcode<"OPM",       0b0110001>;
 def OPC_ABRANCH   : RISCVOpcode<"ABRANCH",   0b1100001>;
+def OPC_CTBRANCH  : RISCVOpcode<"CTBRANCH",  0b1100000>;
 def OPC_AJALR     : RISCVOpcode<"AJALR",     0b1100101>;
 def OPC_AJAL      : RISCVOpcode<"AJAL",      0b1101101>;
 def OPC_MARK      : RISCVOpcode<"MARK",      0b0001011>;
@@ -27,6 +28,16 @@ def OPC_MARK      : RISCVOpcode<"MARK",      0b0001011>;
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class ABranchCC_rri<bits<3> funct3, string opcodestr>
     : RVInstB<funct3, OPC_ABRANCH, (outs),
+              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
+              opcodestr, "$rs1, $rs2, $imm12">,
+      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
+  let isBranch = 1;
+  let isTerminator = 1;
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+class CTBranchCC_rri<bits<3> funct3, string opcodestr>
+    : RVInstB<funct3, OPC_CTBRANCH, (outs),
               (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
               opcodestr, "$rs1, $rs2, $imm12">,
       Sched<[WriteJmp, ReadJmp, ReadJmp]> {
@@ -96,6 +107,13 @@ def ABLT  : ABranchCC_rri<0b100, "a.blt">;
 def ABGE  : ABranchCC_rri<0b101, "a.bge">;
 def ABLTU : ABranchCC_rri<0b110, "a.bltu">;
 def ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
+
+def CTBEQ  : CTBranchCC_rri<0b000, "ct.beq">;
+def CTBNE  : CTBranchCC_rri<0b001, "ct.bne">;
+def CTBLT  : CTBranchCC_rri<0b100, "ct.blt">;
+def CTBGE  : CTBranchCC_rri<0b101, "ct.bge">;
+def CTBLTU : CTBranchCC_rri<0b110, "ct.bltu">;
+def CTBGEU : CTBranchCC_rri<0b111, "ct.bgeu">;
 
 def GLB : GLoad_ri<0b000, "g.lb">, Sched<[WriteLDB, ReadMemBase]>;
 def MLW : MLoad_ri<0b010, "m.lw">, Sched<[WriteLDW, ReadMemBase]>;
