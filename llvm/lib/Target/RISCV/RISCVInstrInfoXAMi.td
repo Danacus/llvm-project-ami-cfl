@@ -15,6 +15,7 @@ def OPC_OP_GIMM   : RISCVOpcode<"OP_GIMM",   0b0010000>;
 def OPC_OP_MIMM   : RISCVOpcode<"OP_MIMM",   0b0010001>;
 def OPC_OP_PIMM   : RISCVOpcode<"OP_PIMM",   0b0010010>;
 def OPC_OPM       : RISCVOpcode<"OPM",       0b0110001>;
+def OPC_OPP       : RISCVOpcode<"OPM",       0b0110010>;
 def OPC_ABRANCH   : RISCVOpcode<"ABRANCH",   0b1100001>;
 def OPC_CTBRANCH  : RISCVOpcode<"CTBRANCH",  0b1100000>;
 def OPC_AJALR     : RISCVOpcode<"AJALR",     0b1100101>;
@@ -84,6 +85,14 @@ class MALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
   let isCommutable = Commutable;
 }
 
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+class PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
+             bit Commutable = 0>
+    : RVInstR<funct7, funct3, OPC_OPP, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+              opcodestr, "$rd, $rs1, $rs2"> {
+  let isCommutable = Commutable;
+}
+
 
 //===----------------------------------------------------------------------===//
 // Instructions
@@ -133,6 +142,8 @@ def MORI  : MALU_ri<0b110, "m.ori">;
 
 
 def MADD  : MALU_rr<0b0000000, 0b000, "m.add", /*Commutable*/1>,
+            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+def PADD  : PALU_rr<0b0000000, 0b000, "p.add", /*Commutable*/1>,
             Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
