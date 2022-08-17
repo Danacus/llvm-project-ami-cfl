@@ -16,6 +16,7 @@ def OPC_OP_MIMM   : RISCVOpcode<"OP_MIMM",   0b0010001>;
 def OPC_OP_PIMM   : RISCVOpcode<"OP_PIMM",   0b0010010>;
 def OPC_OPM       : RISCVOpcode<"OPM",       0b0110001>;
 def OPC_OPP       : RISCVOpcode<"OPM",       0b0110010>;
+def OPC_PLUI      : RISCVOpcode<"PLUI",      0b0110110>;
 def OPC_ABRANCH   : RISCVOpcode<"ABRANCH",   0b1100001>;
 def OPC_CTBRANCH  : RISCVOpcode<"CTBRANCH",  0b1100000>;
 def OPC_AJALR     : RISCVOpcode<"AJALR",     0b1100101>;
@@ -99,6 +100,10 @@ class PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
 //===----------------------------------------------------------------------===//
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in
+def PLUI : RVInstU<OPC_PLUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
+                  "p.lui", "$rd, $imm20">, Sched<[WriteIALU]>;
+
 let isCall = 1 in
 def AJAL : RVInstJ<OPC_AJAL, (outs GPR:$rd), (ins simm21_lsb0_jal:$imm20),
                   "a.jal", "$rd, $imm20">, Sched<[WriteJal]>;
