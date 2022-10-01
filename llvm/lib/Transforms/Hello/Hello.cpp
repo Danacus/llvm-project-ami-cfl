@@ -12,9 +12,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/Statistic.h"
+#include "llvm/IR/Argument.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "hello"
@@ -29,15 +32,29 @@ namespace {
 
     bool runOnFunction(Function &F) override {
       ++HelloCounter;
-      errs() << "Hello: ";
+      errs() << "Hello World: ";
+    
       errs().write_escaped(F.getName()) << '\n';
+      for (Argument &Arg : F.args()) {
+        errs().write_escaped(Arg.getName()) << " is a ";
+        Arg.getType()->print(errs(), true);
+        errs() << '\n';
+      }
+
       return false;
     }
   };
-}
+} // namespace
 
 char Hello::ID = 0;
 static RegisterPass<Hello> X("hello", "Hello World Pass");
+
+/*
+static RegisterStandardPasses Y(
+    PassManagerBuilder::EP_EarlyAsPossible,
+    [](const PassManagerBuilder &Builder,
+       legacy::PassManagerBase &PM) { PM.add(new Hello()); });
+*/
 
 namespace {
   // Hello2 - The second implementation with getAnalysisUsage implemented.
@@ -57,8 +74,8 @@ namespace {
       AU.setPreservesAll();
     }
   };
-}
+} // namespace
 
 char Hello2::ID = 0;
 static RegisterPass<Hello2>
-Y("hello2", "Hello World Pass (with getAnalysisUsage implemented)");
+Z("hello2", "Hello World Pass (with getAnalysisUsage implemented)");
