@@ -81,6 +81,8 @@ add_llvm_component_library(LLVMTransformUtils
   Utils.cpp
   ValueMapper.cpp
   VNCoercion.cpp
+  FindSecrets.cpp
+  TrackSecrets.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/Transforms

@@ -16,27 +16,38 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "find_secrets"
+#define DEBUG_TYPE "findsecrets"
 
 PreservedAnalyses FindSecretsPass::run(Module &M,
                                       ModuleAnalysisManager &AM) {
   for (Function &F : M.getFunctionList()) {
     for (BasicBlock &BB : F.getBasicBlockList()) {
       for (Instruction &I : BB.getInstList()) {
+        
         if (!isa<IntrinsicInst>(I))
           continue;
 
         IntrinsicInst *II = dyn_cast<IntrinsicInst>(&I);
         Function *CF = II->getCalledFunction();
-  
+        
         if (CF->getName().compare("llvm.var.annotation") != 0)
           continue;
 
         Value *OP = II->getArgOperand(1);
   
         GlobalVariable *GV = dyn_cast<GlobalVariable>(OP);
+
+        // It seems that Clang can't decide on whether to generate a GlobalVariable
+        // or a getelementptr here, so we have to support both cases
+        if (!GV) {
+          ConstantExpr *CE = dyn_cast<ConstantExpr>(OP);
+          if (!CE) continue;
+          
+          GV = dyn_cast<GlobalVariable>(CE->getOperand(0));
+        }
+        
         if (!GV) continue;
-    
+
         ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV->getInitializer());
         if (!CDS) continue;
     
