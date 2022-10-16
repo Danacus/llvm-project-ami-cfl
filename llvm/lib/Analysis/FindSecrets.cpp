@@ -1,4 +1,5 @@
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/FindSecrets.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -8,18 +9,18 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Secrets.h"
-#include "llvm/Transforms/Secrets/FindSecrets.h"
 
 
 using namespace llvm;
 
 #define DEBUG_TYPE "findsecrets"
 
-PreservedAnalyses FindSecretsPass::run(Module &M,
-                                      ModuleAnalysisManager &AM) {
+AnalysisKey FindSecretsAnalysis::Key;
+
+std::vector<SecretVar> FindSecretsAnalysis::run(Module &M, ModuleAnalysisManager &AM) {
   for (Function &F : M.getFunctionList()) {
     for (BasicBlock &BB : F.getBasicBlockList()) {
       for (Instruction &I : BB.getInstList()) {
@@ -54,27 +55,41 @@ PreservedAnalyses FindSecretsPass::run(Module &M,
         if (!CDS->isString() || CDS->getAsCString().compare("secret") != 0)
           continue;
 
-        errs() << "Found secret! ";
+        //errs() << "Found secret! \n";
     
+        //II->dump();
         Value *Target = II->getArgOperand(0);
+        //Target->dump();
     
-        errs() << Target->getName() << "\n";
+        //errs() << Target->getName() << "\n";
     
-        /*
-        if (Instruction *TargetInstr = dyn_cast<Instruction>(Target)) {
-          TargetInstr->dump();
-          errs() << TargetInstr->getName() << "\n";
-        }
-        */
+        Instruction *TargetInstr = dyn_cast<Instruction>(Target);
+        
+        if (!TargetInstr) continue;
+        
+        //TargetInstr->dump();
+        //errs() << TargetInstr->getName() << "\n";
     
         SecretVar Secret = SecretVar();
-        Secret.Func = F.getName();
-        Secret.BB = BB.getName();
-        Secret.Name = Target->getName().str();
+        Secret.Instr = TargetInstr;
+        //Secret.Func = F.getName();
+        //Secret.BB = BB.getName();
+        //Secret.Name = Target->getName().str();
     
         SecretVars.push_back(Secret);
       }
     }
   }
+  return SecretVars;
+}
+
+PreservedAnalyses FindSecretsPrinterPass::run(Module &M, ModuleAnalysisManager &AM) {
+  auto SecretVars = AM.getResult<FindSecretsAnalysis>(M);
+  
+  for (SecretVar Secret : SecretVars) {
+    Secret.Instr->dump();
+    //OS << Secret.Func << "." << Secret.BB << "." << Secret.Name << "\n";
+  }
+  
   return PreservedAnalyses::all();
 }

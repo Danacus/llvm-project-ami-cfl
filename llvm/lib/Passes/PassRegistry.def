@@ -28,6 +28,8 @@ MODULE_ANALYSIS("verify", VerifierAnalysis())
 MODULE_ANALYSIS("pass-instrumentation", PassInstrumentationAnalysis(PIC))
 MODULE_ANALYSIS("inline-advisor", InlineAdvisorAnalysis())
 MODULE_ANALYSIS("ir-similarity", IRSimilarityAnalysis())
+MODULE_ANALYSIS("findsecrets", FindSecretsAnalysis())
+MODULE_ANALYSIS("tracksecrets", TrackSecretsAnalysis())
 
 #ifndef MODULE_ALIAS_ANALYSIS
 #define MODULE_ALIAS_ANALYSIS(NAME, CREATE_PASS)                               \
@@ -127,8 +129,8 @@ MODULE_PASS("sanmd-module", SanitizerBinaryMetadataPass())
 MODULE_PASS("memprof-module", ModuleMemProfilerPass())
 MODULE_PASS("poison-checking", PoisonCheckingPass())
 MODULE_PASS("pseudo-probe-update", PseudoProbeUpdatePass())
-MODULE_PASS("findsecrets", FindSecretsPass())
-MODULE_PASS("tracksecrets", TrackSecretsPass())
+MODULE_PASS("print-findsecrets", FindSecretsPrinterPass(dbgs()))
+MODULE_PASS("print-tracksecrets", TrackSecretsPrinterPass(dbgs()))
 #undef MODULE_PASS
 
 #ifndef MODULE_PASS_WITH_PARAMS

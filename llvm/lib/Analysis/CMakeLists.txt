@@ -145,6 +145,8 @@ add_llvm_component_library(LLVMAnalysis
   ValueTracking.cpp
   VectorUtils.cpp
   VFABIDemangling.cpp
+  FindSecrets.cpp
+  TrackSecrets.cpp
   ${GeneratedMLSources}
 
   ADDITIONAL_HEADER_DIRS
