@@ -12,9 +12,9 @@ class FindSecretsAnalysis : public AnalysisInfoMixin<FindSecretsAnalysis> {
   
 public:
   static AnalysisKey Key;
-  using Result = std::vector<SecretVar>;
+  using Result = Secrets;
 
-  std::vector<SecretVar> run(Module &M, ModuleAnalysisManager &AM);
+  Secrets run(Module &M, ModuleAnalysisManager &AM);
 };
 
 class FindSecretsPrinterPass : public PassInfoMixin<FindSecretsPrinterPass> {

@@ -10,9 +10,9 @@ namespace llvm {
 class TrackSecretsAnalysis : public AnalysisInfoMixin<TrackSecretsAnalysis> {
 public:
   static AnalysisKey Key;
-  using Result = std::vector<SecretVar>;
+  using Result = Secrets;
   
-  std::vector<SecretVar> run(Module &M, ModuleAnalysisManager &AM);
+  Secrets run(Module &M, ModuleAnalysisManager &AM);
 };
 
 class TrackSecretsPrinterPass : public PassInfoMixin<TrackSecretsPrinterPass> {

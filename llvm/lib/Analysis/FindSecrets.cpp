@@ -1,5 +1,6 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/FindSecrets.h"
+#include "llvm/Analysis/Secrets.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -20,10 +21,14 @@ using namespace llvm;
 
 AnalysisKey FindSecretsAnalysis::Key;
 
-std::vector<SecretVar> FindSecretsAnalysis::run(Module &M, ModuleAnalysisManager &AM) {
-  for (Function &F : M.getFunctionList()) {
-    for (BasicBlock &BB : F.getBasicBlockList()) {
-      for (Instruction &I : BB.getInstList()) {
+Secrets FindSecretsAnalysis::run(Module &M, ModuleAnalysisManager &AM) {
+  auto S = Secrets();
+  
+  for (Function &F : M) {
+    auto FS = FunctionSecrets(&F);
+    for (BasicBlock &BB : F) {
+      auto BS = BlockSecrets(&BB);
+      for (Instruction &I : BB) {
         
         if (!isa<IntrinsicInst>(I))
           continue;
@@ -55,7 +60,7 @@ std::vector<SecretVar> FindSecretsAnalysis::run(Module &M, ModuleAnalysisManager
         if (!CDS->isString() || CDS->getAsCString().compare("secret") != 0)
           continue;
 
-        //errs() << "Found secret! \n";
+        errs() << "Found secret! \n";
     
         //II->dump();
         Value *Target = II->getArgOperand(0);
@@ -68,27 +73,28 @@ std::vector<SecretVar> FindSecretsAnalysis::run(Module &M, ModuleAnalysisManager
         if (!TargetInstr) continue;
         
         //TargetInstr->dump();
-        //errs() << TargetInstr->getName() << "\n";
+        errs() << TargetInstr->getName() << "\n";
     
-        SecretVar Secret = SecretVar();
-        Secret.Instr = TargetInstr;
-        //Secret.Func = F.getName();
-        //Secret.BB = BB.getName();
-        //Secret.Name = Target->getName().str();
+        SecretVar Secret = SecretVar(TargetInstr);
     
-        SecretVars.push_back(Secret);
+        BS.SecretVars.push_back(Secret);
       }
+      FS.Blocks.push_back(BS);
     }
+    S.Functions.push_back(FS);
   }
-  return SecretVars;
+  return S;
 }
 
 PreservedAnalyses FindSecretsPrinterPass::run(Module &M, ModuleAnalysisManager &AM) {
-  auto SecretVars = AM.getResult<FindSecretsAnalysis>(M);
+  auto Secrets = AM.getResult<FindSecretsAnalysis>(M);
   
-  for (SecretVar Secret : SecretVars) {
-    Secret.Instr->dump();
-    //OS << Secret.Func << "." << Secret.BB << "." << Secret.Name << "\n";
+  for (auto FS : Secrets.Functions) {
+    for (auto BS : FS.Blocks) {
+      for (auto S : BS.SecretVars) {
+        S.Instr->dump();
+      }
+    }
   }
   
   return PreservedAnalyses::all();
