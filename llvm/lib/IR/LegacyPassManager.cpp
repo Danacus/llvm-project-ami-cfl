@@ -19,6 +19,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassTimingInfo.h"
 #include "llvm/IR/PrintPasses.h"
+#include "llvm/PassRegistry.h"
 #include "llvm/Support/Chrono.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -1178,6 +1179,14 @@ void PMDataManager::dumpPassArguments() const {
 void PMDataManager::dumpPassInfo(Pass *P, enum PassDebuggingString S1,
                                  enum PassDebuggingString S2,
                                  StringRef Msg) {
+  /*
+  // HACK: print arguments instead of names
+  AnalysisID AID = P->getPassID();
+  const PassInfo *PI = PassRegistry::getPassRegistry()->getPassInfo(AID);
+  if (PI && S1 == EXECUTION_MSG)
+    dbgs() << PI->getPassArgument() << "\n";
+  */
+
   if (PassDebugging < Executions)
     return;
   dbgs() << "[" << std::chrono::system_clock::now() << "] " << (void *)this
