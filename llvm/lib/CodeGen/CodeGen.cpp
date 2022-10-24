@@ -44,6 +44,8 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeFEntryInserterPass(Registry);
   initializeFinalizeISelPass(Registry);
   initializeFinalizeMachineBundlesPass(Registry);
+  initializeFindSecretsAnalysisPass(Registry);
+  initializeFindSecretsPrinterPass(Registry);
   initializeFixupStatepointCallerSavedPass(Registry);
   initializeFuncletLayoutPass(Registry);
   initializeGCMachineCodeAnalysisPass(Registry);
