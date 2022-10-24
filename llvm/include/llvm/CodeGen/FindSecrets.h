@@ -2,6 +2,7 @@
 #define LLVM_CODEGEN_FINDSECRETS_H
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/IR/Argument.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Function.h"
@@ -28,13 +29,19 @@ struct BlockSecrets {
 
 struct FunctionSecrets {
   Function* Func;
-  SmallVector<BlockSecrets> Blocks;
+  SmallVector<Instruction*> Upgrades;
+  SmallVector<Instruction*> Downgrades;
+  SmallVector<Argument*> Args;
   
   FunctionSecrets(Function* F) {
     Func = F;
   }
   
   FunctionSecrets() {}
+};
+
+struct SecretParams {
+  SmallVector<Argument*> Args;
 };
 
 namespace {

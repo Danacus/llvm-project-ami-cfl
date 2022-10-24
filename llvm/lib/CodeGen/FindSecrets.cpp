@@ -26,6 +26,14 @@ char FindSecretsAnalysis::ID = 0;
 
 bool FindSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   auto &F = MF.getFunction();
+  Secrets.Func = &F;
+  
+  for (auto &Arg : F.args()) {
+    if (Arg.hasAttribute(Attribute::Secret)) {
+      Secrets.Args.push_back(&Arg);
+    }
+  }
+
   auto FS = FunctionSecrets(&F);
 
   for (BasicBlock &BB : F) {
@@ -58,12 +66,16 @@ bool FindSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
       ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV->getInitializer());
       if (!CDS) continue;
+      
+      if (!CDS->isString())
+        continue;
+      
+      bool Upgrade = CDS->getAsCString().compare("secret_upgrade") == 0;
+      bool Downgrade = CDS->getAsCString().compare("secret_downgrade") == 0;
   
-      if (!CDS->isString() || CDS->getAsCString().compare("secret") != 0)
+      if (!Upgrade && !Downgrade)
         continue;
 
-      errs() << "Found secret! \n";
-  
       //II->dump();
       Value *Target = II->getArgOperand(0);
       //Target->dump();
@@ -75,15 +87,14 @@ bool FindSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
       if (!TargetInstr) continue;
       
       //TargetInstr->dump();
-      errs() << TargetInstr->getName() << "\n";
-  
-      SecretVar Secret = SecretVar(TargetInstr);
-  
-      BS.SecretVars.push_back(Secret);
+      
+      if (Upgrade) {
+        Secrets.Upgrades.push_back(TargetInstr);
+      } else if (Downgrade) {
+        Secrets.Downgrades.push_back(TargetInstr);
+      }
     }
-    FS.Blocks.push_back(BS);
   }
-  Secrets = FS;
   return false;
 }
 
@@ -101,10 +112,24 @@ char FindSecretsPrinter::ID = 0;
 bool FindSecretsPrinter::runOnMachineFunction(MachineFunction &MF) {
   auto Secrets = getAnalysis<FindSecretsAnalysis>().Secrets;
   
-  for (auto BS : Secrets.Blocks) {
-    for (auto S : BS.SecretVars) {
-      S.Instr->dump();
-    }
+  errs() << "Secrets for function: " << Secrets.Func->getName() << "\n";
+  
+  errs() << "Arguments:\n";
+  
+  for (auto &Arg : Secrets.Args) {
+    Arg->dump();
+  }
+  
+  errs() << "Upgrading instructions:\n";
+  
+  for (auto &Instr : Secrets.Upgrades) {
+    Instr->dump();
+  }
+  
+  errs() << "Downgrading instructions:\n";
+
+  for (auto &Instr : Secrets.Downgrades) {
+    Instr->dump();
   }
   
   return false;
