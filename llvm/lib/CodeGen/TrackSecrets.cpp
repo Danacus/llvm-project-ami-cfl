@@ -24,10 +24,39 @@ using namespace llvm;
 
 char TrackSecretsAnalysis::ID = 0;
 
+/// Propagates given input secrets through the given basic block and stores them
+bool TrackSecretsAnalysis::transfer(MachineBasicBlock &BB, SmallVector<MachineOperand>) {
+  auto Out = BBOuts.lookup(&BB);
+  auto Changed = false;
+  
+  // For each instruction ...
+  
+  // Return true of Out was changed
+  return Changed;
+}
+
+/// Computes secret inputs for the given basic block by joining secret outputs of predecessors
+SmallVector<MachineOperand> TrackSecretsAnalysis::join(MachineBasicBlock &BB) {
+  auto In = SmallVector<MachineOperand>();
+  
+  // For each basic block in pred iterator ...
+  
+  return In;
+}
+
 bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   auto FS = getAnalysis<FindSecretsAnalysis>().Secrets;
   
   // TODO: track flow of secrets
+  
+  // Initialize BBOuts: create vector for each basic block
+  
+  // Initialize entry block: transfer with secret arguments of MF
+  
+  // While BBOuts is changing:
+    // For each basic block: join and transfer
+  
+  // TODO: later, use work list, more efficient
   
   return false;
 }
