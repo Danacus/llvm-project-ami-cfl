@@ -1069,6 +1069,9 @@ def int_codeview_annotation : DefaultAttrsIntrinsic<[], [llvm_metadata_ty],
                                         [IntrInaccessibleMemOnly, IntrNoDuplicate, IntrWillReturn],
                                         "llvm.codeview.annotation">;
 
+def int_secret : DefaultAttrsIntrinsic<[LLVMMatchType<0>], [llvm_any_ty], [], "llvm.secret">;
+def int_declassify : DefaultAttrsIntrinsic<[LLVMMatchType<0>], [llvm_any_ty], [], "llvm.declassify">;
+
 //===------------------------ Trampoline Intrinsics -----------------------===//
 //
 def int_init_trampoline : DefaultAttrsIntrinsic<

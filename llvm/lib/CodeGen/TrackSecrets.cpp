@@ -1,4 +1,5 @@
 #include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/IR/Argument.h"
@@ -50,8 +51,17 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   // TODO: track flow of secrets
   
   // Initialize BBOuts: create vector for each basic block
+  for (auto &BB : MF) {
+    BBOuts.insert(std::pair(&BB, SmallVector<MachineOperand>()));
+  }
   
   // Initialize entry block: transfer with secret arguments of MF
+  
+  auto EntryIns = SmallVector<MachineOperand>();
+  
+  for (auto &Arg : FS.Args) {
+
+  }
   
   // While BBOuts is changing:
     // For each basic block: join and transfer
