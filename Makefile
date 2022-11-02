@@ -34,15 +34,6 @@ SRCDIR_CLANG  = $(MAKEFILE_DIR)clang
 
 BUILDDIR_LLVM = $(BUILDDIR)/llvm
 
-DISTBUILDDIR_LLVM = $(DISTBUILDDIR)/llvm
-
-DISTDEPS =
-DISTDEPS += cmake
-DISTDEPS += ninja-build
-DISTDEPS += gcc-multilib
-DISTDEPS += python3
-DISTDEPS += python3-distutils
-
 CMAKE_FLAGS_LLVM += -G "$(CMAKE_GENERATOR)"
 CMAKE_FLAGS_LLVM += -S $(SRCDIR_LLVM)
 ifeq ($(CMAKE_GENERATOR), Ninja)
@@ -59,13 +50,6 @@ DEV_CMAKE_FLAGS_LLVM = $(CMAKE_FLAGS_LLVM)
 DEV_CMAKE_FLAGS_LLVM += -B $(BUILDDIR_LLVM)
 DEV_CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(INSTALLDIR)
 DEV_CMAKE_FLAGS_LLVM += -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
-
-DIST_CMAKE_FLAGS_LLVM = $(CMAKE_FLAGS_LLVM)
-DIST_CMAKE_FLAGS_LLVM += -B $(DISTBUILDDIR_LLVM)
-DIST_CMAKE_FLAGS_LLVM += -DCMAKE_INSTALL_PREFIX=$(DISTINSTALLDIR)
-DIST_CMAKE_FLAGS_LLVM += -DCMAKE_BUILD_TYPE=Release
-DIST_CMAKE_FLAGS_LLVM += -DLLVM_DISTRIBUTION_COMPONENTS="clang;lld;llvm-objdump"
-DIST_CMAKE_FLAGS_LLVM += -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON
 
 #############################################################################
 
@@ -91,38 +75,6 @@ endif
 .PHONY: install
 install:
 	$(CMAKE) --build $(BUILDDIR_LLVM) --target install
-
-.PHONY: dist-install-deps
-dist-install-deps:
-	apt-get -y install $(DISTDEPS)
-
-.PHONY: dist-configure-build
-dist-configure-build:
-	$(MKDIR) $(DISTBUILDDIR)
-	$(CMAKE) $(DIST_CMAKE_FLAGS_LLVM) $(SRCDIR_LLVM)
-
-.PHONY: dist-build
-dist-build:
-	$(NICE) $(CMAKE) --build $(DISTBUILDDIR_LLVM)
-
-.PHONY: dist-install
-dist-install:
-	$(CMAKE) --build $(DISTBUILDDIR_LLVM) --target install-distribution
-
-.PHONY: dist-deb
-dist-deb: dist-install
-	$(MKDIR) $(DISTDIR)/$(PACKAGE)/DEBIAN
-	chmod g-s $(DISTDIR)/$(PACKAGE)/DEBIAN
-	cp morpheus/control $(DISTDIR)/$(PACKAGE)/DEBIAN
-	cd $(DISTDIR) && dpkg-deb --build $(PACKAGE)
-
-.PHONY: dist
-dist:
-	$(MAKE) dist-install-deps
-	$(MAKE) dist-configure-build
-	$(MAKE) dist-build
-	$(MAKE) dist-install
-	$(MAKE) dist-deb
 
 .PHONY: clean
 clean:
