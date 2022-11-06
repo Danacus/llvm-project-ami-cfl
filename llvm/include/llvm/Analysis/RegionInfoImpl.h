@@ -637,8 +637,10 @@ bool RegionInfoBase<Tr>::isTrivialRegion(BlockT *entry, BlockT *exit) const {
   unsigned num_successors =
       BlockTraits::child_end(entry) - BlockTraits::child_begin(entry);
 
-  if (num_successors <= 1 && exit == *(BlockTraits::child_begin(entry)))
+  if (num_successors <= 1 && exit == *(BlockTraits::child_begin(entry))) {
+    //errs() << "Trivial region: " << *entry << "\n";
     return true;
+  }
 
   return false;
 }
@@ -648,8 +650,8 @@ typename Tr::RegionT *RegionInfoBase<Tr>::createRegion(BlockT *entry,
                                                        BlockT *exit) {
   assert(entry && exit && "entry and exit must not be null!");
 
-  if (isTrivialRegion(entry, exit))
-    return nullptr;
+  //if (isTrivialRegion(entry, exit))
+    //return nullptr;
 
   RegionT *region =
       new RegionT(entry, exit, static_cast<RegionInfoT *>(this), DT);
