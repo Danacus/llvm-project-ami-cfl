@@ -336,6 +336,7 @@ void RISCVPassConfig::addPreEmitPass2() {
   // possibility for other passes to break the requirements for forward
   // progress in the LR/SC block.
   addPass(createRISCVExpandAtomicPseudoPass());
+  addPass(createAMiLinearizeRegionPass());
 }
 
 void RISCVPassConfig::addMachineSSAOptimization() {
@@ -359,6 +360,8 @@ void RISCVPassConfig::addPreRegAlloc() {
 void RISCVPassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
     addPass(createRISCVRedundantCopyEliminationPass());
+  
+  //addPass(createAMiLinearizeRegionPass());
 }
 
 yaml::MachineFunctionInfo *

@@ -144,3 +144,4 @@ INITIALIZE_PASS_BEGIN(FindSecretsPrinter, DEBUG_TYPE_2,
 INITIALIZE_PASS_DEPENDENCY(FindSecretsAnalysis)
 INITIALIZE_PASS_END(FindSecretsPrinter, DEBUG_TYPE_2,
     "Print secrets", false, false)
+

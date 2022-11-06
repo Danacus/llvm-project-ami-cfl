@@ -72,7 +72,7 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
 }
 
 TrackSecretsAnalysis::TrackSecretsAnalysis() : MachineFunctionPass(ID), Secrets() {
-  initializeMachineCFGPrinterPass(*PassRegistry::getPassRegistry());
+  //initializeMachineCFGPrinterPass(*PassRegistry::getPassRegistry());
 }
 
 INITIALIZE_PASS_BEGIN(TrackSecretsAnalysis, DEBUG_TYPE,
