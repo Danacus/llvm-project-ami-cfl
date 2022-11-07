@@ -1,6 +1,7 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
 #include "RISCVAMiLinearizeRegion.h"
+#include "RISCVInstrInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -26,6 +27,7 @@
 #include "llvm/Pass.h"
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 
@@ -36,9 +38,18 @@ using namespace llvm;
 char AMiLinearizeRegion::ID = 0;
 
 void AMiLinearizeRegion::setPersistent(MachineInstr *I) {
+  auto PersistentInstr = RISCV::AMi::getQualified<RISCV::AMi::Persistent>(I->getOpcode());
+  
+  if (PersistentInstr != -1) {
+    errs() << *I << " --> ";
+    I->setDesc(TII->get(PersistentInstr));
+    errs() << *I << "\n";
+  }
+  
   switch (I->getOpcode()) {
   case RISCV::SLLI:
-    // I->setDesc(TII->get(RISCV::PSLLI));
+    // TODO
+    //I->setDesc(TII->get(RISCV::PSLLI));
     break;
   case RISCV::LUI:
     I->setDesc(TII->get(RISCV::PLUI));
@@ -49,6 +60,17 @@ void AMiLinearizeRegion::setPersistent(MachineInstr *I) {
   case RISCV::ADDI:
     I->setDesc(TII->get(RISCV::PADDI));
     break;
+  // Always persistent
+  case RISCV::SW:
+    break;
+  // Already persistent
+  case RISCV::PLUI:
+  case RISCV::PADD:
+  case RISCV::PADDI:
+    break;
+  default:
+    errs() << "Unsupported instruction: " << *I;
+    llvm_unreachable("AMi error: unsupported instruction cannot be made persistent!");
   }
 }
 
@@ -80,19 +102,29 @@ void AMiLinearizeRegion::handlePersistentInstr(MachineInstr *I) {
 
   DebugLoc DL;
 
-  if (I->getNumOperands() > 0 && I->getOperand(0).isReg()) {
-    // BuildMI(*I->getParent(), I->getIterator(), DL, TII->get(RISCV::GLW),
-    // I->getOperand(0).getReg());
+  if (I->getNumOperands() > 2 && I->getOperand(0).isReg()) {
+    BuildMI(*I->getParent(), I->getIterator(), DL, TII->get(RISCV::GLW),
+            I->getOperand(0).getReg().asMCReg())
+        .add(I->getOperand(1))
+        .add(I->getOperand(2));
+  } else { 
+    llvm_unreachable("AMi error: unable to nullify unwanted side-effects in mimicry mode!");
   }
 }
 
 void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   errs() << "Handling region " << *Region << "\n";
 
+  // Make the predecessing branch instruction activating
+  assert(Region->getEntry()->pred_size() <= 1 &&
+         "AMi error: activating region cannot have multiple entry points!");
   for (MachineBasicBlock *Pred : Region->getEntry()->predecessors()) {
     MachineInstr &BranchI = Pred->instr_back();
     if (BranchI.getOpcode() == RISCV::BEQ) {
       BranchI.setDesc(TII->get(RISCV::ABEQ));
+    } else {
+      llvm_unreachable(
+          "AMi error: unsupported branch instruction for activating region!");
     }
   }
 
@@ -119,16 +151,14 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
 
 bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Region Pass\n";
-  // auto &RDA = getAnalysis<ReachingDefAnalysis>();
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
 
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  // MRI.getTopLevelRegion()->dump();
-
   // Temporary implementation
+
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
 
   for (auto &MRNode : MRI.getTopLevelRegion()->elements()) {
@@ -141,6 +171,8 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
       }
     }
   }
+
+  // End of temporary implementation
 
   SmallVector<MachineRegion *> ToTransform;
   SmallVector<MachineRegion *> WorkList;
@@ -173,30 +205,7 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     handleRegion(Region);
   }
 
-  for (MachineBasicBlock &MB : MF) {
-    // errs() << "Entering Machine Block: " << MB.getName() << "\n";
-
-    for (MachineInstr &MI : MB) {
-      // errs() << "Entering Machine Instruction: " << MI << "\n";
-
-      /*
-      if (MI.getOpcode() == RISCV::ADDI) {
-        MI.setDesc(TII->get(RISCV::PADDI));
-      }
-      */
-
-      // errs() << "\n";
-    }
-  }
-
-  errs() << "\nResult: -------------- \n";
-
-  for (MachineBasicBlock &MB : MF) {
-    // errs() << MB.getName();
-    errs() << MB;
-  }
-
-  errs() << "\n --------------------- \n";
+  MF.dump();
 
   return true;
 }

@@ -52,8 +52,8 @@ class InstrInfoEmitter {
   const CodeGenSchedModels &SchedModels;
 
 public:
-  InstrInfoEmitter(RecordKeeper &R):
-    Records(R), CDP(R), SchedModels(CDP.getTargetInfo().getSchedModels()) {}
+  InstrInfoEmitter(RecordKeeper &R)
+      : Records(R), CDP(R), SchedModels(CDP.getTargetInfo().getSchedModels()) {}
 
   // run - Output the instruction set description.
   void run(raw_ostream &OS);
@@ -66,8 +66,8 @@ private:
   /// The keys of this map are maps which have OpName enum values as their keys
   /// and instruction operand indices as their values.  The values of this map
   /// are lists of instruction names.
-  typedef std::map<std::map<unsigned, unsigned>,
-                   std::vector<std::string>> OpNameMapTy;
+  typedef std::map<std::map<unsigned, unsigned>, std::vector<std::string>>
+      OpNameMapTy;
   typedef std::map<std::string, unsigned>::iterator StrUintMapIter;
 
   /// Generate member functions in the target-specific GenInstrInfo class.
@@ -86,25 +86,32 @@ private:
   void emitFeatureVerifier(raw_ostream &OS, const CodeGenTarget &Target);
   void emitRecord(const CodeGenInstruction &Inst, unsigned Num,
                   Record *InstrInfo,
-                  std::map<std::vector<Record*>, unsigned> &EL,
-                  const OperandInfoMapTy &OpInfo,
-                  raw_ostream &OS);
+                  std::map<std::vector<Record *>, unsigned> &EL,
+                  const OperandInfoMapTy &OpInfo, raw_ostream &OS);
   void emitOperandTypeMappings(
       raw_ostream &OS, const CodeGenTarget &Target,
       ArrayRef<const CodeGenInstruction *> NumberedInstructions);
-  void initOperandMapData(
-            ArrayRef<const CodeGenInstruction *> NumberedInstructions,
-            StringRef Namespace,
-            std::map<std::string, unsigned> &Operands,
-            OpNameMapTy &OperandMap);
-  void emitOperandNameMappings(raw_ostream &OS, const CodeGenTarget &Target,
-            ArrayRef<const CodeGenInstruction*> NumberedInstructions);
+  void
+  initOperandMapData(ArrayRef<const CodeGenInstruction *> NumberedInstructions,
+                     StringRef Namespace,
+                     std::map<std::string, unsigned> &Operands,
+                     OpNameMapTy &OperandMap);
+  void emitOperandNameMappings(
+      raw_ostream &OS, const CodeGenTarget &Target,
+      ArrayRef<const CodeGenInstruction *> NumberedInstructions);
 
   void emitLogicalOperandSizeMappings(
       raw_ostream &OS, StringRef Namespace,
       ArrayRef<const CodeGenInstruction *> NumberedInstructions);
   void emitLogicalOperandTypeMappings(
       raw_ostream &OS, StringRef Namespace,
+      ArrayRef<const CodeGenInstruction *> NumberedInstructions);
+
+  void emitAMiQualifierMap(raw_ostream &OS, const CodeGenTarget &Target,
+                           const StringRef &FnName,
+                           const std::map<StringRef, StringRef> &Map);
+  void emitAMiQualifierMappings(
+      raw_ostream &OS, const CodeGenTarget &Target,
       ArrayRef<const CodeGenInstruction *> NumberedInstructions);
 
   // Operand information.
@@ -114,8 +121,8 @@ private:
 
 } // end anonymous namespace
 
-static void PrintDefList(const std::vector<Record*> &Uses,
-                         unsigned Num, raw_ostream &OS) {
+static void PrintDefList(const std::vector<Record *> &Uses, unsigned Num,
+                         raw_ostream &OS) {
   OS << "static const MCPhysReg ImplicitList" << Num << "[] = { ";
   for (auto [Idx, U] : enumerate(Uses))
     OS << (Idx ? ", " : "") << getQualifiedName(U);
@@ -197,8 +204,7 @@ InstrInfoEmitter::GetOperandInfo(const CodeGenInstruction &Inst) {
       // Fill in constraint info.
       Res += ", ";
 
-      const CGIOperandList::ConstraintInfo &Constraint =
-        Op.Constraints[j];
+      const CGIOperandList::ConstraintInfo &Constraint = Op.Constraints[j];
       if (Constraint.isNone())
         Res += "0";
       else if (Constraint.isEarlyClobber())
@@ -226,7 +232,8 @@ void InstrInfoEmitter::EmitOperandInfo(raw_ostream &OS,
   for (const CodeGenInstruction *Inst : Target.getInstructionsByEnumValue()) {
     std::vector<std::string> OperandInfo = GetOperandInfo(*Inst);
     unsigned &N = OperandInfoIDs[OperandInfo];
-    if (N != 0) continue;
+    if (N != 0)
+      continue;
 
     N = ++OperandListNum;
     OS << "static const MCOperandInfo OperandInfo" << N << "[] = { ";
@@ -244,10 +251,9 @@ void InstrInfoEmitter::EmitOperandInfo(raw_ostream &OS,
 ///        each instructions.  This is used to generate the OperandMap table as
 ///        well as the getNamedOperandIdx() function.
 void InstrInfoEmitter::initOperandMapData(
-        ArrayRef<const CodeGenInstruction *> NumberedInstructions,
-        StringRef Namespace,
-        std::map<std::string, unsigned> &Operands,
-        OpNameMapTy &OperandMap) {
+    ArrayRef<const CodeGenInstruction *> NumberedInstructions,
+    StringRef Namespace, std::map<std::string, unsigned> &Operands,
+    OpNameMapTy &OperandMap) {
   unsigned NumOperands = 0;
   for (const CodeGenInstruction *Inst : NumberedInstructions) {
     if (!Inst->TheDef->getValueAsBit("UseNamedOperandTable"))
@@ -257,14 +263,89 @@ void InstrInfoEmitter::initOperandMapData(
       StrUintMapIter I = Operands.find(Info.Name);
 
       if (I == Operands.end()) {
-        I = Operands.insert(Operands.begin(),
-                    std::pair<std::string, unsigned>(Info.Name, NumOperands++));
+        I = Operands.insert(Operands.begin(), std::pair<std::string, unsigned>(
+                                                  Info.Name, NumOperands++));
       }
       OpList[I->second] = Info.MIOperandNo;
     }
-    OperandMap[OpList].push_back(Namespace.str() + "::" +
-                                 Inst->TheDef->getName().str());
+    OperandMap[OpList].push_back(Namespace.str() +
+                                 "::" + Inst->TheDef->getName().str());
   }
+}
+
+void InstrInfoEmitter::emitAMiQualifierMap(
+    raw_ostream &OS, const CodeGenTarget &Target, const StringRef &QualName,
+    const std::map<StringRef, StringRef> &Map) {
+  auto Namespace = Target.getInstNamespace();
+
+  OS << "template <>\n";
+  OS << "int16_t " << "getQualified<" << Namespace << "::AMi::" << QualName << ">" << "(uint16_t Inst) {\n";
+  if (!Map.empty()) {
+    OS << "  switch(Inst) {\n";
+    for (const auto &Entry : Map) {
+      OS << "  case " << Namespace << "::" << Entry.first << ":\n";
+      OS << "    return " << Namespace << "::" << Entry.second << ";\n";
+    }
+    OS << "  default: return -1;\n";
+    OS << "  }\n";
+  } else {
+    OS << "  return -1;\n";
+  }
+  OS << "}\n";
+}
+
+void InstrInfoEmitter::emitAMiQualifierMappings(
+    raw_ostream &OS, const CodeGenTarget &Target,
+    ArrayRef<const CodeGenInstruction *> NumberedInstructions) {
+  auto Namespace = Target.getInstNamespace();
+  auto Defs = Records.getAllDerivedDefinitions("AMiInstQualified");
+
+  std::map<StringRef, StringRef> PMap;
+  std::map<StringRef, StringRef> MMap;
+  std::map<StringRef, StringRef> GMap;
+  std::map<StringRef, StringRef> CTMap;
+  std::map<StringRef, StringRef> AMap;
+
+  for (auto *Def : Defs) {
+    //CodeGenInstruction Inst = Target.getInstruction(Def->getValueAsDef("Inst"));
+    //CodeGenInstruction QualInst =
+        //Target.getInstruction(Def->getValueAsDef("QualInst"));
+    StringRef Inst = Def->getValueAsString("Inst");
+    StringRef QualInst = Def->getValueAsString("QualInst");
+    std::pair<StringRef, StringRef> Tuple = {Inst, QualInst};
+    switch (Def->getValueAsString("Qualifier")[0]) {
+    case 'p':
+      PMap.insert(Tuple);
+      break;
+    case 'm':
+      MMap.insert(Tuple);
+      break;
+    case 'g':
+      GMap.insert(Tuple);
+      break;
+    case 'c':
+      CTMap.insert(Tuple);
+      break;
+    case 'a':
+      AMap.insert(Tuple);
+      break;
+    }
+  }
+
+  OS << "#ifdef GET_INSTRINFO_AMI_QUAL\n";
+  OS << "#undef GET_INSTRINFO_AMI_QUAL\n";
+  OS << "namespace llvm {\n";
+  OS << "namespace " << Namespace << " {\n";
+  OS << "namespace AMi {\n";
+  emitAMiQualifierMap(OS, Target, "Persistent", PMap);
+  emitAMiQualifierMap(OS, Target, "Mimic", MMap);
+  emitAMiQualifierMap(OS, Target, "Ghost", GMap);
+  emitAMiQualifierMap(OS, Target, "ConstantTime", CTMap);
+  emitAMiQualifierMap(OS, Target, "Activating", AMap);
+  OS << "} // end namespace AMi\n";
+  OS << "} // end namespace " << Namespace << "\n";
+  OS << "} // end namespace llvm\n";
+  OS << "#endif //GET_INSTRINFO_AMI_QUAL\n\n";
 }
 
 /// Generate a table and function for looking up the indices of operands by
@@ -278,9 +359,9 @@ void InstrInfoEmitter::initOperandMapData(
 /// - A function called getNamedOperandIdx(uint16_t Opcode, uint16_t NamedIdx)
 ///   for looking up the operand index for an instruction, given a value from
 ///   OpName enum
-void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
-           const CodeGenTarget &Target,
-           ArrayRef<const CodeGenInstruction*> NumberedInstructions) {
+void InstrInfoEmitter::emitOperandNameMappings(
+    raw_ostream &OS, const CodeGenTarget &Target,
+    ArrayRef<const CodeGenInstruction *> NumberedInstructions) {
   StringRef Namespace = Target.getInstNamespace();
   std::string OpNameNS = "OpName";
   // Map of operand names to their enumeration value.  This will be used to
@@ -378,7 +459,8 @@ void InstrInfoEmitter::emitOperandTypeMappings(
     }
   }
 
-  OS << "  OPERAND_TYPE_LIST_END" << "\n};\n";
+  OS << "  OPERAND_TYPE_LIST_END"
+     << "\n};\n";
   OS << "} // end namespace OpTypes\n";
   OS << "} // end namespace " << Namespace << "\n";
   OS << "} // end namespace llvm\n";
@@ -683,7 +765,7 @@ void InstrInfoEmitter::emitMCIIHelperMethods(raw_ostream &OS,
 
   for (const Record *Rec : TIIPredicates) {
     OS << "bool " << Rec->getValueAsString("FunctionName")
-        << "(const MCInst &MI);\n";
+       << "(const MCInst &MI);\n";
   }
 
   OS << "void verifyInstructionPredicates(unsigned Opcode, const FeatureBitset "
@@ -901,7 +983,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   Record *InstrInfo = Target.getInstructionSet();
 
   // Keep track of all of the def lists we have emitted already.
-  std::map<std::vector<Record*>, unsigned> EmittedLists;
+  std::map<std::vector<Record *>, unsigned> EmittedLists;
   unsigned ListNumber = 0;
 
   // Emit all of the instruction's implicit uses and defs.
@@ -927,8 +1009,8 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   // Emit all of the MCInstrDesc records in reverse ENUM ordering.
   Records.startTimer("Emit InstrDesc records");
   OS << "\nextern const MCInstrDesc " << TargetName << "Insts[] = {\n";
-  ArrayRef<const CodeGenInstruction*> NumberedInstructions =
-    Target.getInstructionsByEnumValue();
+  ArrayRef<const CodeGenInstruction *> NumberedInstructions =
+      Target.getInstructionsByEnumValue();
 
   SequenceToOffsetTable<std::string> InstrNames;
   unsigned Num = NumberedInstructions.size();
@@ -946,7 +1028,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   InstrNames.emitStringLiteralDef(OS, Twine("extern const char ") + TargetName +
                                           "InstrNameData[]");
 
-  OS << "extern const unsigned " << TargetName <<"InstrNameIndices[] = {";
+  OS << "extern const unsigned " << TargetName << "InstrNameIndices[] = {";
   Num = 0;
   for (const CodeGenInstruction *Inst : NumberedInstructions) {
     // Newline every eight entries.
@@ -1033,7 +1115,6 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
         "unsigned CatchRetOpcode = ~0u, unsigned ReturnOpcode = ~0u);\n"
      << "  ~" << ClassName << "() override = default;\n";
 
-
   OS << "\n};\n} // end namespace llvm\n";
 
   OS << "#endif // GET_INSTRINFO_HEADER\n\n";
@@ -1082,6 +1163,8 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
 
   OS << "#endif // GET_INSTRINFO_CTOR_DTOR\n\n";
 
+  emitAMiQualifierMappings(OS, Target, NumberedInstructions);
+
   Records.startTimer("Emit operand name mappings");
   emitOperandNameMappings(OS, Target, NumberedInstructions);
 
@@ -1101,20 +1184,18 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   emitFeatureVerifier(OS, Target);
 }
 
-void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
-                                  Record *InstrInfo,
-                         std::map<std::vector<Record*>, unsigned> &EmittedLists,
-                                  const OperandInfoMapTy &OpInfo,
-                                  raw_ostream &OS) {
+void InstrInfoEmitter::emitRecord(
+    const CodeGenInstruction &Inst, unsigned Num, Record *InstrInfo,
+    std::map<std::vector<Record *>, unsigned> &EmittedLists,
+    const OperandInfoMapTy &OpInfo, raw_ostream &OS) {
   int MinOperands = 0;
   if (!Inst.Operands.empty())
     // Each logical operand can be multiple MI operands.
-    MinOperands = Inst.Operands.back().MIOperandNo +
-                  Inst.Operands.back().MINumOperands;
+    MinOperands =
+        Inst.Operands.back().MIOperandNo + Inst.Operands.back().MINumOperands;
 
   OS << "  { ";
-  OS << Num << ",\t" << MinOperands << ",\t"
-     << Inst.Operands.NumDefs << ",\t"
+  OS << Num << ",\t" << MinOperands << ",\t" << Inst.Operands.NumDefs << ",\t"
      << Inst.TheDef->getValueAsInt("Size") << ",\t"
      << SchedModels.getSchedClassIdx(Inst) << ",\t"
      << Inst.ImplicitUses.size() << ",\t"
@@ -1123,49 +1204,88 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
   CodeGenTarget &Target = CDP.getTargetInfo();
 
   // Emit all of the target independent flags...
-  if (Inst.isPreISelOpcode)    OS << "|(1ULL<<MCID::PreISelOpcode)";
-  if (Inst.isPseudo)           OS << "|(1ULL<<MCID::Pseudo)";
-  if (Inst.isMeta)             OS << "|(1ULL<<MCID::Meta)";
-  if (Inst.isReturn)           OS << "|(1ULL<<MCID::Return)";
-  if (Inst.isEHScopeReturn)    OS << "|(1ULL<<MCID::EHScopeReturn)";
-  if (Inst.isBranch)           OS << "|(1ULL<<MCID::Branch)";
-  if (Inst.isIndirectBranch)   OS << "|(1ULL<<MCID::IndirectBranch)";
-  if (Inst.isCompare)          OS << "|(1ULL<<MCID::Compare)";
-  if (Inst.isMoveImm)          OS << "|(1ULL<<MCID::MoveImm)";
-  if (Inst.isMoveReg)          OS << "|(1ULL<<MCID::MoveReg)";
-  if (Inst.isBitcast)          OS << "|(1ULL<<MCID::Bitcast)";
-  if (Inst.isAdd)              OS << "|(1ULL<<MCID::Add)";
-  if (Inst.isTrap)             OS << "|(1ULL<<MCID::Trap)";
-  if (Inst.isSelect)           OS << "|(1ULL<<MCID::Select)";
-  if (Inst.isBarrier)          OS << "|(1ULL<<MCID::Barrier)";
-  if (Inst.hasDelaySlot)       OS << "|(1ULL<<MCID::DelaySlot)";
-  if (Inst.isCall)             OS << "|(1ULL<<MCID::Call)";
-  if (Inst.canFoldAsLoad)      OS << "|(1ULL<<MCID::FoldableAsLoad)";
-  if (Inst.mayLoad)            OS << "|(1ULL<<MCID::MayLoad)";
-  if (Inst.mayStore)           OS << "|(1ULL<<MCID::MayStore)";
-  if (Inst.mayRaiseFPException) OS << "|(1ULL<<MCID::MayRaiseFPException)";
-  if (Inst.isPredicable)       OS << "|(1ULL<<MCID::Predicable)";
-  if (Inst.isConvertibleToThreeAddress) OS << "|(1ULL<<MCID::ConvertibleTo3Addr)";
-  if (Inst.isCommutable)       OS << "|(1ULL<<MCID::Commutable)";
-  if (Inst.isTerminator)       OS << "|(1ULL<<MCID::Terminator)";
-  if (Inst.isReMaterializable) OS << "|(1ULL<<MCID::Rematerializable)";
-  if (Inst.isNotDuplicable)    OS << "|(1ULL<<MCID::NotDuplicable)";
-  if (Inst.Operands.hasOptionalDef) OS << "|(1ULL<<MCID::HasOptionalDef)";
-  if (Inst.usesCustomInserter) OS << "|(1ULL<<MCID::UsesCustomInserter)";
-  if (Inst.hasPostISelHook)    OS << "|(1ULL<<MCID::HasPostISelHook)";
-  if (Inst.Operands.isVariadic)OS << "|(1ULL<<MCID::Variadic)";
-  if (Inst.hasSideEffects)     OS << "|(1ULL<<MCID::UnmodeledSideEffects)";
-  if (Inst.isAsCheapAsAMove)   OS << "|(1ULL<<MCID::CheapAsAMove)";
+  if (Inst.isPreISelOpcode)
+    OS << "|(1ULL<<MCID::PreISelOpcode)";
+  if (Inst.isPseudo)
+    OS << "|(1ULL<<MCID::Pseudo)";
+  if (Inst.isMeta)
+    OS << "|(1ULL<<MCID::Meta)";
+  if (Inst.isReturn)
+    OS << "|(1ULL<<MCID::Return)";
+  if (Inst.isEHScopeReturn)
+    OS << "|(1ULL<<MCID::EHScopeReturn)";
+  if (Inst.isBranch)
+    OS << "|(1ULL<<MCID::Branch)";
+  if (Inst.isIndirectBranch)
+    OS << "|(1ULL<<MCID::IndirectBranch)";
+  if (Inst.isCompare)
+    OS << "|(1ULL<<MCID::Compare)";
+  if (Inst.isMoveImm)
+    OS << "|(1ULL<<MCID::MoveImm)";
+  if (Inst.isMoveReg)
+    OS << "|(1ULL<<MCID::MoveReg)";
+  if (Inst.isBitcast)
+    OS << "|(1ULL<<MCID::Bitcast)";
+  if (Inst.isAdd)
+    OS << "|(1ULL<<MCID::Add)";
+  if (Inst.isTrap)
+    OS << "|(1ULL<<MCID::Trap)";
+  if (Inst.isSelect)
+    OS << "|(1ULL<<MCID::Select)";
+  if (Inst.isBarrier)
+    OS << "|(1ULL<<MCID::Barrier)";
+  if (Inst.hasDelaySlot)
+    OS << "|(1ULL<<MCID::DelaySlot)";
+  if (Inst.isCall)
+    OS << "|(1ULL<<MCID::Call)";
+  if (Inst.canFoldAsLoad)
+    OS << "|(1ULL<<MCID::FoldableAsLoad)";
+  if (Inst.mayLoad)
+    OS << "|(1ULL<<MCID::MayLoad)";
+  if (Inst.mayStore)
+    OS << "|(1ULL<<MCID::MayStore)";
+  if (Inst.mayRaiseFPException)
+    OS << "|(1ULL<<MCID::MayRaiseFPException)";
+  if (Inst.isPredicable)
+    OS << "|(1ULL<<MCID::Predicable)";
+  if (Inst.isConvertibleToThreeAddress)
+    OS << "|(1ULL<<MCID::ConvertibleTo3Addr)";
+  if (Inst.isCommutable)
+    OS << "|(1ULL<<MCID::Commutable)";
+  if (Inst.isTerminator)
+    OS << "|(1ULL<<MCID::Terminator)";
+  if (Inst.isReMaterializable)
+    OS << "|(1ULL<<MCID::Rematerializable)";
+  if (Inst.isNotDuplicable)
+    OS << "|(1ULL<<MCID::NotDuplicable)";
+  if (Inst.Operands.hasOptionalDef)
+    OS << "|(1ULL<<MCID::HasOptionalDef)";
+  if (Inst.usesCustomInserter)
+    OS << "|(1ULL<<MCID::UsesCustomInserter)";
+  if (Inst.hasPostISelHook)
+    OS << "|(1ULL<<MCID::HasPostISelHook)";
+  if (Inst.Operands.isVariadic)
+    OS << "|(1ULL<<MCID::Variadic)";
+  if (Inst.hasSideEffects)
+    OS << "|(1ULL<<MCID::UnmodeledSideEffects)";
+  if (Inst.isAsCheapAsAMove)
+    OS << "|(1ULL<<MCID::CheapAsAMove)";
   if (!Target.getAllowRegisterRenaming() || Inst.hasExtraSrcRegAllocReq)
     OS << "|(1ULL<<MCID::ExtraSrcRegAllocReq)";
   if (!Target.getAllowRegisterRenaming() || Inst.hasExtraDefRegAllocReq)
     OS << "|(1ULL<<MCID::ExtraDefRegAllocReq)";
-  if (Inst.isRegSequence) OS << "|(1ULL<<MCID::RegSequence)";
-  if (Inst.isExtractSubreg) OS << "|(1ULL<<MCID::ExtractSubreg)";
-  if (Inst.isInsertSubreg) OS << "|(1ULL<<MCID::InsertSubreg)";
-  if (Inst.isConvergent) OS << "|(1ULL<<MCID::Convergent)";
-  if (Inst.variadicOpsAreDefs) OS << "|(1ULL<<MCID::VariadicOpsAreDefs)";
-  if (Inst.isAuthenticated) OS << "|(1ULL<<MCID::Authenticated)";
+  if (Inst.isRegSequence)
+    OS << "|(1ULL<<MCID::RegSequence)";
+  if (Inst.isExtractSubreg)
+    OS << "|(1ULL<<MCID::ExtractSubreg)";
+  if (Inst.isInsertSubreg)
+    OS << "|(1ULL<<MCID::InsertSubreg)";
+  if (Inst.isConvergent)
+    OS << "|(1ULL<<MCID::Convergent)";
+  if (Inst.variadicOpsAreDefs)
+    OS << "|(1ULL<<MCID::VariadicOpsAreDefs)";
+  if (Inst.isAuthenticated)
+    OS << "|(1ULL<<MCID::Authenticated)";
 
   // Emit all of the target-specific flags...
   BitsInit *TSF = Inst.TheDef->getValueAsBitsInit("TSFlags");
@@ -1183,6 +1303,7 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
   OS.write_hex(Value);
   OS << "ULL, ";
 
+<<<<<<< HEAD
   // Emit the implicit use/def list...
   std::vector<Record *> ImplicitOps = Inst.ImplicitUses;
   llvm::append_range(ImplicitOps, Inst.ImplicitDefs);
@@ -1190,6 +1311,20 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
     OS << "nullptr, ";
   else
     OS << "ImplicitList" << EmittedLists[ImplicitOps] << ", ";
+=======
+  // Emit the implicit uses and defs lists...
+  std::vector<Record *> UseList = Inst.TheDef->getValueAsListOfDefs("Uses");
+  if (UseList.empty())
+    OS << "nullptr, ";
+  else
+    OS << "ImplicitList" << EmittedLists[UseList] << ", ";
+
+  std::vector<Record *> DefList = Inst.TheDef->getValueAsListOfDefs("Defs");
+  if (DefList.empty())
+    OS << "nullptr, ";
+  else
+    OS << "ImplicitList" << EmittedLists[DefList] << ", ";
+>>>>>>> b7b37055796f (TableGen magic)
 
   // Emit the operand info.
   std::vector<std::string> OperandInfo = GetOperandInfo(Inst);

@@ -254,6 +254,19 @@ bool isFaultFirstLoad(const MachineInstr &MI);
 // Implemented in RISCVGenInstrInfo.inc
 int16_t getNamedOperandIdx(uint16_t Opcode, uint16_t NamedIndex);
 
+namespace AMi {
+  enum Qualifier {
+    Persistent,
+    Mimic,
+    Ghost,
+    ConstantTime,
+    Activating,
+  };
+
+  template<Qualifier Q> 
+  int16_t getQualified(uint16_t Inst);
+} // end namespace AMi
+
 // Return true if both input instructions have equal rounding mode. If at least
 // one of the instructions does not have rounding mode, false will be returned.
 bool hasEqualFRM(const MachineInstr &MI1, const MachineInstr &MI2);

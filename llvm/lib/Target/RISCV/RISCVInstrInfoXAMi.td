@@ -23,30 +23,69 @@ def OPC_AJALR     : RISCVOpcode<"AJALR",     0b1100101>;
 def OPC_AJAL      : RISCVOpcode<"AJAL",      0b1101101>;
 def OPC_MARK      : RISCVOpcode<"MARK",      0b0001011>;
 
+
+
+
 //===----------------------------------------------------------------------===//
 // Instruction Class Templates
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class ABranchCC_rri<bits<3> funct3, string opcodestr>
-    : RVInstB<funct3, OPC_ABRANCH, (outs),
+class AMiInstQualified<string I, string QI, string Q> {
+  string Inst = I;
+  string QualInst = QI;
+  string Qualifier = Q;
+}
+
+/*
+multiclass QualifiedInstr<string qualifier> {
+  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "a">;
+}
+*/
+
+multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+  def NAME : RVInstB<funct3, OPC_ABRANCH, (outs),
+            (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
+            opcodestr, "$rs1, $rs2, $imm12">,
+      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
+    let isBranch = 1;
+    let isTerminator = 1;
+  }
+  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "a">;
+}
+
+multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+  def NAME : RVInstB<funct3, OPC_CTBRANCH, (outs),
               (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
               opcodestr, "$rs1, $rs2, $imm12">,
       Sched<[WriteJmp, ReadJmp, ReadJmp]> {
-  let isBranch = 1;
-  let isTerminator = 1;
+    let isBranch = 1;
+    let isTerminator = 1;
+  }
+  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "ct">;
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class CTBranchCC_rri<bits<3> funct3, string opcodestr>
-    : RVInstB<funct3, OPC_CTBRANCH, (outs),
-              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
-              opcodestr, "$rs1, $rs2, $imm12">,
-      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
-  let isBranch = 1;
-  let isTerminator = 1;
+multiclass MLoad_ri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+  def NAME : RVInstI<funct3, OPC_MLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, ${imm12}(${rs1})">;
+  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "m">;
+}
+multiclass PLoad_ri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+  def NAME : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, ${imm12}(${rs1})">;
+  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "p">;
+}
+multiclass GLoad_ri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+  def NAME : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),              
+        opcodestr, "$rd, ${imm12}(${rs1})">;
+  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "g">;
 }
 
+/*
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
 class MLoad_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_MLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
@@ -59,6 +98,7 @@ class GLoad_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 }
+*/
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class MALU_ri<bits<3> funct3, string opcodestr>
@@ -115,25 +155,28 @@ def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
            Sched<[WriteJalr, ReadJalr]>;
 }
 
-def ABEQ  : ABranchCC_rri<0b000, "a.beq">;
-def ABNE  : ABranchCC_rri<0b001, "a.bne">;
-def ABLT  : ABranchCC_rri<0b100, "a.blt">;
-def ABGE  : ABranchCC_rri<0b101, "a.bge">;
-def ABLTU : ABranchCC_rri<0b110, "a.bltu">;
-def ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
+//def : AMiInstQualified<"LUI", "PLUI", "p">;
+//def : AMiInstQualified<"JAL", "AJALR", "a">;
 
-def CTBEQ  : CTBranchCC_rri<0b000, "ct.beq">;
-def CTBNE  : CTBranchCC_rri<0b001, "ct.bne">;
-def CTBLT  : CTBranchCC_rri<0b100, "ct.blt">;
-def CTBGE  : CTBranchCC_rri<0b101, "ct.bge">;
-def CTBLTU : CTBranchCC_rri<0b110, "ct.bltu">;
-def CTBGEU : CTBranchCC_rri<0b111, "ct.bgeu">;
+defm ABEQ  : ABranchCC_rri<0b000, "a.beq">;
+defm ABNE  : ABranchCC_rri<0b001, "a.bne">;
+defm ABLT  : ABranchCC_rri<0b100, "a.blt">;
+defm ABGE  : ABranchCC_rri<0b101, "a.bge">;
+defm ABLTU : ABranchCC_rri<0b110, "a.bltu">;
+defm ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
 
-def GLB : GLoad_ri<0b000, "g.lb">, Sched<[WriteLDB, ReadMemBase]>;
-def MLW : MLoad_ri<0b010, "m.lw">, Sched<[WriteLDW, ReadMemBase]>;
-def PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
-def GLW : GLoad_ri<0b010, "g.lw">, Sched<[WriteLDW, ReadMemBase]>;
-def MLBU: MLoad_ri<0b100, "m.lbu">, Sched<[WriteLDB, ReadMemBase]>;
+defm CTEQ  : CTBranchCC_rri<0b000, "ct.beq">;
+defm CTNE  : CTBranchCC_rri<0b001, "ct.bne">;
+defm CTLT  : CTBranchCC_rri<0b100, "ct.blt">;
+defm CTGE  : CTBranchCC_rri<0b101, "ct.bge">;
+defm CTLTU : CTBranchCC_rri<0b110, "ct.bltu">;
+defm CTGEU : CTBranchCC_rri<0b111, "ct.bgeu">;
+
+defm GLB : GLoad_ri<0b000, "g.lb">, Sched<[WriteLDB, ReadMemBase]>;
+defm MLW : MLoad_ri<0b010, "m.lw">, Sched<[WriteLDW, ReadMemBase]>;
+defm PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
+defm GLW : GLoad_ri<0b010, "g.lw">, Sched<[WriteLDW, ReadMemBase]>;
+defm MLBU: MLoad_ri<0b100, "m.lbu">, Sched<[WriteLDB, ReadMemBase]>;
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def MADDI : MALU_ri<0b000, "m.addi">;
