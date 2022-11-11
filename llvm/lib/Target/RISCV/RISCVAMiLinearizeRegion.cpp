@@ -1,6 +1,7 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
 #include "RISCVAMiLinearizeRegion.h"
+#include "RISCVInstrInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -38,6 +39,9 @@ char AMiLinearizeRegion::ID = 0;
 
 template <RISCV::AMi::Qualifier Q>
 void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
+  if (RISCV::AMi::hasQualifier<Q>(I->getOpcode()))
+    return;
+  
   auto PersistentInstr =
       RISCV::AMi::getQualified<Q>(I->getOpcode());
 

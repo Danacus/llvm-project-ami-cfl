@@ -292,6 +292,21 @@ void InstrInfoEmitter::emitAMiQualifierMap(
     OS << "  return -1;\n";
   }
   OS << "}\n";
+
+  OS << "template <>\n";
+  OS << "bool " << "hasQualifier<" << Namespace << "::AMi::" << QualName << ">" << "(uint16_t Inst) {\n";
+  if (!Map.empty()) {
+    OS << "  switch(Inst) {\n";
+    for (const auto &Entry : Map) {
+      OS << "  case " << Namespace << "::" << Entry.second << ":\n";
+    }
+    OS << "    return true;\n";
+    OS << "  default: return false;\n";
+    OS << "  }\n";
+  } else {
+    OS << "  return false;\n";
+  }
+  OS << "}\n";
 }
 
 void InstrInfoEmitter::emitAMiQualifierMappings(
