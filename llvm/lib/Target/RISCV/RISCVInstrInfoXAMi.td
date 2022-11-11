@@ -36,13 +36,11 @@ class AMiInstQualified<string I, string QI, string Q> {
   string Qualifier = Q;
 }
 
-/*
 multiclass QualifiedInstr<string qualifier> {
-  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "a">;
+  def _m : AMiInstQualified<!substr(NAME, !size(qualifier)), NAME, qualifier>;
 }
-*/
 
-multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> {
+multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedInstr<"a"> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
   def NAME : RVInstB<funct3, OPC_ABRANCH, (outs),
             (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
@@ -51,10 +49,9 @@ multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> {
     let isBranch = 1;
     let isTerminator = 1;
   }
-  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "a">;
 }
 
-multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> {
+multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedInstr<"ct"> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
   def NAME : RVInstB<funct3, OPC_CTBRANCH, (outs),
               (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
@@ -63,40 +60,61 @@ multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> {
     let isBranch = 1;
     let isTerminator = 1;
   }
-  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "ct">;
 }
 
-multiclass MLoad_ri<bits<3> funct3, string opcodestr> {
-  let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+multiclass MLoad_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"m"> {
   def NAME : RVInstI<funct3, OPC_MLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
-  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "m">;
 }
-multiclass PLoad_ri<bits<3> funct3, string opcodestr> {
-  let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+multiclass PLoad_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"p"> {
   def NAME : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
-  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "p">;
 }
-multiclass GLoad_ri<bits<3> funct3, string opcodestr> {
-  let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+multiclass GLoad_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"g"> {
   def NAME : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),              
         opcodestr, "$rd, ${imm12}(${rs1})">;
-  def _m : AMiInstQualified<!substr(NAME, 1), NAME, "g">;
+}
 }
 
 /*
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
-class MLoad_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_MLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+multiclass MALU_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"m"> {
+  def NAME : RVInstI<funct3, OPC_OP_MIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, $rs1, $imm12">,
+      Sched<[WriteIALU, ReadIALU]>;
+}
 
-class PLoad_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
-class GLoad_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+multiclass GALU_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"g"> {
+  def NAME : RVInstI<funct3, OPC_OP_GIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, $rs1, $imm12">,
+      Sched<[WriteIALU, ReadIALU]>;
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+multiclass PALU_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"p"> {
+  def NAME : RVInstI<funct3, OPC_OP_PIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, $rs1, $imm12">,
+      Sched<[WriteIALU, ReadIALU]>;
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+multiclass MALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
+             bit Commutable = 0> : QualifiedInstr<"m"> {
+  def NAME : RVInstR<funct7, funct3, OPC_OPM, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+              opcodestr, "$rd, $rs1, $rs2"> {
+    let isCommutable = Commutable;
+  }
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+multiclass PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
+             bit Commutable = 0> : QualifiedInstr<"p"> {
+  def NAME : RVInstR<funct7, funct3, OPC_OPP, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+              opcodestr, "$rd, $rs1, $rs2"> {
+    let isCommutable = Commutable;
+  }
 }
 */
 
@@ -135,6 +153,7 @@ class PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
 }
 
 
+
 //===----------------------------------------------------------------------===//
 // Instructions
 //===----------------------------------------------------------------------===//
@@ -155,8 +174,9 @@ def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
            Sched<[WriteJalr, ReadJalr]>;
 }
 
-//def : AMiInstQualified<"LUI", "PLUI", "p">;
-//def : AMiInstQualified<"JAL", "AJALR", "a">;
+def : AMiInstQualified<"LUI", "PLUI", "p">;
+def : AMiInstQualified<"JAL", "AJAL", "a">;
+def : AMiInstQualified<"JALR", "AJALR", "a">;
 
 defm ABEQ  : ABranchCC_rri<0b000, "a.beq">;
 defm ABNE  : ABranchCC_rri<0b001, "a.bne">;
@@ -165,12 +185,12 @@ defm ABGE  : ABranchCC_rri<0b101, "a.bge">;
 defm ABLTU : ABranchCC_rri<0b110, "a.bltu">;
 defm ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
 
-defm CTEQ  : CTBranchCC_rri<0b000, "ct.beq">;
-defm CTNE  : CTBranchCC_rri<0b001, "ct.bne">;
-defm CTLT  : CTBranchCC_rri<0b100, "ct.blt">;
-defm CTGE  : CTBranchCC_rri<0b101, "ct.bge">;
-defm CTLTU : CTBranchCC_rri<0b110, "ct.bltu">;
-defm CTGEU : CTBranchCC_rri<0b111, "ct.bgeu">;
+defm CTBEQ  : CTBranchCC_rri<0b000, "ct.beq">;
+defm CTBNE  : CTBranchCC_rri<0b001, "ct.bne">;
+defm CTBLT  : CTBranchCC_rri<0b100, "ct.blt">;
+defm CTBGE  : CTBranchCC_rri<0b101, "ct.bge">;
+defm CTBLTU : CTBranchCC_rri<0b110, "ct.bltu">;
+defm CTBGEU : CTBranchCC_rri<0b111, "ct.bgeu">;
 
 defm GLB : GLoad_ri<0b000, "g.lb">, Sched<[WriteLDB, ReadMemBase]>;
 defm MLW : MLoad_ri<0b010, "m.lw">, Sched<[WriteLDW, ReadMemBase]>;
