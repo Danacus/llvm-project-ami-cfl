@@ -96,30 +96,28 @@ multiclass GLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"g"> {
 }
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 class MALU_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_OP_MIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, $rs1, $imm12">,
       Sched<[WriteIALU, ReadIALU]>;
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class GALU_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_OP_GIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, $rs1, $imm12">,
       Sched<[WriteIALU, ReadIALU]>;
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class PALU_ri<bits<3> funct3, string opcodestr>
     : RVInstI<funct3, OPC_OP_PIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, $rs1, $imm12">,
       Sched<[WriteIALU, ReadIALU]>;
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class MALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
              bit Commutable = 0>
     : RVInstR<funct7, funct3, OPC_OPM, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
               opcodestr, "$rd, $rs1, $rs2"> {
   let isCommutable = Commutable;
+}
 }
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
@@ -130,7 +128,28 @@ class PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
   let isCommutable = Commutable;
 }
 
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+multiclass MShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : QualifiedMulti<"m"> {
+  def NAME : RVInstIShift<imm11_7, funct3, OPC_OP_MIMM, (outs GPR:$rd),
+                   (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
+                   "$rd, $rs1, $shamt">,
+      Sched<[WriteShiftImm, ReadShiftImm]>;
+}
 
+multiclass PShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : QualifiedMulti<"p"> {
+  def NAME : RVInstIShift<imm11_7, funct3, OPC_OP_PIMM, (outs GPR:$rd),
+                   (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
+                   "$rd, $rs1, $shamt">,
+      Sched<[WriteShiftImm, ReadShiftImm]>;
+}
+
+multiclass GShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : QualifiedMulti<"g"> {
+  def NAME : RVInstIShift<imm11_7, funct3, OPC_OP_GIMM, (outs GPR:$rd),
+                   (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
+                   "$rd, $rs1, $shamt">,
+      Sched<[WriteShiftImm, ReadShiftImm]>;
+}
+}
 
 //===----------------------------------------------------------------------===//
 // Instructions
@@ -196,6 +215,25 @@ def MORI  : MALU_ri<0b110, "m.ori">;
 
 def : AMiQualifiedAuto<"MORI">;
 
+def MANDI  : MALU_ri<0b111, "m.andi">;
+def : AMiQualifiedAuto<"MANDI">;
+def PANDI  : PALU_ri<0b111, "p.andi">;
+def : AMiQualifiedAuto<"PANDI">;
+def GANDI  : GALU_ri<0b111, "g.andi">;
+def : AMiQualifiedAuto<"GANDI">;
+
+defm GSLLI : GShift_ri<0b00000, 0b001, "g.slli">;
+defm MSLLI : MShift_ri<0b00000, 0b001, "m.slli">;
+defm PSLLI : PShift_ri<0b00000, 0b001, "p.slli">;
+
+defm GSRLI : GShift_ri<0b00000, 0b101, "g.srli">;
+defm MSRLI : MShift_ri<0b00000, 0b101, "m.srli">;
+defm PSRLI : PShift_ri<0b00000, 0b101, "p.srli">;
+
+defm GSRAI : GShift_ri<0b01000, 0b101, "g.srai">;
+defm MSRAI : MShift_ri<0b01000, 0b101, "m.srai">;
+defm PSRAI : PShift_ri<0b01000, 0b101, "p.srai">;
+
 def MADD  : MALU_rr<0b0000000, 0b000, "m.add", /*Commutable*/1>,
             Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def PADD  : PALU_rr<0b0000000, 0b000, "p.add", /*Commutable*/1>,
@@ -213,7 +251,8 @@ def MARK : RVInstI<0b000, OPC_MARK, (outs),
 }
 
 // Always persistent instructions
-
+def : AMiAlwaysPersistent<"SB">;
+def : AMiAlwaysPersistent<"SH">;
 def : AMiAlwaysPersistent<"SW">;
 
 //===----------------------------------------------------------------------===//
