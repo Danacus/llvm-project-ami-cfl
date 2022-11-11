@@ -263,11 +263,19 @@ namespace AMi {
     Activating,
   };
 
+  enum Class {
+    Activatable,
+    Mimicable,
+    AlwaysPersistent,
+  };
+
   template<Qualifier Q> 
   int16_t getQualified(uint16_t Inst);
 
   template<Qualifier Q> 
   bool hasQualifier(uint16_t Inst);
+
+  int16_t getClass(uint16_t Inst);
 } // end namespace AMi
 
 // Return true if both input instructions have equal rounding mode. If at least

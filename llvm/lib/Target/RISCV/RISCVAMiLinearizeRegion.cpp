@@ -121,7 +121,7 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
       continue;
 
     for (MachineInstr &I : *MRNode->getEntry()) {
-      if (I.getOpcode() == RISCV::SW) {
+      if (RISCV::AMi::getClass(I.getOpcode()) == RISCV::AMi::AlwaysPersistent) {
         AlwaysPersistent.push_back(&I);
       }
     }

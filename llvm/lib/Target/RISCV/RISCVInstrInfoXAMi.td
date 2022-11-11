@@ -30,20 +30,28 @@ def OPC_MARK      : RISCVOpcode<"MARK",      0b0001011>;
 // Instruction Class Templates
 //===----------------------------------------------------------------------===//
 
+class AMiClass;
+
+def Mimicable: AMiClass;
+def Activatable: AMiClass;
+def AlwaysPersistent: AMiClass;
+
 class AMiInstQualified<string I, string QI, string Q> {
   string Inst = I;
   string QualInst = QI;
   string Qualifier = Q;
+  AMiClass Class = Mimicable;
 }
 
 class AMiQualified<string I, string Q> : AMiInstQualified<!substr(I, !size(Q)), I, Q>;
 class AMiQualifiedAuto<string I, int quallen = 1> : AMiInstQualified<!substr(I, quallen), I, !substr(I, 0, quallen)>;
+class AMiAlwaysPersistent<string I> : AMiInstQualified<I, I, "p">;
 
 multiclass QualifiedMulti<string qualifier> {
   def _m : AMiQualified<NAME, qualifier>;
 }
 
-multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedMulti<"a"> {
+multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
   def NAME : RVInstB<funct3, OPC_ABRANCH, (outs),
             (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
@@ -52,9 +60,12 @@ multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedMulti<"a">
     let isBranch = 1;
     let isTerminator = 1;
   }
+  def _m : AMiQualified<NAME, "a"> {
+    let Class = Activatable; 
+  }
 }
 
-multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedMulti<"ct"> {
+multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
   def NAME : RVInstB<funct3, OPC_CTBRANCH, (outs),
               (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
@@ -62,6 +73,9 @@ multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedMulti<"ct
       Sched<[WriteJmp, ReadJmp, ReadJmp]> {
     let isBranch = 1;
     let isTerminator = 1;
+  }
+  def _m : AMiQualified<NAME, "ct"> {
+    let Class = Activatable; 
   }
 }
 
@@ -137,8 +151,12 @@ def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
 }
 
 def : AMiQualifiedAuto<"PLUI">;
-def : AMiQualifiedAuto<"AJAL">;
-def : AMiQualifiedAuto<"AJALR">;
+def : AMiQualifiedAuto<"AJAL"> {
+  let Class = Activatable;
+}
+def : AMiQualifiedAuto<"AJALR"> {
+  let Class = Activatable;
+}
 
 defm ABEQ  : ABranchCC_rri<0b000, "a.beq">;
 defm ABNE  : ABranchCC_rri<0b001, "a.bne">;
@@ -191,6 +209,10 @@ def MARK : RVInstI<0b000, OPC_MARK, (outs),
   let rs1 = 0;
   let rd = 0;
 }
+
+// Always persistent instructions
+
+def : AMiAlwaysPersistent<"SW">;
 
 //===----------------------------------------------------------------------===//
 // Non-standard extensions

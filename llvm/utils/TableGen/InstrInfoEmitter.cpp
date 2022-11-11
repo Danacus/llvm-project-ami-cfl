@@ -320,6 +320,8 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
   std::map<StringRef, StringRef> GMap;
   std::map<StringRef, StringRef> CTMap;
   std::map<StringRef, StringRef> AMap;
+  
+  std::map<StringRef, StringRef> ClassMap;
 
   for (auto *Def : Defs) {
     //CodeGenInstruction Inst = Target.getInstruction(Def->getValueAsDef("Inst"));
@@ -327,6 +329,10 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
         //Target.getInstruction(Def->getValueAsDef("QualInst"));
     StringRef Inst = Def->getValueAsString("Inst");
     StringRef QualInst = Def->getValueAsString("QualInst");
+
+    StringRef AMiClass = Def->getValueAsDef("Class")->getName();
+    ClassMap.insert({ Inst, AMiClass });
+
     std::pair<StringRef, StringRef> Tuple = {Inst, QualInst};
     switch (std::tolower(Def->getValueAsString("Qualifier")[0])) {
     case 'p':
@@ -344,7 +350,7 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
     case 'a':
       AMap.insert(Tuple);
       break;
-    }
+    }    
   }
 
   OS << "#ifdef GET_INSTRINFO_AMI_QUAL\n";
@@ -357,6 +363,21 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
   emitAMiQualifierMap(OS, Target, "Ghost", GMap);
   emitAMiQualifierMap(OS, Target, "ConstantTime", CTMap);
   emitAMiQualifierMap(OS, Target, "Activating", AMap);
+
+  OS << "int16_t getClass" << "(uint16_t Inst) {\n";
+  if (!ClassMap.empty()) {
+    OS << "  switch(Inst) {\n";
+    for (const auto &Entry : ClassMap) {
+      OS << "  case " << Namespace << "::" << Entry.first << ":\n";
+        OS << "    return " << Namespace << "::AMi::" << Entry.second << ";\n";
+    }
+    OS << "  default: return -1;\n";
+    OS << "  }\n";
+  } else {
+    OS << "  return -1;\n";
+  }
+  OS << "}\n";
+
   OS << "} // end namespace AMi\n";
   OS << "} // end namespace " << Namespace << "\n";
   OS << "} // end namespace llvm\n";
