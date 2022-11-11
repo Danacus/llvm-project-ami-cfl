@@ -313,7 +313,7 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
     StringRef Inst = Def->getValueAsString("Inst");
     StringRef QualInst = Def->getValueAsString("QualInst");
     std::pair<StringRef, StringRef> Tuple = {Inst, QualInst};
-    switch (Def->getValueAsString("Qualifier")[0]) {
+    switch (std::tolower(Def->getValueAsString("Qualifier")[0])) {
     case 'p':
       PMap.insert(Tuple);
       break;

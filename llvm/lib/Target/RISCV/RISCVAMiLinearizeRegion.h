@@ -1,6 +1,7 @@
 #ifndef LLVM_CODEGEN_AMI_LINEARIZE_REGION_H
 #define LLVM_CODEGEN_AMI_LINEARIZE_REGION_H
 
+#include "RISCVInstrInfo.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -29,7 +30,8 @@ public:
 
   AMiLinearizeRegion();
 
-  void setPersistent(MachineInstr *I);
+  template <RISCV::AMi::Qualifier Q>
+  void setQualifier(MachineInstr *I);
   void handlePersistentInstr(MachineInstr *I);
   void handleRegion(MachineRegion *Region);
 

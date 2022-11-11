@@ -36,11 +36,14 @@ class AMiInstQualified<string I, string QI, string Q> {
   string Qualifier = Q;
 }
 
-multiclass QualifiedInstr<string qualifier> {
-  def _m : AMiInstQualified<!substr(NAME, !size(qualifier)), NAME, qualifier>;
+class AMiQualified<string I, string Q> : AMiInstQualified<!substr(I, !size(Q)), I, Q>;
+class AMiQualifiedAuto<string I, int quallen = 1> : AMiInstQualified<!substr(I, quallen), I, !substr(I, 0, quallen)>;
+
+multiclass QualifiedMulti<string qualifier> {
+  def _m : AMiQualified<NAME, qualifier>;
 }
 
-multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedInstr<"a"> {
+multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedMulti<"a"> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
   def NAME : RVInstB<funct3, OPC_ABRANCH, (outs),
             (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
@@ -51,7 +54,7 @@ multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedInstr<"a">
   }
 }
 
-multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedInstr<"ct"> {
+multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedMulti<"ct"> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
   def NAME : RVInstB<funct3, OPC_CTBRANCH, (outs),
               (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
@@ -63,60 +66,19 @@ multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> : QualifiedInstr<"ct
 }
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
-multiclass MLoad_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"m"> {
+multiclass MLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"m"> {
   def NAME : RVInstI<funct3, OPC_MLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 }
-multiclass PLoad_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"p"> {
+multiclass PLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"p"> {
   def NAME : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 }
-multiclass GLoad_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"g"> {
+multiclass GLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"g"> {
   def NAME : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),              
         opcodestr, "$rd, ${imm12}(${rs1})">;
 }
 }
-
-/*
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-multiclass MALU_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"m"> {
-  def NAME : RVInstI<funct3, OPC_OP_MIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-}
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-multiclass GALU_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"g"> {
-  def NAME : RVInstI<funct3, OPC_OP_GIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-}
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-multiclass PALU_ri<bits<3> funct3, string opcodestr> : QualifiedInstr<"p"> {
-  def NAME : RVInstI<funct3, OPC_OP_PIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-}
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-multiclass MALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
-             bit Commutable = 0> : QualifiedInstr<"m"> {
-  def NAME : RVInstR<funct7, funct3, OPC_OPM, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
-              opcodestr, "$rd, $rs1, $rs2"> {
-    let isCommutable = Commutable;
-  }
-}
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-multiclass PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
-             bit Commutable = 0> : QualifiedInstr<"p"> {
-  def NAME : RVInstR<funct7, funct3, OPC_OPP, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
-              opcodestr, "$rd, $rs1, $rs2"> {
-    let isCommutable = Commutable;
-  }
-}
-*/
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class MALU_ri<bits<3> funct3, string opcodestr>
@@ -174,9 +136,9 @@ def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
            Sched<[WriteJalr, ReadJalr]>;
 }
 
-def : AMiInstQualified<"LUI", "PLUI", "p">;
-def : AMiInstQualified<"JAL", "AJAL", "a">;
-def : AMiInstQualified<"JALR", "AJALR", "a">;
+def : AMiQualifiedAuto<"PLUI">;
+def : AMiQualifiedAuto<"AJAL">;
+def : AMiQualifiedAuto<"AJALR">;
 
 defm ABEQ  : ABranchCC_rri<0b000, "a.beq">;
 defm ABNE  : ABranchCC_rri<0b001, "a.bne">;
@@ -204,15 +166,23 @@ def GADDI : GALU_ri<0b000, "g.addi">;
 def PADDI : PALU_ri<0b000, "p.addi">;
 }
 
+def : AMiQualifiedAuto<"MADDI">;
+def : AMiQualifiedAuto<"GADDI">;
+def : AMiQualifiedAuto<"PADDI">;
+
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def MORI  : MALU_ri<0b110, "m.ori">;
 }
 
+def : AMiQualifiedAuto<"MORI">;
 
 def MADD  : MALU_rr<0b0000000, 0b000, "m.add", /*Commutable*/1>,
             Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def PADD  : PALU_rr<0b0000000, 0b000, "p.add", /*Commutable*/1>,
             Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+
+def : AMiQualifiedAuto<"MADD">;
+def : AMiQualifiedAuto<"PADD">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MARK : RVInstI<0b000, OPC_MARK, (outs),

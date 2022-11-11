@@ -1,7 +1,6 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
 #include "RISCVAMiLinearizeRegion.h"
-#include "RISCVInstrInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -37,40 +36,19 @@ using namespace llvm;
 
 char AMiLinearizeRegion::ID = 0;
 
-void AMiLinearizeRegion::setPersistent(MachineInstr *I) {
-  auto PersistentInstr = RISCV::AMi::getQualified<RISCV::AMi::Persistent>(I->getOpcode());
-  
+template <RISCV::AMi::Qualifier Q>
+void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
+  auto PersistentInstr =
+      RISCV::AMi::getQualified<Q>(I->getOpcode());
+
   if (PersistentInstr != -1) {
-    errs() << *I << " --> ";
     I->setDesc(TII->get(PersistentInstr));
-    errs() << *I << "\n";
-  }
-  
-  switch (I->getOpcode()) {
-  case RISCV::SLLI:
-    // TODO
-    //I->setDesc(TII->get(RISCV::PSLLI));
-    break;
-  case RISCV::LUI:
-    I->setDesc(TII->get(RISCV::PLUI));
-    break;
-  case RISCV::ADD:
-    I->setDesc(TII->get(RISCV::PADD));
-    break;
-  case RISCV::ADDI:
-    I->setDesc(TII->get(RISCV::PADDI));
-    break;
-  // Always persistent
-  case RISCV::SW:
-    break;
-  // Already persistent
-  case RISCV::PLUI:
-  case RISCV::PADD:
-  case RISCV::PADDI:
-    break;
-  default:
+  } else {
     errs() << "Unsupported instruction: " << *I;
-    llvm_unreachable("AMi error: unsupported instruction cannot be made persistent!");
+    /*
+    llvm_unreachable(
+        "AMi error: unsupported instruction cannot be made persistent!");
+    */
   }
 }
 
@@ -83,7 +61,7 @@ void AMiLinearizeRegion::handlePersistentInstr(MachineInstr *I) {
 
   while (!WorkSet.empty()) {
     auto *I = WorkSet.pop_back_val();
-    setPersistent(I);
+    setQualifier<RISCV::AMi::Persistent>(I);
 
     for (auto &Op : I->operands()) {
       if (!Op.isReg())
@@ -107,8 +85,9 @@ void AMiLinearizeRegion::handlePersistentInstr(MachineInstr *I) {
             I->getOperand(0).getReg().asMCReg())
         .add(I->getOperand(1))
         .add(I->getOperand(2));
-  } else { 
-    llvm_unreachable("AMi error: unable to nullify unwanted side-effects in mimicry mode!");
+  } else {
+    llvm_unreachable(
+        "AMi error: unable to nullify unwanted side-effects in mimicry mode!");
   }
 }
 
@@ -120,8 +99,8 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
          "AMi error: activating region cannot have multiple entry points!");
   for (MachineBasicBlock *Pred : Region->getEntry()->predecessors()) {
     MachineInstr &BranchI = Pred->instr_back();
-    if (BranchI.getOpcode() == RISCV::BEQ) {
-      BranchI.setDesc(TII->get(RISCV::ABEQ));
+    if (BranchI.isBranch()) {
+      setQualifier<RISCV::AMi::Activating>(&BranchI);
     } else {
       llvm_unreachable(
           "AMi error: unsupported branch instruction for activating region!");
