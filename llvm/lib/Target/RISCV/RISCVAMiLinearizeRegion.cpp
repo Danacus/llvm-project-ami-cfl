@@ -49,10 +49,8 @@ void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
     I->setDesc(TII->get(PersistentInstr));
   } else {
     errs() << "Unsupported instruction: " << *I;
-    /*
-    llvm_unreachable(
-        "AMi error: unsupported instruction cannot be made persistent!");
-    */
+    //llvm_unreachable(
+        //"AMi error: unsupported instruction cannot be qualified!");
   }
 }
 

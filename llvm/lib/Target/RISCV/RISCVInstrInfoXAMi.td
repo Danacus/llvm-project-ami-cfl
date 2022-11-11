@@ -45,7 +45,9 @@ class AMiInstQualified<string I, string QI, string Q> {
 
 class AMiQualified<string I, string Q> : AMiInstQualified<!substr(I, !size(Q)), I, Q>;
 class AMiQualifiedAuto<string I, int quallen = 1> : AMiInstQualified<!substr(I, quallen), I, !substr(I, 0, quallen)>;
-class AMiAlwaysPersistent<string I> : AMiInstQualified<I, I, "p">;
+class AMiAlwaysPersistent<string I> : AMiInstQualified<I, I, "p"> {
+  let Class = AlwaysPersistent;
+}
 
 multiclass QualifiedMulti<string qualifier> {
   def _m : AMiQualified<NAME, qualifier>;
