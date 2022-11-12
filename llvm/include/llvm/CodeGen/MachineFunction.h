@@ -391,6 +391,8 @@ class LLVM_EXTERNAL_VISIBILITY MachineFunction {
   std::vector<unsigned> FilterEnds;
 
   EHPersonality PersonalityTypeCache = EHPersonality::Unknown;
+  
+  std::vector<Register> SecretArgs;
 
   /// \}
 
@@ -847,6 +849,9 @@ public:
   /// \returns true if no problems were found.
   bool verify(Pass *p = nullptr, const char *Banner = nullptr,
               bool AbortOnError = true) const;
+
+  void addSecretArg(Register Reg);
+  iterator_range<std::vector<Register>::iterator> secretArgs();
 
   // Provide accessors for the MachineBasicBlock list...
   using iterator = BasicBlockListType::iterator;

@@ -37,7 +37,7 @@ bool FindSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   auto FS = FunctionSecrets(&F);
 
   for (BasicBlock &BB : F) {
-    auto BS = BlockSecrets(&BB);
+    //auto BS = BlockSecrets(&BB);
     for (Instruction &I : BB) {
       
       if (!isa<IntrinsicInst>(I))
@@ -89,9 +89,9 @@ bool FindSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
       //TargetInstr->dump();
       
       if (Upgrade) {
-        Secrets.Upgrades.push_back(TargetInstr);
+        //Secrets.Upgrades.push_back(TargetInstr);
       } else if (Downgrade) {
-        Secrets.Downgrades.push_back(TargetInstr);
+        //Secrets.Downgrades.push_back(TargetInstr);
       }
     }
   }
@@ -114,24 +114,16 @@ bool FindSecretsPrinter::runOnMachineFunction(MachineFunction &MF) {
   
   errs() << "Secrets for function: " << Secrets.Func->getName() << "\n";
   
-  errs() << "Arguments:\n";
+  if (Secrets.ReturnSecret) {
+    errs() << "Returns secret\n";
+  }
+  
+  errs() << "Secret arguments:\n";
   
   for (auto &Arg : Secrets.Args) {
     Arg->dump();
   }
-  
-  errs() << "Upgrading instructions:\n";
-  
-  for (auto &Instr : Secrets.Upgrades) {
-    Instr->dump();
-  }
-  
-  errs() << "Downgrading instructions:\n";
 
-  for (auto &Instr : Secrets.Downgrades) {
-    Instr->dump();
-  }
-  
   return false;
 }
 

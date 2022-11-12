@@ -15,6 +15,7 @@
 #include "InstrEmitter.h"
 #include "SDNodeDbgValue.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -84,9 +85,16 @@ static unsigned countOperands(SDNode *Node, unsigned NumExpUses,
 void InstrEmitter::EmitCopyFromReg(SDNode *Node, unsigned ResNo, bool IsClone,
                                    Register SrcReg,
                                    DenseMap<SDValue, Register> &VRBaseMap) {
+  //auto *RegNode = cast<RegisterSDNode>(Node->getOperand(1));
+
   Register VRBase;
   if (SrcReg.isVirtual()) {
-    // Just use the input register directly!
+    /*
+    if (RegNode->isSecret()) {
+      BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(SrcReg);
+    }
+    */
+
     SDValue Op(Node, ResNo);
     if (IsClone)
       VRBaseMap.erase(Op);
@@ -1226,9 +1234,28 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     break;
   }
   case ISD::CopyFromReg: {
+<<<<<<< HEAD
     unsigned SrcReg = cast<RegisterSDNode>(Node->getOperand(1))->getReg();
     EmitCopyFromReg(Node, 0, IsClone, SrcReg, VRBaseMap);
+=======
+    auto *RegNode = cast<RegisterSDNode>(Node->getOperand(1));
+    unsigned SrcReg = RegNode->getReg();
+
+    EmitCopyFromReg(Node, 0, IsClone, IsCloned, SrcReg, VRBaseMap);
+>>>>>>> 86c87aceb505 (IR secret parameter attribute to SECRET PseudoInstruction)
     break;
+  }
+  case ISD::Secret: {
+    for (SDNode::use_iterator UI = Node->use_begin(), UE = Node->use_end(); UI != UE; ++UI) {
+      SDNode *TargetNode = *UI;
+      switch (TargetNode->getOpcode()) {
+        case ISD::CopyFromReg:    
+          auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
+          BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
+          break;
+      }
+    }
+    break;    
   }
   case ISD::EH_LABEL:
   case ISD::ANNOTATION_LABEL: {

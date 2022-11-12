@@ -1261,6 +1261,14 @@ def COPY : StandardPseudoInstruction {
   let isAsCheapAsAMove = true;
   let hasNoSchedulingInfo = false;
 }
+def SECRET : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins unknown:$src);
+  let AsmString = "SECRET";
+  let hasSideEffects = true;
+  let isAsCheapAsAMove = true;
+  let hasNoSchedulingInfo = false;
+}
 def BUNDLE : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins variable_ops);

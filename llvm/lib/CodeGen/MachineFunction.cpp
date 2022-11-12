@@ -1490,6 +1490,14 @@ void MachineConstantPool::print(raw_ostream &OS) const {
   }
 }
 
+void MachineFunction::addSecretArg(Register Reg) {
+  SecretArgs.push_back(Reg);
+}
+
+iterator_range<std::vector<Register>::iterator> MachineFunction::secretArgs() {
+  return make_range(SecretArgs.begin(), SecretArgs.end());
+}
+
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 LLVM_DUMP_METHOD void MachineConstantPool::dump() const { print(dbgs()); }
 #endif

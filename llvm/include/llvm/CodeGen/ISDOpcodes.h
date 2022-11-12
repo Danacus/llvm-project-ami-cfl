@@ -207,6 +207,8 @@ enum NodeType {
   /// SelectionDAG.  The register is available from the RegisterSDNode object.
   CopyFromReg,
 
+  Secret,
+
   /// UNDEF - An undefined node.
   UNDEF,
 

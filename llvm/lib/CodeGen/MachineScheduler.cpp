@@ -385,14 +385,20 @@ ScheduleDAGInstrs *PostMachineScheduler::createPostMachineScheduler() {
 /// design would be to split blocks at scheduling boundaries, but LLVM has a
 /// general bias against block splitting purely for implementation simplicity.
 bool MachineScheduler::runOnMachineFunction(MachineFunction &mf) {
+  errs() << "MachineScheduler start\n";
+
   if (skipFunction(mf.getFunction()))
     return false;
 
   if (EnableMachineSched.getNumOccurrences()) {
     if (!EnableMachineSched)
       return false;
-  } else if (!mf.getSubtarget().enableMachineScheduler())
+  } else if (!mf.getSubtarget().enableMachineScheduler()) {
+    errs() << "MachineScheduler disabled\n";
     return false;
+  }
+
+  mf.dump();
 
   LLVM_DEBUG(dbgs() << "Before MISched:\n"; mf.print(dbgs()));
 
@@ -419,6 +425,10 @@ bool MachineScheduler::runOnMachineFunction(MachineFunction &mf) {
   LLVM_DEBUG(LIS->dump());
   if (VerifyScheduling)
     MF->verify(this, "After machine scheduling.");
+  
+  errs() << "MachineScheduler end\n";
+  MF->dump();
+  
   return true;
 }
 

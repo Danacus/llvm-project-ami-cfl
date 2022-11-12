@@ -12631,17 +12631,24 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
                      CallConv == CallingConv::Fast ? CC_RISCV_FastCC
                                                    : CC_RISCV);
 
-  for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
+  for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {    
     CCValAssign &VA = ArgLocs[i];
     SDValue ArgValue;
+    SDValue NewChain = Chain;
+    
+    if (Ins[i].Flags.isSecret()) {
+      auto SecretNode = DAG.getSecret(Chain, DL);
+      NewChain = SecretNode;
+    }
+
     // Passing f64 on RV32D with a soft float ABI must be handled as a special
     // case.
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64)
-      ArgValue = unpackF64OnRV32DSoftABI(DAG, Chain, VA, DL);
+      ArgValue = unpackF64OnRV32DSoftABI(DAG, NewChain, VA, DL);
     else if (VA.isRegLoc())
-      ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL, Ins[i], *this);
+      ArgValue = unpackFromRegLoc(DAG, NewChain, VA, DL, Ins[i], *this);
     else
-      ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL);
+      ArgValue = unpackFromMemLoc(DAG, NewChain, VA, DL);
 
     if (VA.getLocInfo() == CCValAssign::Indirect) {
       // If the original argument was split and passed by reference (e.g. i128
@@ -12649,7 +12656,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
       // address). Vectors may be partly split to registers and partly to the
       // stack, in which case the base address is partly offset and subsequent
       // stores are relative to that.
-      InVals.push_back(DAG.getLoad(VA.getValVT(), DL, Chain, ArgValue,
+      InVals.push_back(DAG.getLoad(VA.getValVT(), DL, NewChain, ArgValue,
                                    MachinePointerInfo()));
       unsigned ArgIndex = Ins[i].OrigArgIndex;
       unsigned ArgPartOffset = Ins[i].PartOffset;
@@ -12661,7 +12668,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
         if (PartVA.getValVT().isScalableVector())
           Offset = DAG.getNode(ISD::VSCALE, DL, XLenVT, Offset);
         SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, ArgValue, Offset);
-        InVals.push_back(DAG.getLoad(PartVA.getValVT(), DL, Chain, Address,
+        InVals.push_back(DAG.getLoad(PartVA.getValVT(), DL, NewChain, Address,
                                      MachinePointerInfo()));
         ++i;
       }

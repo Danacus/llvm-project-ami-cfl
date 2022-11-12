@@ -53,6 +53,7 @@ namespace ISD {
     unsigned IsInConsecutiveRegs : 1;
     unsigned IsCopyElisionCandidate : 1; ///< Argument copy elision candidate
     unsigned IsPointer : 1;
+    unsigned IsSecret : 1;
 
     unsigned ByValOrByRefSize = 0; ///< Byval or byref struct size
 
@@ -66,8 +67,8 @@ namespace ISD {
           IsSwiftError(0), IsCFGuardTarget(0), IsHva(0), IsHvaStart(0),
           IsSecArgPass(0), MemAlign(0), OrigAlign(0),
           IsInConsecutiveRegsLast(0), IsInConsecutiveRegs(0),
-          IsCopyElisionCandidate(0), IsPointer(0) {
-      static_assert(sizeof(*this) == 3 * sizeof(unsigned), "flags are too big");
+          IsCopyElisionCandidate(0), IsPointer(0), IsSecret(0) {
+      static_assert(sizeof(*this) == 4 * sizeof(unsigned), "flags are too big");
     }
 
     bool isZExt() const { return IsZExt; }
@@ -140,6 +141,9 @@ namespace ISD {
 
     bool isPointer()  const { return IsPointer; }
     void setPointer() { IsPointer = 1; }
+
+    bool isSecret()  const { return IsSecret; }
+    void setSecret() { IsSecret = 1; }
 
     Align getNonZeroMemAlign() const {
       return decodeMaybeAlign(MemAlign).valueOrOne();

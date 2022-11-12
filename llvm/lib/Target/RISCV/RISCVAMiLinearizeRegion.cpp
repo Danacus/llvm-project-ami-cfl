@@ -132,6 +132,11 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
 
 bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Region Pass\n";
+  
+  for (Register Arg : MF.secretArgs()) {
+    errs() << Arg.virtRegIndex() << " is secret\n";
+  }
+  
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
 
   const auto &ST = MF.getSubtarget();

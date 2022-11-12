@@ -10,28 +10,10 @@
 
 using namespace llvm;
 
-struct SecretVar {
-  Instruction* Instr;
-  
-  SecretVar(Instruction* I) {
-    Instr = I;
-  }
-};
-
-struct BlockSecrets {
-  BasicBlock* Block;
-  SmallVector<SecretVar> SecretVars;
-  
-  BlockSecrets(BasicBlock* B) {
-    Block = B;
-  }
-};
-
 struct FunctionSecrets {
   Function* Func;
-  SmallVector<Instruction*> Upgrades;
-  SmallVector<Instruction*> Downgrades;
   SmallVector<Argument*> Args;
+  bool ReturnSecret;
   
   FunctionSecrets(Function* F) {
     Func = F;
@@ -40,9 +22,6 @@ struct FunctionSecrets {
   FunctionSecrets() {}
 };
 
-struct SecretParams {
-  SmallVector<Argument*> Args;
-};
 
 namespace llvm {
 

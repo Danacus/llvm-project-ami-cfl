@@ -808,6 +808,12 @@ public:
     return getNode(ISD::CopyFromReg, dl, VTs,
                    ArrayRef(Ops, Glue.getNode() ? 3 : 2));
   }
+  
+  SDValue getSecret(SDValue Chain, const SDLoc &dl) {
+    SDVTList VTs = getVTList(MVT::Other);
+    SDValue Ops[] = { Chain };
+    return getNode(ISD::Secret, dl, VTs, makeArrayRef(Ops, 1));
+  }
 
   SDValue getCondCode(ISD::CondCode Cond);
 

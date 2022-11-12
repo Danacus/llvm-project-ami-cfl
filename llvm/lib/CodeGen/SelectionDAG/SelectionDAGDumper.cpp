@@ -174,6 +174,7 @@ std::string SDNode::getOperationName(const SelectionDAG *G) const {
 
   case ISD::CopyToReg:                  return "CopyToReg";
   case ISD::CopyFromReg:                return "CopyFromReg";
+  case ISD::Secret:                     return "Secret";
   case ISD::UNDEF:                      return "undef";
   case ISD::VSCALE:                     return "vscale";
   case ISD::MERGE_VALUES:               return "merge_values";

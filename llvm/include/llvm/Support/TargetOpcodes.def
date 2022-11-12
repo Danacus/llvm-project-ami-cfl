@@ -109,6 +109,8 @@ HANDLE_TARGET_OPCODE(DBG_LABEL)
 /// used to copy between subregisters of virtual registers.
   HANDLE_TARGET_OPCODE(COPY)
 
+HANDLE_TARGET_OPCODE(SECRET)
+
 /// BUNDLE - This instruction represents an instruction bundle. Instructions
 /// which immediately follow a BUNDLE instruction which are marked with
 /// 'InsideBundle' flag are inside the bundle.

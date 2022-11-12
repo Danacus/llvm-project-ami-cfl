@@ -34,6 +34,7 @@
 #include "llvm/CodeGen/CodeGenCommonISel.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/GCMetadata.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -91,6 +92,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
@@ -10597,6 +10599,8 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
         Flags.setSwiftAsync();
       if (Arg.hasAttribute(Attribute::SwiftError))
         Flags.setSwiftError();
+      if (Arg.hasAttribute(Attribute::Secret))
+        Flags.setSecret();
       if (Arg.hasAttribute(Attribute::ByVal))
         Flags.setByVal();
       if (Arg.hasAttribute(Attribute::ByRef))
@@ -10619,6 +10623,11 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
         // preallocated handling in the various CC lowering callbacks.
         Flags.setByVal();
       }
+      /*
+      if (Arg.hasAttribute(Attribute::Secret)) {
+        Flags.setSecret();
+      }
+      */
 
       // Certain targets (such as MIPS), may have a different ABI alignment
       // for a type depending on the context. Give the target a chance to
@@ -10691,6 +10700,8 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
       PartBase += VT.getStoreSize().getKnownMinValue();
     }
   }
+  
+  //DAG.viewGraph();
 
   // Call the target to set up the argument values.
   SmallVector<SDValue, 8> InVals;
@@ -10713,6 +10724,8 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
 
   // Update the DAG with the new chain value resulting from argument lowering.
   DAG.setRoot(NewRoot);
+
+  //DAG.viewGraph();
 
   // Set up the argument values.
   unsigned i = 0;
@@ -10762,6 +10775,28 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
                              ElidedArgCopyInstrs, ArgCopyElisionCandidates, Arg,
                              InVals[i], ArgHasUses);
     }
+
+    /* Target-independent secret hack (abandoned)
+    if (Arg.hasAttribute(Attribute::Secret)) {
+      switch (InVals[i].getOpcode()) {
+        case ISD::CopyFromReg:
+          auto SecretNode = DAG.getSecret(DAG.getEntryNode(), dl);
+          SDValue NewNode;
+          if (InVals[i].getNumOperands() == 2) {
+            SDVTList VTs = DAG.getVTList(InVals[i].getValueType(), MVT::Other, MVT::Other);
+            SDValue Ops[] = { SecretNode, InVals[i].getOperand(1) };
+            NewNode = DAG.getNode(ISD::CopyFromReg, dl, VTs, makeArrayRef(Ops, 2));
+          } else if (InVals[i].getNumOperands() == 3) {
+            SDVTList VTs = DAG.getVTList(InVals[i].getValueType(), MVT::Other, MVT::Other, MVT::Glue);
+            SDValue Ops[] = { SecretNode, InVals[i].getOperand(1), InVals[i].getOperand(2) };
+            NewNode = DAG.getNode(ISD::CopyFromReg, dl, VTs, makeArrayRef(Ops, 3));
+          }
+          InVals[i] = NewNode;
+
+          break;
+      }
+    }
+    */
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.
@@ -10842,7 +10877,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
         SwiftError->setCurrentVReg(FuncInfo->MBB, SwiftError->getFunctionArg(),
                                    Reg);
     }
-
+    
     // If this argument is live outside of the entry block, insert a copy from
     // wherever we got it to the vreg that other BB's will reference it as.
     if (Res.getOpcode() == ISD::CopyFromReg) {
