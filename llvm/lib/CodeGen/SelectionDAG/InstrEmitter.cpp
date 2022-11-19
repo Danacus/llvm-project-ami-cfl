@@ -1257,13 +1257,8 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     (void)isNew; // Silence compiler warning.
     assert(isNew && "Node emitted out of order - early");
 
-    // Pseudo-instruction emission
-    switch (TargetNode->getOpcode()) {
-      case ISD::CopyFromReg:    
-        auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
-        BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
-        break;
-    }
+    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(TargetVReg);
+
     break;    
   }
   case ISD::EH_LABEL:
