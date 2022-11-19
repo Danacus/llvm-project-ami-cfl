@@ -1252,12 +1252,19 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     SDValue Op(Node, 0);
     if (IsClone)
       VRBaseMap.erase(Op);
-    auto TargetVReg = VRBaseMap.find(TargetNode)->getSecond();
-    bool isNew = VRBaseMap.insert(std::make_pair(Op, TargetVReg)).second;
+    auto SrcVReg = VRBaseMap.find(TargetNode)->getSecond();
+    bool isNew = VRBaseMap.insert(std::make_pair(Op, SrcVReg)).second;
     (void)isNew; // Silence compiler warning.
     assert(isNew && "Node emitted out of order - early");
 
-    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(TargetVReg);
+    //auto SrcVReg = VRBaseMap.find(TargetNode)->getSecond();
+    //auto VRBase = MRI->createVirtualRegister(MRI->getRegClass(SrcVReg));
+    //BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET),
+            //VRBase).addReg(SrcVReg);
+
+    //BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
+            //VRBase).addReg(SrcVReg);
+    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(SrcVReg);
 
     break;    
   }

@@ -69,6 +69,10 @@ bool DeadMachineInstructionElim::isDead(const MachineInstr *MI) const {
   if (MI->getOpcode() == TargetOpcode::LOCAL_ESCAPE)
     return false;
 
+  // Don't delete secret annotations
+  if (MI->getOpcode() == TargetOpcode::SECRET)
+    return false;
+
   // Don't delete instructions with side effects.
   bool SawStore = false;
   if (!MI->isSafeToMove(nullptr, SawStore) && !MI->isPHI())

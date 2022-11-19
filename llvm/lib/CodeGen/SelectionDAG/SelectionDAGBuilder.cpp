@@ -1539,6 +1539,8 @@ SDValue SelectionDAGBuilder::getCopyFromRegs(const Value *V, Type *Ty) {
     SDValue Chain = DAG.getEntryNode();
     Result = RFV.getCopyFromRegs(DAG, FuncInfo, getCurSDLoc(), Chain, nullptr,
                                  V);
+    if (FuncInfo.SecretRegisters.contains(InReg))
+      Result = DAG.getSecret(DAG.getEntryNode(), getCurSDLoc(), Result, Result.getValueType());
     resolveDanglingDebugInfo(V, Result);
   }
 
@@ -10865,13 +10867,25 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     if (Res.getOpcode() == ISD::CopyFromReg) {
       // If we can, though, try to skip creating an unnecessary vreg.
       // FIXME: This isn't very clean... it would be nice to make this more
-      // general.
+      // general.      
       unsigned Reg = cast<RegisterSDNode>(Res.getOperand(1))->getReg();
       if (Register::isVirtualRegister(Reg)) {
         FuncInfo->ValueMap[&Arg] = Reg;
         continue;
       }
     }
+    
+    if (Res.getOpcode() == ISD::Secret) {
+      if (SDValue V = Res.getOperand(1); V.getOpcode() == ISD::CopyFromReg) {
+        unsigned Reg = cast<RegisterSDNode>(V.getOperand(1))->getReg();
+        if (Register::isVirtualRegister(Reg)) {
+          FuncInfo->ValueMap[&Arg] = Reg;
+          FuncInfo->SecretRegisters.insert(Reg);
+          continue;
+        }
+      }
+    }
+
     if (!isOnlyUsedInEntryBlock(&Arg, TM.Options.EnableFastISel)) {
       FuncInfo->InitializeRegForValue(&Arg);
       SDB->CopyToExportRegsIfNeeded(&Arg);

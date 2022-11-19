@@ -2066,6 +2066,7 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
       break;
     case ISD::LIFETIME_START:
     case ISD::LIFETIME_END:
+    case ISD::Secret:
     case ISD::CopyFromReg:
     case ISD::CopyToReg:
       AddToWorklist(i, CurNode->getOperand(0).getNode(), CurOpNumber);
@@ -9004,6 +9005,7 @@ SDValue DAGCombiner::visitShiftByConstant(SDNode *N) {
                             BinOpLHSVal.getOpcode() == ISD::SRL) &&
                            isa<ConstantSDNode>(BinOpLHSVal.getOperand(1));
   bool IsCopyOrSelect = BinOpLHSVal.getOpcode() == ISD::CopyFromReg ||
+                        BinOpLHSVal.getOpcode() == ISD::Secret ||
                         BinOpLHSVal.getOpcode() == ISD::SELECT;
 
   if (!IsShiftByConstant && !IsCopyOrSelect)
@@ -26197,6 +26199,7 @@ void DAGCombiner::GatherAllAliases(SDNode *N, SDValue OriginalChain,
     }
 
     case ISD::CopyFromReg:
+    case ISD::Secret:
       // Always forward past past CopyFromReg.
       C = C.getOperand(0);
       return true;

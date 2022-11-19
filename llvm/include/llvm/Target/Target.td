@@ -1265,7 +1265,7 @@ def SECRET : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins unknown:$src);
   let AsmString = "SECRET";
-  let hasSideEffects = true;
+  let hasSideEffects = false;
   let isAsCheapAsAMove = true;
   let hasNoSchedulingInfo = false;
 }
