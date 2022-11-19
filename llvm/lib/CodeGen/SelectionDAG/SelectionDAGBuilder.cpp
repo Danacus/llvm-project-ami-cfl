@@ -10725,7 +10725,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
   // Update the DAG with the new chain value resulting from argument lowering.
   DAG.setRoot(NewRoot);
 
-  //DAG.viewGraph();
+  DAG.viewGraph();
 
   // Set up the argument values.
   unsigned i = 0;
@@ -10776,27 +10776,9 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
                              InVals[i], ArgHasUses);
     }
 
-    /* Target-independent secret hack (abandoned)
-    if (Arg.hasAttribute(Attribute::Secret)) {
-      switch (InVals[i].getOpcode()) {
-        case ISD::CopyFromReg:
-          auto SecretNode = DAG.getSecret(DAG.getEntryNode(), dl);
-          SDValue NewNode;
-          if (InVals[i].getNumOperands() == 2) {
-            SDVTList VTs = DAG.getVTList(InVals[i].getValueType(), MVT::Other, MVT::Other);
-            SDValue Ops[] = { SecretNode, InVals[i].getOperand(1) };
-            NewNode = DAG.getNode(ISD::CopyFromReg, dl, VTs, makeArrayRef(Ops, 2));
-          } else if (InVals[i].getNumOperands() == 3) {
-            SDVTList VTs = DAG.getVTList(InVals[i].getValueType(), MVT::Other, MVT::Other, MVT::Glue);
-            SDValue Ops[] = { SecretNode, InVals[i].getOperand(1), InVals[i].getOperand(2) };
-            NewNode = DAG.getNode(ISD::CopyFromReg, dl, VTs, makeArrayRef(Ops, 3));
-          }
-          InVals[i] = NewNode;
-
-          break;
-      }
-    }
-    */
+    // Add a `Secret` node in front of the InVal
+    if (Arg.hasAttribute(Attribute::Secret))
+      InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType());
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.

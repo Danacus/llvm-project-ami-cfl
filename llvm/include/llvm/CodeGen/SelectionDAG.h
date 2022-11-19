@@ -809,10 +809,10 @@ public:
                    ArrayRef(Ops, Glue.getNode() ? 3 : 2));
   }
   
-  SDValue getSecret(SDValue Chain, const SDLoc &dl) {
-    SDVTList VTs = getVTList(MVT::Other);
-    SDValue Ops[] = { Chain };
-    return getNode(ISD::Secret, dl, VTs, makeArrayRef(Ops, 1));
+  SDValue getSecret(SDValue Chain, const SDLoc &dl, SDValue Target, EVT VT) {
+    SDVTList VTs = getVTList(VT, MVT::Other);
+    SDValue Ops[] = { Chain, Target };
+    return getNode(ISD::Secret, dl, VTs, Ops);
   }
 
   SDValue getCondCode(ISD::CondCode Cond);

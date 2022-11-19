@@ -1246,14 +1246,23 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     break;
   }
   case ISD::Secret: {
-    for (SDNode::use_iterator UI = Node->use_begin(), UE = Node->use_end(); UI != UE; ++UI) {
-      SDNode *TargetNode = *UI;
-      switch (TargetNode->getOpcode()) {
-        case ISD::CopyFromReg:    
-          auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
-          BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
-          break;
-      }
+    SDValue TargetNode = Node->getOperand(1);
+      
+    // VReg value passthrough (based on `EmitCopyFromReg`)
+    SDValue Op(Node, 0);
+    if (IsClone)
+      VRBaseMap.erase(Op);
+    auto TargetVReg = VRBaseMap.find(TargetNode)->getSecond();
+    bool isNew = VRBaseMap.insert(std::make_pair(Op, TargetVReg)).second;
+    (void)isNew; // Silence compiler warning.
+    assert(isNew && "Node emitted out of order - early");
+
+    // Pseudo-instruction emission
+    switch (TargetNode->getOpcode()) {
+      case ISD::CopyFromReg:    
+        auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
+        BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
+        break;
     }
     break;    
   }
