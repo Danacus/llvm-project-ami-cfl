@@ -7890,7 +7890,7 @@ SelectionDAGBuilder::lowerInvokable(TargetLowering::CallLoweringInfo &CLI,
   } else {
     DAG.setRoot(Result.second);
   }
-
+  
   if (EHPadBB) {
     DAG.setRoot(lowerEndEH(getRoot(), cast_or_null<InvokeInst>(CLI.CB), EHPadBB,
                            BeginLabel));
@@ -10183,6 +10183,20 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   assert((CLI.IsTailCall || InVals.size() == CLI.Ins.size()) &&
          "LowerCall didn't emit the correct number of values!");
 
+  Secret::Info SecretInfo = Secret::NotSecret;
+
+  if (CLI.CB->getCalledFunction()->hasFnAttribute(Attribute::Secret))
+    SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Value);
+  if (CLI.CB->getCalledFunction()->hasFnAttribute(Attribute::SecretPtr))
+    SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Ptr);
+  
+  if (SecretInfo != Secret::NotSecret) {
+    for (unsigned I = 0, E = InVals.size(); I != E; ++I) {
+      InVals[I] = CLI.DAG.getSecret(CLI.Chain, CLI.DL, InVals[I], InVals[I].getValueType(), SecretInfo);
+      CLI.Chain = InVals[I].getValue(1);
+    }
+  }
+
   // For a tail call, the return value is merely live-out and there aren't
   // any nodes in the DAG representing it. Return a special value to
   // indicate that a tail call has been emitted and no more Instructions
@@ -10264,7 +10278,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     if (ReturnValues.empty())
       return std::make_pair(SDValue(), CLI.Chain);
   }
-
+  
   SDValue Res = CLI.DAG.getNode(ISD::MERGE_VALUES, CLI.DL,
                                 CLI.DAG.getVTList(RetTys), ReturnValues);
   return std::make_pair(Res, CLI.Chain);
@@ -10699,7 +10713,6 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     }
   }
   
-  //DAG.viewGraph();
 
   // Call the target to set up the argument values.
   SmallVector<SDValue, 8> InVals;
@@ -10722,8 +10735,6 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
 
   // Update the DAG with the new chain value resulting from argument lowering.
   DAG.setRoot(NewRoot);
-
-  DAG.viewGraph();
 
   // Set up the argument values.
   unsigned i = 0;

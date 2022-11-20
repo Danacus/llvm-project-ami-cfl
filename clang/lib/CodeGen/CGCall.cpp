@@ -2725,16 +2725,42 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
     // Naked functions don't have prologues.
     return;
 
-  // If this is an implicit-return-zero function, go ahead and
-  // initialize the return value.  TODO: it might be nice to have
-  // a more general mechanism for this that didn't require synthesized
-  // return statements.
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(CurCodeDecl)) {
+    // If this is an implicit-return-zero function, go ahead and
+    // initialize the return value.  TODO: it might be nice to have
+    // a more general mechanism for this that didn't require synthesized
+    // return statements.
     if (FD->hasImplicitReturnZero()) {
       QualType RetTy = FD->getReturnType().getUnqualifiedType();
       llvm::Type* LLVMTy = CGM.getTypes().ConvertType(RetTy);
       llvm::Constant* Zero = llvm::Constant::getNullValue(LLVMTy);
       Builder.CreateStore(Zero, ReturnValue);
+    }
+    
+    if (auto TL = FD->getFunctionTypeLoc().getReturnLoc()) {
+      QualType Type = TL.getType();
+      
+      if (Type->isAnyPointerType()) {
+        const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
+        TypeLoc PointeeTypeLoc = PtrTypeLoc.getPointeeLoc();
+        if (auto PATL = PointeeTypeLoc.getAsAdjusted<AttributedTypeLoc>()) {
+          if (PATL.getAttrKind() == attr::AnnotateType) {
+            const AnnotateTypeAttr *ATA = PATL.getAttrAs<AnnotateTypeAttr>();
+            if (ATA->getAnnotation().compare("secret") == 0) {
+              Fn->addFnAttr(llvm::Attribute::SecretPtr);
+            }
+          }
+        }
+      }
+      
+      if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
+        if (ATL.getAttrKind() == attr::AnnotateType) {
+          const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
+          if (ATA->getAnnotation().compare("secret") == 0) {
+            Fn->addFnAttr(llvm::Attribute::Secret);
+          }
+        }
+      }
     }
   }
 
@@ -2760,6 +2786,9 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
     AI->setName("agg.result");
     AI->addAttr(llvm::Attribute::NoAlias);
   }
+  
+  //FI.getReturnTypeSourceInfo()
+  //FI.getReturnInfo().getT
 
   // Track if we received the parameter as a pointer (indirect, byval, or
   // inalloca).  If already have a pointer, EmitParmDecl doesn't need to copy it

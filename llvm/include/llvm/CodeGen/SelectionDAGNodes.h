@@ -2167,17 +2167,11 @@ class RegisterSDNode : public SDNode {
 
   Register Reg;
 
-  // yes, here :)
-  bool IsSecret = false;
-
   RegisterSDNode(Register reg, EVT VT)
     : SDNode(ISD::Register, 0, DebugLoc(), getSDVTList(VT)), Reg(reg) {}
 
 public:
   Register getReg() const { return Reg; }
-
-  void setSecret() { IsSecret = true; }
-  bool isSecret() const { return IsSecret; }
 
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::Register;

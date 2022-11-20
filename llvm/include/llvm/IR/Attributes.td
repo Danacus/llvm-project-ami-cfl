@@ -277,10 +277,10 @@ def SpeculativeLoadHardening : EnumAttr<"speculative_load_hardening",
                                         [FnAttr]>;
 
 /// Argument contains secret data
-def Secret : EnumAttr<"secret", [ParamAttr]>;
+def Secret : EnumAttr<"secret", [ParamAttr, FnAttr]>;
 
 /// Argument is a pointer to secret data
-def SecretPtr : EnumAttr<"secret_ptr", [ParamAttr]>;
+def SecretPtr : EnumAttr<"secret_ptr", [ParamAttr, FnAttr]>;
 
 /// Argument is swift error.
 def SwiftError : EnumAttr<"swifterror", [ParamAttr]>;
