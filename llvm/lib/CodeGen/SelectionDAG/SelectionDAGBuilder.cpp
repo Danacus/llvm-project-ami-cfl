@@ -46,6 +46,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/CodeGen/SwiftErrorValueTracking.h"
@@ -1539,8 +1540,8 @@ SDValue SelectionDAGBuilder::getCopyFromRegs(const Value *V, Type *Ty) {
     SDValue Chain = DAG.getEntryNode();
     Result = RFV.getCopyFromRegs(DAG, FuncInfo, getCurSDLoc(), Chain, nullptr,
                                  V);
-    if (FuncInfo.SecretRegisters.contains(InReg))
-      Result = DAG.getSecret(DAG.getEntryNode(), getCurSDLoc(), Result, Result.getValueType());
+    if (auto Entry = FuncInfo.SecretRegisters.find(InReg); Entry != FuncInfo.SecretRegisters.end())
+      Result = DAG.getSecret(DAG.getEntryNode(), getCurSDLoc(), Result, Result.getValueType(), Entry->second);
     resolveDanglingDebugInfo(V, Result);
   }
 
@@ -10625,11 +10626,6 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
         // preallocated handling in the various CC lowering callbacks.
         Flags.setByVal();
       }
-      /*
-      if (Arg.hasAttribute(Attribute::Secret)) {
-        Flags.setSecret();
-      }
-      */
 
       // Certain targets (such as MIPS), may have a different ABI alignment
       // for a type depending on the context. Give the target a chance to
@@ -10779,8 +10775,16 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     }
 
     // Add a `Secret` node in front of the InVal
+    
+    Secret::Info SecretInfo = Secret::NotSecret;
+    
     if (Arg.hasAttribute(Attribute::Secret))
-      InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType());
+      SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Value);
+    if (Arg.hasAttribute(Attribute::SecretPtr))
+      SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Ptr);
+
+    if (SecretInfo != Secret::NotSecret)
+      InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretInfo);
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.
@@ -10880,7 +10884,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
         unsigned Reg = cast<RegisterSDNode>(V.getOperand(1))->getReg();
         if (Register::isVirtualRegister(Reg)) {
           FuncInfo->ValueMap[&Arg] = Reg;
-          FuncInfo->SecretRegisters.insert(Reg);
+          FuncInfo->SecretRegisters.insert({ Reg, SecretInfo });
           continue;
         }
       }

@@ -101,6 +101,8 @@ class SDTypeProfile<int numresults, int numoperands,
   list<SDTypeConstraint> Constraints = constraints;
 }
 
+def SDSecretTy : SDTypeProfile<2, 2, []>;
+
 // Builtin profiles.
 def SDTIntLeaf: SDTypeProfile<1, 0, [SDTCisInt<0>]>;         // for 'imm'.
 def SDTFPLeaf : SDTypeProfile<1, 0, [SDTCisFP<0>]>;          // for 'fpimm'.
@@ -334,6 +336,8 @@ def set;
 def implicit;
 def node;
 def srcvalue;
+
+def secret     : SDNode<"ISD::Secret", SDSecretTy, [], "SecretSDNode">;
 
 def imm        : SDNode<"ISD::Constant"  , SDTIntLeaf , [], "ConstantSDNode">;
 def timm       : SDNode<"ISD::TargetConstant",SDTIntLeaf, [], "ConstantSDNode">;

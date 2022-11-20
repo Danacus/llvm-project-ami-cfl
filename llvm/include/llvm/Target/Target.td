@@ -1263,7 +1263,7 @@ def COPY : StandardPseudoInstruction {
 }
 def SECRET : StandardPseudoInstruction {
   let OutOperandList = (outs);
-  let InOperandList = (ins unknown:$src);
+  let InOperandList = (ins unknown:$src, i32imm:$info);
   let AsmString = "SECRET";
   let hasSideEffects = false;
   let isAsCheapAsAMove = true;

@@ -1246,6 +1246,7 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     break;
   }
   case ISD::Secret: {
+    auto *SecretNode = cast<SecretSDNode>(Node);
     SDValue TargetNode = Node->getOperand(1);
       
     // VReg value passthrough (based on `EmitCopyFromReg`)
@@ -1264,7 +1265,7 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
 
     //BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
             //VRBase).addReg(SrcVReg);
-    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(SrcVReg);
+    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addImm(SecretNode->secretInfo()).addReg(SrcVReg);
 
     break;    
   }

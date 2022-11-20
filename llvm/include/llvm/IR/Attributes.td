@@ -276,8 +276,11 @@ def SanitizeMemTag : EnumAttr<"sanitize_memtag", [FnAttr]>;
 def SpeculativeLoadHardening : EnumAttr<"speculative_load_hardening",
                                         [FnAttr]>;
 
-/// Argument is secret
+/// Argument contains secret data
 def Secret : EnumAttr<"secret", [ParamAttr]>;
+
+/// Argument is a pointer to secret data
+def SecretPtr : EnumAttr<"secret_ptr", [ParamAttr]>;
 
 /// Argument is swift error.
 def SwiftError : EnumAttr<"swifterror", [ParamAttr]>;

@@ -21,6 +21,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
@@ -76,7 +77,7 @@ public:
   /// cross-basic-block values.
   DenseMap<const Value *, Register> ValueMap;
 
-  DenseSet<Register> SecretRegisters;
+  DenseMap<Register, Secret::Info> SecretRegisters;
 
   /// VirtReg2Value map is needed by the Divergence Analysis driven
   /// instruction selection. It is reverted ValueMap. It is computed

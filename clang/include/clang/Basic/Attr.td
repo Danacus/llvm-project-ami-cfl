@@ -843,6 +843,14 @@ def AnnotateType : TypeAttr {
   let Documentation = [AnnotateTypeDocs];
 }
 
+def Secret : TypeAttr {
+  let Spellings = [CXX11<"clang", "secret">, C2x<"clang", "secret">];
+  let Args = [StringArgument<"Annotation">, VariadicExprArgument<"Args">];
+  let HasCustomParsing = 1;
+  let AcceptsExprPack = 1;
+  let Documentation = [SecretDocs];
+}
+
 def ARMInterrupt : InheritableAttr, TargetSpecificAttr<TargetARM> {
   // NOTE: If you add any additional spellings, M68kInterrupt's,
   // MSP430Interrupt's, MipsInterrupt's and AnyX86Interrupt's spellings

@@ -21,9 +21,13 @@
 #include "CodeGenModule.h"
 #include "TargetInfo.h"
 #include "clang/AST/Attr.h"
+#include "clang/AST/Attrs.inc"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/Type.h"
+#include "clang/AST/TypeLoc.h"
+#include "clang/Basic/AttrKinds.h"
 #include "clang/Basic/CodeGenOptions.h"
 #include "clang/Basic/TargetBuiltins.h"
 #include "clang/Basic/TargetInfo.h"
@@ -2787,7 +2791,35 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
     unsigned FirstIRArg, NumIRArgs;
     std::tie(FirstIRArg, NumIRArgs) = IRFunctionArgs.getIRArgs(ArgNo);
-
+    
+    if (auto *SI = Arg->getTypeSourceInfo()) {
+      if (auto TL = SI->getTypeLoc()) {
+        QualType Type = TL.getType();
+        
+        if (Type->isAnyPointerType()) {
+          const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
+          TypeLoc PointeeTypeLoc = PtrTypeLoc.getPointeeLoc();
+          if (auto PATL = PointeeTypeLoc.getAsAdjusted<AttributedTypeLoc>()) {
+            if (PATL.getAttrKind() == attr::AnnotateType) {
+              const AnnotateTypeAttr *ATA = PATL.getAttrAs<AnnotateTypeAttr>();
+              if (ATA->getAnnotation().compare("secret") == 0) {
+                Fn->getArg(FirstIRArg)->addAttr(llvm::Attribute::SecretPtr);
+              }
+            }
+          }
+        }
+        
+        if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
+          if (ATL.getAttrKind() == attr::AnnotateType) {
+            const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
+            if (ATA->getAnnotation().compare("secret") == 0) {
+              Fn->getArg(FirstIRArg)->addAttr(llvm::Attribute::Secret);
+            }
+          }
+        }
+      }
+    }
+        
     switch (ArgI.getKind()) {
     case ABIArgInfo::InAlloca: {
       assert(NumIRArgs == 0);

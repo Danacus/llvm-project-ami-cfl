@@ -2977,6 +2977,37 @@ public:
   }
 };
 
+namespace Secret {
+  enum Info: unsigned {
+    NotSecret = 0b00,
+    Value = 0b01,
+    Ptr = 0b10,
+    Both = Value | Ptr,
+  };
+} // end namespace Secret
+
+class SecretSDNode : public SDNode {  
+private:
+  Secret::Info Info;
+    
+public:
+  
+  SecretSDNode(unsigned Order, const DebugLoc &DL, SDVTList VTs, Secret::Info I)
+      : SDNode(ISD::Secret, Order, DL, VTs), Info(I) {}
+  
+  /// Is this value secret
+  bool isSecretValue() { return Info & Secret::Value; }
+  
+  /// Is this a pointer to a secret value
+  bool isSecretPtr() { return Info & Secret::Ptr; }  
+  
+  Secret::Info secretInfo() { return Info; }
+
+  static bool classof(const SDNode *N) {
+    return N->getOpcode() == ISD::Secret;
+  }
+};
+
 class SDNodeIterator {
   const SDNode *Node;
   unsigned Operand;

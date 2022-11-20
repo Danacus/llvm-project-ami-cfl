@@ -6721,6 +6721,14 @@ neither type checking rules, nor runtime semantics. In particular:
   }];
 }
 
+def SecretDocs : Documentation {
+  let Category = DocCatType;
+  let Heading = "secret";
+  let Content = [{
+Secret type
+  }];
+}
+
 def WeakDocs : Documentation {
   let Category = DocCatDecl;
   let Content = [{

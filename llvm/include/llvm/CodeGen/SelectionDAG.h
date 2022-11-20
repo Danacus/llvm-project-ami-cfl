@@ -809,10 +809,15 @@ public:
                    ArrayRef(Ops, Glue.getNode() ? 3 : 2));
   }
   
-  SDValue getSecret(SDValue Chain, const SDLoc &dl, SDValue Target, EVT VT) {
+  SDValue getSecret(SDValue Chain, const SDLoc &dl, SDValue Target, EVT VT, Secret::Info I) {
     SDVTList VTs = getVTList(VT, MVT::Other);
     SDValue Ops[] = { Chain, Target };
-    return getNode(ISD::Secret, dl, VTs, Ops);
+    auto *N = newSDNode<SecretSDNode>(dl.getIROrder(), dl.getDebugLoc(), VTs, I);
+    CSEMap.InsertNode(N);
+    createOperands(N, Ops);
+    InsertNode(N);
+    return SDValue(N, 0);
+    //return getNode(ISD::Secret, dl, VTs, Ops);
   }
 
   SDValue getCondCode(ISD::CondCode Cond);
