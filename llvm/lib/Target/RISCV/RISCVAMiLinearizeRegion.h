@@ -26,12 +26,13 @@ public:
 
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  const SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
+  SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
 
   AMiLinearizeRegion();
 
   template <RISCV::AMi::Qualifier Q>
   void setQualifier(MachineInstr *I);
+  void findActivatingRegions();
   void handlePersistentInstr(MachineInstr *I);
   void handleRegion(MachineRegion *Region);
 
@@ -42,6 +43,7 @@ public:
                           // CFG
     AU.addRequired<ReachingDefAnalysis>();
     AU.addRequired<MachineRegionInfoPass>();
+    AU.addRequiredTransitive<TrackSecretsAnalysis>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

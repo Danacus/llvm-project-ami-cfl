@@ -4092,6 +4092,9 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
       llvm::Function::Create(FTy, llvm::Function::ExternalLinkage,
                              Entry ? StringRef() : MangledName, &getModule());
 
+  llvm::errs() << "Created function\n";
+  F->dump();  
+
   // If we already created a function with the same mangled name (but different
   // type) before, take its name and add it to the list of functions to be
   // replaced with F at the end of CodeGen.
@@ -4170,7 +4173,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
       }
     }
   }
-
+  
   // Make sure the result is of the requested type.
   if (!IsIncompleteFunction) {
     assert(F->getFunctionType() == Ty);

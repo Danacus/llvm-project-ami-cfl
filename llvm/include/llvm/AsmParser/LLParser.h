@@ -291,6 +291,7 @@ namespace llvm {
     bool parseOptionalAlignment(MaybeAlign &Alignment,
                                 bool AllowParens = false);
     bool parseOptionalDerefAttrBytes(lltok::Kind AttrKind, uint64_t &Bytes);
+    bool parseSecretAttrMask(lltok::Kind AttrKind, uint64_t &Mask);
     bool parseOptionalUWTableKind(UWTableKind &Kind);
     bool parseAllocKind(AllocFnKind &Kind);
     std::optional<MemoryEffects> parseMemoryAttr();

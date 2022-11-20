@@ -5,6 +5,7 @@
 #include "RISCVSubtarget.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -41,16 +42,15 @@ template <RISCV::AMi::Qualifier Q>
 void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
   if (RISCV::AMi::hasQualifier<Q>(I->getOpcode()))
     return;
-  
-  auto PersistentInstr =
-      RISCV::AMi::getQualified<Q>(I->getOpcode());
+
+  auto PersistentInstr = RISCV::AMi::getQualified<Q>(I->getOpcode());
 
   if (PersistentInstr != -1) {
     I->setDesc(TII->get(PersistentInstr));
   } else {
     errs() << "Unsupported instruction: " << *I;
-    //llvm_unreachable(
-        //"AMi error: unsupported instruction cannot be qualified!");
+    // llvm_unreachable(
+    //"AMi error: unsupported instruction cannot be qualified!");
   }
 }
 
@@ -130,40 +130,49 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   }
 }
 
+void AMiLinearizeRegion::findActivatingRegions() {
+  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  auto &Secrets = getAnalysis<TrackSecretsAnalysis>().Secrets;
+
+  for (auto &Secret : Secrets) {
+    assert((Secret.SecretMask & 1u) && "not a secret value or incorrect mask");
+    assert((!Secret.IsDef) && "not a use of a secret value");
+
+    if (Secret.MI->isConditionalBranch()) {
+      errs() << "Conditional branch: " << *Secret.MI << "\n";
+      MachineBasicBlock *EntryMBB = Secret.MI->getParent()->getFallThrough();
+
+      // Get largest region that starts at BB. (See
+      // RegionInfoBase::getMaxRegionExit)
+      MachineRegion *R = MRI.getRegionFor(EntryMBB);
+      if (R->getEntry() != EntryMBB)
+        llvm_unreachable("AMi error: unable to find activating region for "
+                         "secret-dependent branch");
+      while (R && R->getParent() && R->getParent()->getEntry() == EntryMBB)
+        R = R->getParent();
+
+      ActivatingRegions.insert(R);
+    }
+  }
+}
+
 bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Region Pass\n";
-  
-  for (Register Arg : MF.secretArgs()) {
-    errs() << Arg.virtRegIndex() << " is secret\n";
-  }
-  
+
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
 
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  // Temporary implementation
+  findActivatingRegions();
 
-  SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
+  auto *TopRegion = MRI.getTopLevelRegion();
 
-  for (auto &MRNode : MRI.getTopLevelRegion()->elements()) {
-    if (MRNode->isSubRegion()) {
-      for (auto &MRNode : MRNode->getNodeAs<MachineRegion>()->elements()) {
-        if (MRNode->isSubRegion()) {
-          MachineRegion *MR = MRNode->getNodeAs<MachineRegion>();
-          ActivatingRegions.insert(MR);
-        }
-      }
-    }
-  }
-
-  // End of temporary implementation
+  MRI.dump();
 
   SmallVector<MachineRegion *> ToTransform;
   SmallVector<MachineRegion *> WorkList;
-
-  auto *TopRegion = MRI.getTopLevelRegion();
 
   WorkList.push_back(TopRegion);
   if (ActivatingRegions.contains(TopRegion))
@@ -202,8 +211,9 @@ AMiLinearizeRegion::AMiLinearizeRegion() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
 INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
+INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
+INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysis)
 INITIALIZE_PASS_END(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)
 

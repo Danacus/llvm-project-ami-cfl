@@ -339,7 +339,10 @@ void ReachingDefAnalysis::getReachingLocalUses(MachineInstr *Def,
 
     // If/when we find a new reaching def, we know that there's no more uses
     // of 'Def'.
-    if (getReachingLocalMIDef(&*MI, PhysReg) != Def)
+    // HACK(Daan Vanoverloop): make sure the ReachingDef exists, adding this check
+    // allows us to find the uses of a register even if MI doesn't actually define PhysReg
+    auto *ReachingDef = getReachingLocalMIDef(&*MI, PhysReg);
+    if (ReachingDef != nullptr && ReachingDef != Def)
       return;
 
     for (auto &MO : MI->operands()) {
@@ -380,10 +383,12 @@ void ReachingDefAnalysis::getGlobalUses(MachineInstr *MI, MCRegister PhysReg,
   getReachingLocalUses(MI, PhysReg, Uses);
 
   // Handle live-out values.
+  /*
   if (auto *LiveOut = getLocalLiveOutMIDef(MI->getParent(), PhysReg)) {
     if (LiveOut != MI)
       return;
 
+    */
     SmallVector<MachineBasicBlock *, 4> ToVisit(MBB->successors());
     SmallPtrSet<MachineBasicBlock*, 4>Visited;
     while (!ToVisit.empty()) {
@@ -394,7 +399,7 @@ void ReachingDefAnalysis::getGlobalUses(MachineInstr *MI, MCRegister PhysReg,
         llvm::append_range(ToVisit, MBB->successors());
       Visited.insert(MBB);
     }
-  }
+  //}
 }
 
 void ReachingDefAnalysis::getGlobalReachingDefs(MachineInstr *MI,

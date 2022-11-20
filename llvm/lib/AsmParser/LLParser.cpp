@@ -1447,6 +1447,13 @@ bool LLParser::parseEnumAttribute(Attribute::AttrKind Attr, AttrBuilder &B,
     B.addDereferenceableOrNullAttr(Bytes);
     return false;
   }
+  case Attribute::Secret: {
+    uint64_t Mask;
+    if (parseSecretAttrMask(lltok::kw_secret, Mask))
+      return true;
+    B.addRawIntAttr(Attribute::Secret, Mask);
+    return false;
+  }
   case Attribute::UWTable: {
     UWTableKind Kind;
     if (parseOptionalUWTableKind(Kind))
@@ -2201,6 +2208,25 @@ bool LLParser::parseOptionalDerefAttrBytes(lltok::Kind AttrKind,
     return error(ParenLoc, "expected ')'");
   if (!Bytes)
     return error(DerefLoc, "dereferenceable bytes must be non-zero");
+  return false;
+}
+
+bool LLParser::parseSecretAttrMask(lltok::Kind AttrKind,
+                                           uint64_t &Mask) {
+  assert(AttrKind == lltok::kw_secret &&
+         "contract!");
+
+  Mask = 0;
+  if (!EatIfPresent(AttrKind))
+    return false;
+  LocTy ParenLoc = Lex.getLoc();
+  if (!EatIfPresent(lltok::lparen))
+    return error(ParenLoc, "expected '('");
+  if (parseUInt64(Mask))
+    return true;
+  ParenLoc = Lex.getLoc();
+  if (!EatIfPresent(lltok::rparen))
+    return error(ParenLoc, "expected ')'");
   return false;
 }
 

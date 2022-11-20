@@ -2473,6 +2473,35 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
 
     ArgAttrs[IRArgs.first] = llvm::AttributeSet::get(getLLVMContext(), Attrs);
   }
+  
+  
+  if (const auto *FD = dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl().getDecl())) {
+    if (auto TL = FD->getFunctionTypeLoc().getReturnLoc()) {
+      uint64_t SecretMask = 0;
+      uint64_t NumIndirections = 0;
+      
+      while (TL) {
+        if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
+          if (ATL.getAttrKind() == attr::AnnotateType) {
+            const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
+            if (ATA->getAnnotation().compare("secret") == 0) {
+              SecretMask |= (1ull << NumIndirections);
+            }
+          }
+        }
+
+        if (TL.getType()->isAnyPointerType()) {
+          NumIndirections++;
+          const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
+          TL = PtrTypeLoc.getPointeeLoc();
+        } else {
+          break;
+        }
+      }
+      
+      RetAttrs.addAttribute(llvm::Attribute::get(getLLVMContext(), llvm::Attribute::Secret, SecretMask));      
+    }
+  }
 
   unsigned ArgNo = 0;
   for (CGFunctionInfo::const_arg_iterator I = FI.arg_begin(),
@@ -2481,6 +2510,38 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
     QualType ParamType = I->type;
     const ABIArgInfo &AI = I->info;
     llvm::AttrBuilder Attrs(getLLVMContext());
+
+    if (const auto *FD = dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl().getDecl())) {
+      const auto *Arg = FD->getParamDecl(ArgNo);
+      if (auto *SI = Arg->getTypeSourceInfo()) {
+        if (auto TL = SI->getTypeLoc()) {
+          uint64_t SecretMask = 0;
+          uint64_t NumIndirections = 0;
+    
+          while (TL) {
+            if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
+              if (ATL.getAttrKind() == attr::AnnotateType) {
+                const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
+                if (ATA->getAnnotation().compare("secret") == 0) {
+                  SecretMask |= (1ull << NumIndirections);
+                }
+              }
+            }
+
+            if (TL.getType()->isAnyPointerType()) {
+              NumIndirections++;
+              const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
+              TL = PtrTypeLoc.getPointeeLoc();
+            } else {
+              break;
+            }
+          }
+
+          Attrs.addAttribute(llvm::Attribute::get(getLLVMContext(), llvm::Attribute::Secret, SecretMask));
+        }
+      }
+    }
+        
 
     // Add attribute for padding argument, if necessary.
     if (IRFunctionArgs.hasPaddingArg(ArgNo)) {
@@ -2725,43 +2786,17 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
     // Naked functions don't have prologues.
     return;
 
+  // If this is an implicit-return-zero function, go ahead and
+  // initialize the return value.  TODO: it might be nice to have
+  // a more general mechanism for this that didn't require synthesized
+  // return statements.
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(CurCodeDecl)) {
-    // If this is an implicit-return-zero function, go ahead and
-    // initialize the return value.  TODO: it might be nice to have
-    // a more general mechanism for this that didn't require synthesized
-    // return statements.
     if (FD->hasImplicitReturnZero()) {
       QualType RetTy = FD->getReturnType().getUnqualifiedType();
       llvm::Type* LLVMTy = CGM.getTypes().ConvertType(RetTy);
       llvm::Constant* Zero = llvm::Constant::getNullValue(LLVMTy);
       Builder.CreateStore(Zero, ReturnValue);
-    }
-    
-    if (auto TL = FD->getFunctionTypeLoc().getReturnLoc()) {
-      QualType Type = TL.getType();
-      
-      if (Type->isAnyPointerType()) {
-        const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
-        TypeLoc PointeeTypeLoc = PtrTypeLoc.getPointeeLoc();
-        if (auto PATL = PointeeTypeLoc.getAsAdjusted<AttributedTypeLoc>()) {
-          if (PATL.getAttrKind() == attr::AnnotateType) {
-            const AnnotateTypeAttr *ATA = PATL.getAttrAs<AnnotateTypeAttr>();
-            if (ATA->getAnnotation().compare("secret") == 0) {
-              Fn->addFnAttr(llvm::Attribute::SecretPtr);
-            }
-          }
-        }
-      }
-      
-      if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
-        if (ATL.getAttrKind() == attr::AnnotateType) {
-          const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
-          if (ATA->getAnnotation().compare("secret") == 0) {
-            Fn->addFnAttr(llvm::Attribute::Secret);
-          }
-        }
-      }
-    }
+    }    
   }
 
   // FIXME: We no longer need the types from FunctionArgList; lift up and
@@ -2820,35 +2855,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
     unsigned FirstIRArg, NumIRArgs;
     std::tie(FirstIRArg, NumIRArgs) = IRFunctionArgs.getIRArgs(ArgNo);
-    
-    if (auto *SI = Arg->getTypeSourceInfo()) {
-      if (auto TL = SI->getTypeLoc()) {
-        QualType Type = TL.getType();
-        
-        if (Type->isAnyPointerType()) {
-          const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
-          TypeLoc PointeeTypeLoc = PtrTypeLoc.getPointeeLoc();
-          if (auto PATL = PointeeTypeLoc.getAsAdjusted<AttributedTypeLoc>()) {
-            if (PATL.getAttrKind() == attr::AnnotateType) {
-              const AnnotateTypeAttr *ATA = PATL.getAttrAs<AnnotateTypeAttr>();
-              if (ATA->getAnnotation().compare("secret") == 0) {
-                Fn->getArg(FirstIRArg)->addAttr(llvm::Attribute::SecretPtr);
-              }
-            }
-          }
-        }
-        
-        if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
-          if (ATL.getAttrKind() == attr::AnnotateType) {
-            const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
-            if (ATA->getAnnotation().compare("secret") == 0) {
-              Fn->getArg(FirstIRArg)->addAttr(llvm::Attribute::Secret);
-            }
-          }
-        }
-      }
-    }
-        
+            
     switch (ArgI.getKind()) {
     case ABIArgInfo::InAlloca: {
       assert(NumIRArgs == 0);

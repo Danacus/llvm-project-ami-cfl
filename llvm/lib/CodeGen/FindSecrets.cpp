@@ -1,6 +1,12 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/ReachingDefAnalysis.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -11,129 +17,114 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/PassRegistry.h"
-
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
 #define DEBUG_TYPE "find-secrets"
 
-char FindSecretsAnalysis::ID = 0;
+char TrackSecretsAnalysis::ID = 0;
 
-bool FindSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
-  auto &F = MF.getFunction();
-  Secrets.Func = &F;
-  
-  for (auto &Arg : F.args()) {
-    if (Arg.hasAttribute(Attribute::Secret)) {
-      Secrets.Args.push_back(&Arg);
-    }
-  }
+char &llvm::TrackSecretsPassID = TrackSecretsAnalysis::ID;
 
-  auto FS = FunctionSecrets(&F);
+SmallSet<Secret, 8>
+TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
+  auto &RDA = getAnalysis<ReachingDefAnalysis>();
+  SmallSet<Secret, 8> SecretDefs;
 
-  for (BasicBlock &BB : F) {
-    //auto BS = BlockSecrets(&BB);
-    for (Instruction &I : BB) {
-      
-      if (!isa<IntrinsicInst>(I))
-        continue;
+  for (MachineBasicBlock &MB : MF) {
+    for (MachineInstr &MI : MB) {
+      if (MI.getOpcode() == TargetOpcode::SECRET) {
+        uint64_t SecretMask = MI.getOperand(1).getImm();
+        MCRegister Reg = MI.getOperand(0).getReg().asMCReg();
 
-      IntrinsicInst *II = dyn_cast<IntrinsicInst>(&I);
-      Function *CF = II->getCalledFunction();
-      
-      if (CF->getName().compare("llvm.var.annotation") != 0)
-        continue;
+        SmallPtrSet<MachineInstr *, 16> Defs;
+        RDA.getGlobalReachingDefs(&MI, Reg, Defs);
 
-      Value *OP = II->getArgOperand(1);
+        // If there are no reaching defs, we assume that the register is an
+        // argument and we need to start tracking at the SECRET
+        // pseudoinstruction
+        if (Defs.empty()) {
+          SecretDefs.insert(Secret(&MI, Reg, SecretMask));
+        }
 
-      GlobalVariable *GV = dyn_cast<GlobalVariable>(OP);
-
-      // It seems that Clang can't decide on whether to generate a GlobalVariable
-      // or a getelementptr here, so we have to support both cases
-      if (!GV) {
-        ConstantExpr *CE = dyn_cast<ConstantExpr>(OP);
-        if (!CE) continue;
-        
-        GV = dyn_cast<GlobalVariable>(CE->getOperand(0));
-      }
-      
-      if (!GV) continue;
-
-      ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV->getInitializer());
-      if (!CDS) continue;
-      
-      if (!CDS->isString())
-        continue;
-      
-      bool Upgrade = CDS->getAsCString().compare("secret_upgrade") == 0;
-      bool Downgrade = CDS->getAsCString().compare("secret_downgrade") == 0;
-  
-      if (!Upgrade && !Downgrade)
-        continue;
-
-      //II->dump();
-      Value *Target = II->getArgOperand(0);
-      //Target->dump();
-  
-      //errs() << Target->getName() << "\n";
-  
-      Instruction *TargetInstr = dyn_cast<Instruction>(Target);
-      
-      if (!TargetInstr) continue;
-      
-      //TargetInstr->dump();
-      
-      if (Upgrade) {
-        //Secrets.Upgrades.push_back(TargetInstr);
-      } else if (Downgrade) {
-        //Secrets.Downgrades.push_back(TargetInstr);
+        // If there are reaching defs, then we need to make sure to start
+        // tracking at the reaching def and not the SECRET pseudoinstruction
+        for (MachineInstr *DefMI : Defs) {
+          SecretDefs.insert(Secret(DefMI, Reg, SecretMask));
+        }
       }
     }
   }
-  return false;
+
+  return SecretDefs;
 }
 
-FindSecretsAnalysis::FindSecretsAnalysis() : MachineFunctionPass(ID), Secrets() {
-  initializeMachineCFGPrinterPass(*PassRegistry::getPassRegistry());
-}
-
-INITIALIZE_PASS(FindSecretsAnalysis, DEBUG_TYPE, "Find Secrets",
-                false, true)
-
-#define DEBUG_TYPE_2 "print-secrets"
-
-char FindSecretsPrinter::ID = 0;
-
-bool FindSecretsPrinter::runOnMachineFunction(MachineFunction &MF) {
-  auto Secrets = getAnalysis<FindSecretsAnalysis>().Secrets;
+void TrackSecretsAnalysis::handleUse(MachineInstr *UseInst, MCRegister Reg,
+                                     uint64_t SecretMask,
+                                     SmallSet<Secret, 8> &SecretDefs) {
+  //errs() << "handleUse: " << *UseInst << "\n";
   
-  errs() << "Secrets for function: " << Secrets.Func->getName() << "\n";
-  
-  if (Secrets.ReturnSecret) {
-    errs() << "Returns secret\n";
+  if (UseInst->mayLoad() && (SecretMask & (1u << 1))) {
+    // TODO: used register(s) are assumed to be dereferenced to get an address to load from
+    // Need to use information from TargetInstrInfo
+    
+    for (MachineOperand &Def : UseInst->defs()) {
+      //errs() << "Push: " << *UseInst << "\n";
+      SecretDefs.insert(Secret(UseInst, Def.getReg(), SecretMask >> 1));
+    }
   }
   
-  errs() << "Secret arguments:\n";
+  if (!UseInst->mayLoadOrStore() && (SecretMask & 1u)) {
+    // Default behavior for most instructions that don't store or load (register to register)
+    for (MachineOperand &Def : UseInst->defs()) {
+      //errs() << "Push: " << *UseInst << "\n";
+      SecretDefs.insert(Secret(UseInst, Def.getReg(), SecretMask));
+    }
+  }
+}
+
+bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
+  SmallSet<Secret, 8> WorkSet = findSecretSources(MF);
+
+  auto &RDA = getAnalysis<ReachingDefAnalysis>();
+
+  while (!WorkSet.empty()) {
+    auto Current = *WorkSet.begin();
+    WorkSet.erase(Current);
+    
+    //errs() << "Pop: " << *Current.MI << "\n";
+
+    SmallPtrSet<MachineInstr *, 8> Uses;
+    RDA.getGlobalUses(Current.MI, Current.Reg, Uses);
+
+    for (auto *Use : Uses) {
+      if (Current.SecretMask & 1u)
+        Secrets.insert(Secret(Use, Current.Reg, Current.SecretMask, false));
+      handleUse(Use, Current.Reg, Current.SecretMask, WorkSet);
+    }
+  }
   
-  for (auto &Arg : Secrets.Args) {
-    Arg->dump();
+  errs() << "Secret registers: \n";
+  
+  for (auto S : Secrets) {
+    errs() << *S.MI << ": " << S.Reg << "\n";
   }
 
   return false;
 }
 
-FindSecretsPrinter::FindSecretsPrinter() : MachineFunctionPass(ID) {
+TrackSecretsAnalysis::TrackSecretsAnalysis()
+    : MachineFunctionPass(ID) {
   initializeMachineCFGPrinterPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(FindSecretsPrinter, DEBUG_TYPE_2,
-    "Print secrets", false, false)
-INITIALIZE_PASS_DEPENDENCY(FindSecretsAnalysis)
-INITIALIZE_PASS_END(FindSecretsPrinter, DEBUG_TYPE_2,
-    "Print secrets", false, false)
-
+INITIALIZE_PASS_BEGIN(TrackSecretsAnalysis, DEBUG_TYPE, "Find Secrets", false,
+                      false)
+INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
+INITIALIZE_PASS_END(TrackSecretsAnalysis, DEBUG_TYPE, "Find Secrets", false,
+                    false)

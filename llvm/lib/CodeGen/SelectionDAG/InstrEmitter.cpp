@@ -1258,14 +1258,9 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     (void)isNew; // Silence compiler warning.
     assert(isNew && "Node emitted out of order - early");
 
-    //auto SrcVReg = VRBaseMap.find(TargetNode)->getSecond();
-    //auto VRBase = MRI->createVirtualRegister(MRI->getRegClass(SrcVReg));
-    //BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET),
-            //VRBase).addReg(SrcVReg);
-
-    //BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
-            //VRBase).addReg(SrcVReg);
-    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addImm(SecretNode->secretInfo()).addReg(SrcVReg);
+    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET))
+        .addReg(SrcVReg)
+        .addImm(SecretNode->getSecurityMask());
 
     break;    
   }

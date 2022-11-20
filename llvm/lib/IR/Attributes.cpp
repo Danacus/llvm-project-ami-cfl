@@ -442,6 +442,9 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
         .str();
   };
 
+  if (hasAttribute(Attribute::Secret))
+    return AttrWithBytesToString("secret");
+
   if (hasAttribute(Attribute::StackAlignment))
     return AttrWithBytesToString("alignstack");
 

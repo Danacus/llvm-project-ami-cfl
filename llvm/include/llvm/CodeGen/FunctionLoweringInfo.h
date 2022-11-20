@@ -77,7 +77,7 @@ public:
   /// cross-basic-block values.
   DenseMap<const Value *, Register> ValueMap;
 
-  DenseMap<Register, Secret::Info> SecretRegisters;
+  DenseMap<Register, uint64_t> SecretRegisters;
 
   /// VirtReg2Value map is needed by the Divergence Analysis driven
   /// instruction selection. It is reverted ValueMap. It is computed

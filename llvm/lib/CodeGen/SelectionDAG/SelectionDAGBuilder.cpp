@@ -7890,7 +7890,7 @@ SelectionDAGBuilder::lowerInvokable(TargetLowering::CallLoweringInfo &CLI,
   } else {
     DAG.setRoot(Result.second);
   }
-  
+    
   if (EHPadBB) {
     DAG.setRoot(lowerEndEH(getRoot(), cast_or_null<InvokeInst>(CLI.CB), EHPadBB,
                            BeginLabel));
@@ -10183,16 +10183,9 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   assert((CLI.IsTailCall || InVals.size() == CLI.Ins.size()) &&
          "LowerCall didn't emit the correct number of values!");
 
-  Secret::Info SecretInfo = Secret::NotSecret;
-
-  if (CLI.CB->getCalledFunction()->hasFnAttribute(Attribute::Secret))
-    SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Value);
-  if (CLI.CB->getCalledFunction()->hasFnAttribute(Attribute::SecretPtr))
-    SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Ptr);
-  
-  if (SecretInfo != Secret::NotSecret) {
+  if (CLI.CB->hasRetAttr(Attribute::Secret)) {
     for (unsigned I = 0, E = InVals.size(); I != E; ++I) {
-      InVals[I] = CLI.DAG.getSecret(CLI.Chain, CLI.DL, InVals[I], InVals[I].getValueType(), SecretInfo);
+      InVals[I] = CLI.DAG.getSecret(CLI.Chain, CLI.DL, InVals[I], InVals[I].getValueType(), CLI.CB->getFnAttr(Attribute::Secret).getValueAsInt());
       CLI.Chain = InVals[I].getValue(1);
     }
   }
@@ -10786,16 +10779,8 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     }
 
     // Add a `Secret` node in front of the InVal
-    
-    Secret::Info SecretInfo = Secret::NotSecret;
-    
     if (Arg.hasAttribute(Attribute::Secret))
-      SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Value);
-    if (Arg.hasAttribute(Attribute::SecretPtr))
-      SecretInfo = static_cast<Secret::Info>(SecretInfo | Secret::Ptr);
-
-    if (SecretInfo != Secret::NotSecret)
-      InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretInfo);
+      InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), Arg.getAttribute(Attribute::Secret).getValueAsInt());
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.
@@ -10890,12 +10875,12 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
       }
     }
     
-    if (Res.getOpcode() == ISD::Secret) {
+    if (Res.getOpcode() == ISD::Secret && Arg.hasAttribute(Attribute::Secret)) {
       if (SDValue V = Res.getOperand(1); V.getOpcode() == ISD::CopyFromReg) {
         unsigned Reg = cast<RegisterSDNode>(V.getOperand(1))->getReg();
         if (Register::isVirtualRegister(Reg)) {
           FuncInfo->ValueMap[&Arg] = Reg;
-          FuncInfo->SecretRegisters.insert({ Reg, SecretInfo });
+          FuncInfo->SecretRegisters.insert({ Reg, Arg.getAttribute(Attribute::Secret).getValueAsInt() });
           continue;
         }
       }

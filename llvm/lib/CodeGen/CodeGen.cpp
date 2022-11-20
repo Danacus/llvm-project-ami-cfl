@@ -45,8 +45,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeFEntryInserterPass(Registry);
   initializeFinalizeISelPass(Registry);
   initializeFinalizeMachineBundlesPass(Registry);
-  initializeFindSecretsAnalysisPass(Registry);
-  initializeFindSecretsPrinterPass(Registry);
+  initializeTrackSecretsAnalysisPass(Registry);
   initializeFixupStatepointCallerSavedPass(Registry);
   initializeFuncletLayoutPass(Registry);
   initializeGCMachineCodeAnalysisPass(Registry);
@@ -133,8 +132,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeTailDuplicatePass(Registry);
   initializeTargetPassConfigPass(Registry);
   initializeTwoAddressInstructionPassPass(Registry);
-  initializeTypePromotionLegacyPass(Registry);
-  initializeTrackSecretsAnalysisPass(Registry);
+  initializeTypePromotionPass(Registry);
   initializeUnpackMachineBundlesPass(Registry);
   initializeUnreachableBlockElimLegacyPassPass(Registry);
   initializeUnreachableMachineBlockElimPass(Registry);
