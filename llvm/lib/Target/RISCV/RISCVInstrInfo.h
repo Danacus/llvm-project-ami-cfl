@@ -49,6 +49,9 @@ public:
   MCInst getNop() const override;
   const MCInstrDesc &getBrCond(RISCVCC::CondCode CC) const;
 
+  void transferSecret(const MachineInstr &MI, Register &Reg, uint64_t &SecretMask, 
+                      const DenseMap<Register, uint64_t> &SecretDefs, SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const override;
+
   unsigned isLoadFromStackSlot(const MachineInstr &MI,
                                int &FrameIndex) const override;
   unsigned isStoreToStackSlot(const MachineInstr &MI,

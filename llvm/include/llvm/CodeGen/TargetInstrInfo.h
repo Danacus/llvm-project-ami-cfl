@@ -257,6 +257,9 @@ public:
     return false;
   }
 
+  virtual void transferSecret(const MachineInstr &MI, Register &Reg, uint64_t &SecretMask, 
+                              const DenseMap<Register, uint64_t> &SecretDefs, SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {}
+
   /// If the specified machine instruction is a direct
   /// load from a stack slot, return the virtual or physical register number of
   /// the destination along with the FrameIndex of the loaded stack slot.  If

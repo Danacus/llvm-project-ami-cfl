@@ -24,10 +24,8 @@ def OPC_AJAL      : RISCVOpcode<"AJAL",      0b1101101>;
 def OPC_MARK      : RISCVOpcode<"MARK",      0b0001011>;
 
 
-
-
 //===----------------------------------------------------------------------===//
-// Instruction Class Templates
+// AMi Qualifier Tables
 //===----------------------------------------------------------------------===//
 
 class AMiClass;
@@ -36,118 +34,72 @@ def Mimicable: AMiClass;
 def Activatable: AMiClass;
 def AlwaysPersistent: AMiClass;
 
-class AMiInstQualified<string I, string QI, string Q> {
-  string Inst = I;
-  string QualInst = QI;
-  string Qualifier = Q;
-  AMiClass Class = Mimicable;
+class QualifiedInst<int quallen = 1> {
+  string AMiFromInst = !substr(NAME, quallen);
+  string AMiQualInst = NAME;
+  string AMiQualifier = !substr(NAME, 0, quallen);
+  AMiClass AMiClass = Mimicable;
 }
 
-class AMiQualified<string I, string Q> : AMiInstQualified<!substr(I, !size(Q)), I, Q>;
-class AMiQualifiedAuto<string I, int quallen = 1> : AMiInstQualified<!substr(I, quallen), I, !substr(I, 0, quallen)>;
-class AMiAlwaysPersistent<string I> : AMiInstQualified<I, I, "p"> {
-  let Class = AlwaysPersistent;
+class AMiAlwaysPersistent : QualifiedInst<1> {
+  let AMiFromInst = !substr(NAME, 1);
+  let AMiQualInst = !substr(NAME, 1);
+  let AMiQualifier = "p";
+  let AMiClass = AlwaysPersistent;
 }
 
-multiclass QualifiedMulti<string qualifier> {
-  def _m : AMiQualified<NAME, qualifier>;
-}
+//===----------------------------------------------------------------------===//
+// AMi Qualified Instruction Template Multiclasses
+//===----------------------------------------------------------------------===//
 
-multiclass ABranchCC_rri<bits<3> funct3, string opcodestr> {
-  let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-  def NAME : RVInstB<funct3, OPC_ABRANCH, (outs),
-            (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
-            opcodestr, "$rs1, $rs2, $imm12">,
-      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
-    let isBranch = 1;
-    let isTerminator = 1;
-  }
-  def _m : AMiQualified<NAME, "a"> {
-    let Class = Activatable; 
-  }
-}
-
-multiclass CTBranchCC_rri<bits<3> funct3, string opcodestr> {
-  let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-  def NAME : RVInstB<funct3, OPC_CTBRANCH, (outs),
-              (ins GPR:$rs1, GPR:$rs2, simm13_lsb0:$imm12),
-              opcodestr, "$rs1, $rs2, $imm12">,
-      Sched<[WriteJmp, ReadJmp, ReadJmp]> {
-    let isBranch = 1;
-    let isTerminator = 1;
-  }
-  def _m : AMiQualified<NAME, "ct"> {
-    let Class = Activatable; 
-  }
-}
-
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
-multiclass MLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"m"> {
-  def NAME : RVInstI<funct3, OPC_MLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
-}
-multiclass PLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"p"> {
-  def NAME : RVInstI<funct3, OPC_PLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
-}
-multiclass GLoad_ri<bits<3> funct3, string opcodestr> : QualifiedMulti<"g"> {
-  def NAME : RVInstI<funct3, OPC_GLOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),              
-        opcodestr, "$rd, ${imm12}(${rs1})">;
+multiclass AMiBranchCC_rri<bits<3> funct3, string opcodestr> {
+let AMiClass = Activatable in {
+  let Opcode = OPC_ABRANCH.Value in
+  def A#NAME : BranchCC_rri<funct3, "a."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_CTBRANCH.Value in
+  def CT#NAME : BranchCC_rri<funct3, "ct."#opcodestr>, QualifiedInst<2>;
 }
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-class MALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_MIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-class GALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_GIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-class PALU_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_OP_PIMM, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, $rs1, $imm12">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-class MALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
-             bit Commutable = 0>
-    : RVInstR<funct7, funct3, OPC_OPM, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
-              opcodestr, "$rd, $rs1, $rs2"> {
-  let isCommutable = Commutable;
+multiclass AMiLoad_ri<bits<3> funct3, string opcodestr> {
+let AMiClass = Mimicable in {
+  let Opcode = OPC_GLOAD.Value in
+  def G#NAME : Load_ri<funct3, "g."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_MLOAD.Value in
+  def M#NAME : Load_ri<funct3, "m."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_PLOAD.Value in
+  def P#NAME : Load_ri<funct3, "p."#opcodestr>, QualifiedInst;
 }
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class PALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr,
-             bit Commutable = 0>
-    : RVInstR<funct7, funct3, OPC_OPP, (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
-              opcodestr, "$rd, $rs1, $rs2"> {
-  let isCommutable = Commutable;
+multiclass AMiALU_ri<bits<3> funct3, string opcodestr> {
+let AMiClass = Mimicable in {
+  let Opcode = OPC_OP_GIMM.Value in
+  def G#NAME : ALU_ri<funct3, "g."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_OP_MIMM.Value in
+  def M#NAME : ALU_ri<funct3, "m."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_OP_PIMM.Value in
+  def P#NAME : ALU_ri<funct3, "p."#opcodestr>, QualifiedInst;
+}
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-multiclass MShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : QualifiedMulti<"m"> {
-  def NAME : RVInstIShift<imm11_7, funct3, OPC_OP_MIMM, (outs GPR:$rd),
-                   (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
-                   "$rd, $rs1, $shamt">,
-      Sched<[WriteShiftImm, ReadShiftImm]>;
+multiclass AMiShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> {
+let AMiClass = Mimicable in {
+  let Opcode = OPC_OP_GIMM.Value in
+  def G#NAME : Shift_ri<imm11_7, funct3, "g."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_OP_MIMM.Value in
+  def M#NAME : Shift_ri<imm11_7, funct3, "m."#opcodestr>, QualifiedInst;
+  let Opcode = OPC_OP_PIMM.Value in
+  def P#NAME : Shift_ri<imm11_7, funct3, "p."#opcodestr>, QualifiedInst;
+}
 }
 
-multiclass PShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : QualifiedMulti<"p"> {
-  def NAME : RVInstIShift<imm11_7, funct3, OPC_OP_PIMM, (outs GPR:$rd),
-                   (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
-                   "$rd, $rs1, $shamt">,
-      Sched<[WriteShiftImm, ReadShiftImm]>;
-}
-
-multiclass GShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : QualifiedMulti<"g"> {
-  def NAME : RVInstIShift<imm11_7, funct3, OPC_OP_GIMM, (outs GPR:$rd),
-                   (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
-                   "$rd, $rs1, $shamt">,
-      Sched<[WriteShiftImm, ReadShiftImm]>;
+multiclass AMiALU_rr<bits<7> funct7, bits<3> funct3, string opcodestr, bit Commutable = 0> {
+let AMiClass = Mimicable in {
+  let Opcode = OPC_OPM.Value in
+  def M#NAME : ALU_rr<funct7, funct3, "m."#opcodestr, Commutable>, QualifiedInst;
+  let Opcode = OPC_OPP.Value in
+  def P#NAME : ALU_rr<funct7, funct3, "p."#opcodestr, Commutable>, QualifiedInst;
 }
 }
 
@@ -158,89 +110,71 @@ multiclass GShift_ri<bits<5> imm11_7, bits<3> funct3, string opcodestr> : Qualif
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def PLUI : RVInstU<OPC_PLUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
-                  "p.lui", "$rd, $imm20">, Sched<[WriteIALU]>;
+                  "p.lui", "$rd, $imm20">, Sched<[WriteIALU]>, QualifiedInst;
 
+let AMiClass = Activatable in {
 let isCall = 1 in
 def AJAL : RVInstJ<OPC_AJAL, (outs GPR:$rd), (ins simm21_lsb0_jal:$imm20),
-                  "a.jal", "$rd, $imm20">, Sched<[WriteJal]>;
+                  "a.jal", "$rd, $imm20">, Sched<[WriteJal]>, QualifiedInst;
 
 let isCall = 1 in
 def AJALR : RVInstI<0b000, OPC_AJALR, (outs GPR:$rd),
                    (ins GPR:$rs1, simm12:$imm12),
                    "a.jalr", "$rd, ${imm12}(${rs1})">,
-           Sched<[WriteJalr, ReadJalr]>;
+           Sched<[WriteJalr, ReadJalr]>, QualifiedInst;
+}
 }
 
-def : AMiQualifiedAuto<"PLUI">;
-def : AMiQualifiedAuto<"AJAL"> {
-  let Class = Activatable;
-}
-def : AMiQualifiedAuto<"AJALR"> {
-  let Class = Activatable;
-}
+defm BEQ  : AMiBranchCC_rri<0b000, "beq">;
+defm BNE  : AMiBranchCC_rri<0b001, "bne">;
+defm BLT  : AMiBranchCC_rri<0b100, "blt">;
+defm BGE  : AMiBranchCC_rri<0b101, "bge">;
+defm BLTU : AMiBranchCC_rri<0b110, "bltu">;
+defm BGEU : AMiBranchCC_rri<0b111, "bgeu">;
 
-defm ABEQ  : ABranchCC_rri<0b000, "a.beq">;
-defm ABNE  : ABranchCC_rri<0b001, "a.bne">;
-defm ABLT  : ABranchCC_rri<0b100, "a.blt">;
-defm ABGE  : ABranchCC_rri<0b101, "a.bge">;
-defm ABLTU : ABranchCC_rri<0b110, "a.bltu">;
-defm ABGEU : ABranchCC_rri<0b111, "a.bgeu">;
+defm LB : AMiLoad_ri<0b000, "lb">, Sched<[WriteLDB, ReadMemBase]>;
+defm LH : AMiLoad_ri<0b001, "lh">, Sched<[WriteLDH, ReadMemBase]>;
+defm LW : AMiLoad_ri<0b010, "lw">, Sched<[WriteLDW, ReadMemBase]>;
+defm LBU : AMiLoad_ri<0b100, "lbu">, Sched<[WriteLDB, ReadMemBase]>;
+defm LHU : AMiLoad_ri<0b101, "lhu">, Sched<[WriteLDH, ReadMemBase]>;
 
-defm CTBEQ  : CTBranchCC_rri<0b000, "ct.beq">;
-defm CTBNE  : CTBranchCC_rri<0b001, "ct.bne">;
-defm CTBLT  : CTBranchCC_rri<0b100, "ct.blt">;
-defm CTBGE  : CTBranchCC_rri<0b101, "ct.bge">;
-defm CTBLTU : CTBranchCC_rri<0b110, "ct.bltu">;
-defm CTBGEU : CTBranchCC_rri<0b111, "ct.bgeu">;
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in
+defm ADDI  : AMiALU_ri<0b000, "addi">;
 
-defm GLB : GLoad_ri<0b000, "g.lb">, Sched<[WriteLDB, ReadMemBase]>;
-defm MLW : MLoad_ri<0b010, "m.lw">, Sched<[WriteLDW, ReadMemBase]>;
-defm PLW : PLoad_ri<0b010, "p.lw">, Sched<[WriteLDW, ReadMemBase]>;
-defm GLW : GLoad_ri<0b010, "g.lw">, Sched<[WriteLDW, ReadMemBase]>;
-defm MLBU: MLoad_ri<0b100, "m.lbu">, Sched<[WriteLDB, ReadMemBase]>;
+defm SLTI  : AMiALU_ri<0b010, "slti">;
+defm SLTIU : AMiALU_ri<0b011, "sltiu">;
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
-def MADDI : MALU_ri<0b000, "m.addi">;
-def GADDI : GALU_ri<0b000, "g.addi">;
-def PADDI : PALU_ri<0b000, "p.addi">;
+defm XORI  : AMiALU_ri<0b100, "xori">;
+defm ORI   : AMiALU_ri<0b110, "ori">;
 }
 
-def : AMiQualifiedAuto<"MADDI">;
-def : AMiQualifiedAuto<"GADDI">;
-def : AMiQualifiedAuto<"PADDI">;
+defm ANDI  : AMiALU_ri<0b111, "andi">;
 
-let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
-def MORI  : MALU_ri<0b110, "m.ori">;
-}
+defm SLLI : AMiShift_ri<0b00000, 0b001, "slli">;
+defm SRLI : AMiShift_ri<0b00000, 0b101, "srli">;
+defm SRAI : AMiShift_ri<0b01000, 0b101, "srai">;
 
-def : AMiQualifiedAuto<"MORI">;
-
-def MANDI  : MALU_ri<0b111, "m.andi">;
-def : AMiQualifiedAuto<"MANDI">;
-def PANDI  : PALU_ri<0b111, "p.andi">;
-def : AMiQualifiedAuto<"PANDI">;
-def GANDI  : GALU_ri<0b111, "g.andi">;
-def : AMiQualifiedAuto<"GANDI">;
-
-defm GSLLI : GShift_ri<0b00000, 0b001, "g.slli">;
-defm MSLLI : MShift_ri<0b00000, 0b001, "m.slli">;
-defm PSLLI : PShift_ri<0b00000, 0b001, "p.slli">;
-
-defm GSRLI : GShift_ri<0b00000, 0b101, "g.srli">;
-defm MSRLI : MShift_ri<0b00000, 0b101, "m.srli">;
-defm PSRLI : PShift_ri<0b00000, 0b101, "p.srli">;
-
-defm GSRAI : GShift_ri<0b01000, 0b101, "g.srai">;
-defm MSRAI : MShift_ri<0b01000, 0b101, "m.srai">;
-defm PSRAI : PShift_ri<0b01000, 0b101, "p.srai">;
-
-def MADD  : MALU_rr<0b0000000, 0b000, "m.add", /*Commutable*/1>,
-            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
-def PADD  : PALU_rr<0b0000000, 0b000, "p.add", /*Commutable*/1>,
-            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
-
-def : AMiQualifiedAuto<"MADD">;
-def : AMiQualifiedAuto<"PADD">;
+defm ADD  : AMiALU_rr<0b0000000, 0b000, "add", /*Commutable*/1>,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+defm SUB  : AMiALU_rr<0b0100000, 0b000, "sub">,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+defm SLL  : AMiALU_rr<0b0000000, 0b001, "sll">,
+           Sched<[WriteShiftReg, ReadShiftReg, ReadShiftReg]>;
+defm SLT  : AMiALU_rr<0b0000000, 0b010, "slt">,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+defm SLTU : AMiALU_rr<0b0000000, 0b011, "sltu">,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+defm XOR  : AMiALU_rr<0b0000000, 0b100, "xor", /*Commutable*/1>,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+defm SRL  : AMiALU_rr<0b0000000, 0b101, "srl">,
+           Sched<[WriteShiftReg, ReadShiftReg, ReadShiftReg]>;
+defm SRA  : AMiALU_rr<0b0100000, 0b101, "sra">,
+           Sched<[WriteShiftReg, ReadShiftReg, ReadShiftReg]>;
+defm OR   : AMiALU_rr<0b0000000, 0b110, "or", /*Commutable*/1>,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+defm AND  : AMiALU_rr<0b0000000, 0b111, "and", /*Commutable*/1>,
+           Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MARK : RVInstI<0b000, OPC_MARK, (outs),
@@ -251,9 +185,9 @@ def MARK : RVInstI<0b000, OPC_MARK, (outs),
 }
 
 // Always persistent instructions
-def : AMiAlwaysPersistent<"SB">;
-def : AMiAlwaysPersistent<"SH">;
-def : AMiAlwaysPersistent<"SW">;
+def PSB : AMiAlwaysPersistent;
+def PSH : AMiAlwaysPersistent;
+def PSW : AMiAlwaysPersistent;
 
 //===----------------------------------------------------------------------===//
 // Non-standard extensions

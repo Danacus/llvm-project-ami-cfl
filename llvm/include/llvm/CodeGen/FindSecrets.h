@@ -14,11 +14,11 @@ using namespace llvm;
 
 struct Secret {
   MachineInstr *MI;
-  MCRegister Reg;
+  Register Reg;
   uint64_t SecretMask;
   bool IsDef;
 
-  Secret(MachineInstr *MI, MCRegister Reg, uint64_t SecretMask, bool IsDef = true)
+  Secret(MachineInstr *MI, Register Reg, uint64_t SecretMask, bool IsDef = true)
       : MI(MI), Reg(Reg), SecretMask(SecretMask), IsDef(IsDef) {}
 
   bool operator<(const Secret &Other) const {
@@ -37,13 +37,19 @@ namespace llvm {
 class TrackSecretsAnalysis : public MachineFunctionPass {
 public:
   static char ID;
-  SmallSet<Secret, 8> Secrets;
+  const TargetInstrInfo *TII;
+  const TargetRegisterInfo *TRI;
+  
+  using SecretsSet = SmallSet<std::pair<MachineInstr *, Register>, 8>;
+  using SecretsMap = DenseMap<std::pair<MachineInstr *, Register>, uint64_t>;
+  
+  SecretsMap SecretUses;
 
   TrackSecretsAnalysis();
 
-  void handleUse(MachineInstr *UseInst, MCRegister Reg, uint64_t SecretMask,
-                 SmallSet<Secret, 8> &SecretDefs);
-  SmallSet<Secret, 8> findSecretSources(MachineFunction &MF);
+  void handleUse(MachineInstr &UseInst, Register Reg, uint64_t SecretMask,
+                 SecretsSet &WorkSet, SecretsMap &SecretDefs);
+  SecretsSet findSecretSources(MachineFunction &MF);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -52,6 +58,10 @@ public:
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
+  
+private:
+  SecretsMap Secrets;
+  
 };
 
 } // namespace llvm

@@ -6,7 +6,9 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -31,16 +33,15 @@ char TrackSecretsAnalysis::ID = 0;
 
 char &llvm::TrackSecretsPassID = TrackSecretsAnalysis::ID;
 
-SmallSet<Secret, 8>
-TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
+TrackSecretsAnalysis::SecretsSet TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
   auto &RDA = getAnalysis<ReachingDefAnalysis>();
-  SmallSet<Secret, 8> SecretDefs;
+  SecretsSet SecretDefs;
 
   for (MachineBasicBlock &MB : MF) {
     for (MachineInstr &MI : MB) {
       if (MI.getOpcode() == TargetOpcode::SECRET) {
         uint64_t SecretMask = MI.getOperand(1).getImm();
-        MCRegister Reg = MI.getOperand(0).getReg().asMCReg();
+        Register Reg = MI.getOperand(0).getReg();
 
         SmallPtrSet<MachineInstr *, 16> Defs;
         RDA.getGlobalReachingDefs(&MI, Reg, Defs);
@@ -49,13 +50,16 @@ TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
         // argument and we need to start tracking at the SECRET
         // pseudoinstruction
         if (Defs.empty()) {
-          SecretDefs.insert(Secret(&MI, Reg, SecretMask));
+          Secrets.insert({ { &MI, Reg }, SecretMask });
+          SecretDefs.insert({ &MI, Reg });
         }
 
         // If there are reaching defs, then we need to make sure to start
         // tracking at the reaching def and not the SECRET pseudoinstruction
         for (MachineInstr *DefMI : Defs) {
-          SecretDefs.insert(Secret(DefMI, Reg, SecretMask));
+          Secrets.insert({ { DefMI, Reg }, SecretMask });
+          SecretDefs.insert({ DefMI, Reg });
+          //SecretDefs.insert(Secret(DefMI, Reg, SecretMask));
         }
       }
     }
@@ -64,62 +68,72 @@ TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
   return SecretDefs;
 }
 
-void TrackSecretsAnalysis::handleUse(MachineInstr *UseInst, MCRegister Reg,
-                                     uint64_t SecretMask,
-                                     SmallSet<Secret, 8> &SecretDefs) {
-  //errs() << "handleUse: " << *UseInst << "\n";
-  
-  if (UseInst->mayLoad() && (SecretMask & (1u << 1))) {
-    // TODO: used register(s) are assumed to be dereferenced to get an address to load from
-    // Need to use information from TargetInstrInfo
+void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, Register Reg,
+                                     uint64_t SecretMask, SecretsSet &WorkSet,
+                                     SecretsMap &SecretDefs) {
+  auto &RDA = getAnalysis<ReachingDefAnalysis>();
+  //SmallSet<std::pair<Register, uint64_t>, 8> Map;
+  DenseMap<Register, uint64_t> MaskMap;
+  SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
+
+  for (auto Def : SecretDefs) {
+    SmallPtrSet<MachineInstr *, 8> Defs;
+    RDA.getGlobalReachingDefs(&UseInst, Def.first.second.asMCReg(), Defs);
+
+    // Check if the the SecretDef we found is relevant in this context,
+    // by making sure the defining instruction is the closest reaching def of
+    // UseInst
+    if (Defs.contains(Def.first.first))
+      MaskMap.insert({Def.first.second, Def.second});
+  }
+
+  TII->transferSecret(UseInst, Reg, SecretMask, MaskMap, NewDefs);
+
+  for (auto Def : NewDefs) {
+    // Add newly defined registers to work set
+    WorkSet.insert({ &UseInst, Def.first });
     
-    for (MachineOperand &Def : UseInst->defs()) {
-      //errs() << "Push: " << *UseInst << "\n";
-      SecretDefs.insert(Secret(UseInst, Def.getReg(), SecretMask >> 1));
-    }
+    // Set or upgrade the mask
+    SecretDefs[{ &UseInst, Def.first }] = Def.second | SecretDefs[{ &UseInst, Def.first }];
   }
-  
-  if (!UseInst->mayLoadOrStore() && (SecretMask & 1u)) {
-    // Default behavior for most instructions that don't store or load (register to register)
-    for (MachineOperand &Def : UseInst->defs()) {
-      //errs() << "Push: " << *UseInst << "\n";
-      SecretDefs.insert(Secret(UseInst, Def.getReg(), SecretMask));
-    }
-  }
+  // errs() << "handleUse: " << *UseInst << "\n";
 }
 
 bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
-  SmallSet<Secret, 8> WorkSet = findSecretSources(MF);
+  const auto &ST = MF.getSubtarget();
+  TII = ST.getInstrInfo();
+
+  SecretsSet WorkSet = findSecretSources(MF);
 
   auto &RDA = getAnalysis<ReachingDefAnalysis>();
 
   while (!WorkSet.empty()) {
     auto Current = *WorkSet.begin();
     WorkSet.erase(Current);
-    
-    //errs() << "Pop: " << *Current.MI << "\n";
+
+    // errs() << "Pop: " << *Current.MI << "\n";
 
     SmallPtrSet<MachineInstr *, 8> Uses;
-    RDA.getGlobalUses(Current.MI, Current.Reg, Uses);
+    RDA.getGlobalUses(Current.first, Current.second, Uses);
 
     for (auto *Use : Uses) {
-      if (Current.SecretMask & 1u)
-        Secrets.insert(Secret(Use, Current.Reg, Current.SecretMask, false));
-      handleUse(Use, Current.Reg, Current.SecretMask, WorkSet);
+      if (Secrets[Current] & 1u) {
+        SecretUses[{ Use, Current.second }] = Secrets[Current];
+      }
+      handleUse(*Use, Current.second, Secrets[Current], WorkSet, Secrets);
     }
   }
-  
+
   errs() << "Secret registers: \n";
-  
-  for (auto S : Secrets) {
-    errs() << *S.MI << ": " << S.Reg << "\n";
+
+  for (auto S : SecretUses) {
+    errs() << *S.first.first << ", " << S.first.second << ": " << S.second << "\n";
   }
 
   return false;
 }
 
-TrackSecretsAnalysis::TrackSecretsAnalysis()
-    : MachineFunctionPass(ID) {
+TrackSecretsAnalysis::TrackSecretsAnalysis() : MachineFunctionPass(ID) {
   initializeMachineCFGPrinterPass(*PassRegistry::getPassRegistry());
 }
 

@@ -313,7 +313,7 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
     raw_ostream &OS, const CodeGenTarget &Target,
     ArrayRef<const CodeGenInstruction *> NumberedInstructions) {
   auto Namespace = Target.getInstNamespace();
-  auto Defs = Records.getAllDerivedDefinitions("AMiInstQualified");
+  auto Defs = Records.getAllDerivedDefinitions("QualifiedInst");
 
   std::map<StringRef, StringRef> PMap;
   std::map<StringRef, StringRef> MMap;
@@ -327,14 +327,14 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
     //CodeGenInstruction Inst = Target.getInstruction(Def->getValueAsDef("Inst"));
     //CodeGenInstruction QualInst =
         //Target.getInstruction(Def->getValueAsDef("QualInst"));
-    StringRef Inst = Def->getValueAsString("Inst");
-    StringRef QualInst = Def->getValueAsString("QualInst");
+    StringRef Inst = Def->getValueAsString("AMiFromInst");
+    StringRef QualInst = Def->getValueAsString("AMiQualInst");
 
-    StringRef AMiClass = Def->getValueAsDef("Class")->getName();
+    StringRef AMiClass = Def->getValueAsDef("AMiClass")->getName();
     ClassMap.insert({ Inst, AMiClass });
 
     std::pair<StringRef, StringRef> Tuple = {Inst, QualInst};
-    switch (std::tolower(Def->getValueAsString("Qualifier")[0])) {
+    switch (std::tolower(Def->getValueAsString("AMiQualifier")[0])) {
     case 'p':
       PMap.insert(Tuple);
       break;
