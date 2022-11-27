@@ -1,6 +1,7 @@
 #ifndef LLVM_CODEGEN_FINDSECRETS_H
 #define LLVM_CODEGEN_FINDSECRETS_H
 
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/Register.h"
@@ -12,37 +13,53 @@
 
 using namespace llvm;
 
-struct Secret {
+struct SecretDef {
   MachineInstr *MI;
   Register Reg;
-  uint64_t SecretMask;
-  bool IsDef;
 
-  Secret(MachineInstr *MI, Register Reg, uint64_t SecretMask, bool IsDef = true)
-      : MI(MI), Reg(Reg), SecretMask(SecretMask), IsDef(IsDef) {}
+  SecretDef(MachineInstr *MI, Register Reg) : MI(MI), Reg(Reg) {}
 
-  bool operator<(const Secret &Other) const {
-    return std::tie(MI, Reg, SecretMask) <
-           std::tie(Other.MI, Other.Reg, Other.SecretMask);
+  bool operator<(const SecretDef &Other) const {
+    return std::tie(MI, Reg) < std::tie(Other.MI, Other.Reg);
   }
 
-  bool operator==(const Secret &Other) const {
-    return std::tie(MI, Reg, SecretMask) ==
-           std::tie(Other.MI, Other.Reg, Other.SecretMask);
+  bool operator==(const SecretDef &Other) const {
+    return std::tie(MI, Reg) == std::tie(Other.MI, Other.Reg);
   }
 };
 
 namespace llvm {
+
+template <> struct DenseMapInfo<SecretDef, void> {
+  static inline SecretDef getEmptyKey() {
+    SecretDef S(nullptr, 0);
+    return S;
+  }
+
+  static inline SecretDef getTombstoneKey() {
+    SecretDef S(nullptr, 0);
+    return S;
+  }
+
+  static unsigned getHashValue(const SecretDef &Key) {
+    return DenseMapInfo<std::pair<uint64_t, uint64_t>>::getHashValue(
+        std::pair((uint64_t)Key.MI, Key.Reg));
+  }
+
+  static bool isEqual(const SecretDef &LHS, const SecretDef &RHS) {
+    return LHS == RHS;
+  }
+};
 
 class TrackSecretsAnalysis : public MachineFunctionPass {
 public:
   static char ID;
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  
-  using SecretsSet = SmallSet<std::pair<MachineInstr *, Register>, 8>;
-  using SecretsMap = DenseMap<std::pair<MachineInstr *, Register>, uint64_t>;
-  
+
+  using SecretsSet = SmallSet<SecretDef, 8>;
+  using SecretsMap = DenseMap<SecretDef, uint64_t>;
+
   SecretsMap SecretUses;
 
   TrackSecretsAnalysis();
@@ -58,12 +75,28 @@ public:
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
-  
+
 private:
   SecretsMap Secrets;
+};
+
+class TrackSecretsPrinter : public MachineFunctionPass {
+public:
+  static char ID;
+
+  TrackSecretsPrinter();
   
+  bool runOnMachineFunction(MachineFunction &MF) override;
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<TrackSecretsAnalysis>();
+    AU.setPreservesAll();
+    MachineFunctionPass::getAnalysisUsage(AU);
+  }
 };
 
 } // namespace llvm
+
+
 
 #endif // LLVM_CODEGEN_FINDSECRETS_H

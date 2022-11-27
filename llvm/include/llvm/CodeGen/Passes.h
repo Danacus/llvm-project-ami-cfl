@@ -183,6 +183,7 @@ namespace llvm {
   extern char &MIRProfileLoaderPassID;
 
   extern char &TrackSecretsPassID;
+  extern char &TrackSecretsPrinterID;
   extern char &PrintSecretsPassID;
 
   /// FastRegisterAllocation Pass - This pass register allocates as fast as

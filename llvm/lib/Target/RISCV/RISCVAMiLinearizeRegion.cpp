@@ -137,12 +137,13 @@ void AMiLinearizeRegion::findActivatingRegions() {
   for (auto &Secret : Secrets) {
     if (!(Secret.second & 1u))
       continue;
-    //assert((Secret.second & 1u) && "not a secret value or incorrect mask");
-    //assert((!Secret.IsDef) && "not a use of a secret value");
+    // assert((Secret.second & 1u) && "not a secret value or incorrect mask");
+    // assert((!Secret.IsDef) && "not a use of a secret value");
 
-    if (Secret.first.first->isConditionalBranch()) {
-      errs() << "Conditional branch: " << *Secret.first.first << "\n";
-      MachineBasicBlock *EntryMBB = Secret.first.first->getParent()->getFallThrough();
+    if (Secret.first.MI->isConditionalBranch()) {
+      errs() << "Conditional branch: " << *Secret.first.MI << "\n";
+      MachineBasicBlock *EntryMBB =
+          Secret.first.MI->getParent()->getFallThrough();
 
       // Get largest region that starts at BB. (See
       // RegionInfoBase::getMaxRegionExit)
