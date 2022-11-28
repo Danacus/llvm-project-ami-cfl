@@ -4969,13 +4969,13 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   if (auto *SI = D->getTypeSourceInfo()) {
     if (auto TL = SI->getTypeLoc()) {
       uint64_t SecretMask = TL.getSecretMask();
-      if (SecretMask) {
+      //if (SecretMask) {
         std::string Attr("secret(");
         Attr.append(std::to_string(SecretMask));
         Attr.append(")");
         auto AA = AnnotateAttr(Context, D->getSourceRange(), Attr);
         Annotations.push_back(EmitAnnotateAttr(GV, &AA, D->getLocation()));
-      }
+      //}
     }
   }
 

@@ -67,21 +67,19 @@ MCInst RISCVInstrInfo::getNop() const {
       .addImm(0);
 }
 
-
-void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, uint64_t &SecretMask, 
-                                    const DenseMap<Register, uint64_t> &SecretDefs, SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {
+void RISCVInstrInfo::verifySecretTypes(const MachineInstr &MI, const DenseMap<MachineOperand *, uint64_t> &SecretMasks) const {
   auto IsSubtype = [](uint64_t First, uint64_t Second) {
     for (int I = 0; I < 64; I++) {
       // If first has a 1 where second has a 0, it's not a valid subtype,
       // because we expected a non-secret, but provided a secret
-      if (((First << I) & 1u) && !((Second << I) & 1u)) {
+      if (((First >> I) & 1u) && !((Second >> I) & 1u)) {
         return false;
       }
     }
     
     return true;
   };
-
+  
   switch (MI.getOpcode()) {
   case RISCV::LB:
   case RISCV::LBU:
@@ -92,14 +90,8 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, 
   case RISCV::FLW:
   case RISCV::LWU:
   case RISCV::LD:
-  case RISCV::FLD:
-  case RISCV::LUI: {
-    // Load instructions
-            
-    // If Reg is a pointer to a secret value
-    if (SecretMask & (1u << 1) && &MI.getOperand(1) == MO)
-      NewDefs.insert({ MI.getOperand(0).getReg(), SecretMask >> 1 });
-
+  case RISCV::FLD: {
+    // Load instructions            
     break;   
   }
 
@@ -111,36 +103,73 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, 
   case RISCV::SD:
   case RISCV::FSD: {
     // Store instructions
+      
+    uint64_t SrcMask = 0;
+    uint64_t DestMask = 0;
 
-    uint64_t TargetMask = 0;
-      
-    auto ExistingDef = find_if(SecretDefs.begin(), SecretDefs.end(), [&MI](auto P) {
-      if (!MI.getOperand(1).isReg())
-        return false;
-      return MI.getOperand(1).getReg() == P.first;
-    });
-      
-    if (ExistingDef != SecretDefs.end()) {
-      TargetMask = ExistingDef->second;
+    for (auto P : SecretMasks) {
+      if (P.first == &MI.getOperand(0)) {
+        SrcMask = P.second;
+      }
+
+      if (P.first == &MI.getOperand(1)) {
+        DestMask = P.second;
+      }
     }
-      
-    // Contravaraint subtype check
-    if (!IsSubtype((SecretMask << 1), TargetMask))
-      llvm_unreachable("AMi Type error");
-      
-      /*
-    if (SecretMask & 1u && IsOpEqReg(MI.getOperand(0)))
-      SecretDefs.insert({ MI.getOperand(1).getReg(), (SecretMask << 1) | TargetMask });
-      */
+
+    /* I don't know why this doesn't work
+    uint64_t SrcMask = SecretMasks.find(&MI.getOperand(0))->second;
+    uint64_t DestMask = SecretMasks.find(&MI.getOperand(1))->second;
+    */
+            
+    // Subtype check
+    if (!IsSubtype((SrcMask << 1), DestMask)) {
+      llvm_unreachable("AMi type error, store would leak secret data");
+    }
       
     break;
   }
 
   default:
-    if (SecretMask & 1u)
-      for (MachineOperand Def : MI.defs())
-        if (Def.isReg())
-          NewDefs.insert({ Def.getReg(), SecretMask });
+    break;
+  }
+}
+
+void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, uint64_t &SecretMask, 
+                                    SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {
+  switch (MI.getOpcode()) {
+  case RISCV::LB:
+  case RISCV::LBU:
+  case RISCV::LH:
+  case RISCV::LHU:
+  case RISCV::FLH:
+  case RISCV::LW:
+  case RISCV::FLW:
+  case RISCV::LWU:
+  case RISCV::LD:
+  case RISCV::FLD: {
+    // Load instructions
+            
+    if (&MI.getOperand(1) == MO)
+      NewDefs.insert({ MI.getOperand(0).getReg(), SecretMask >> 1 });
+
+    break;   
+  }
+
+  case RISCV::SB:
+  case RISCV::SH:
+  case RISCV::SW:
+  case RISCV::FSH:
+  case RISCV::FSW:
+  case RISCV::SD:
+  case RISCV::FSD: {      
+    break;
+  }
+
+  default:
+    for (MachineOperand Def : MI.defs())
+      if (Def.isReg())
+        NewDefs.insert({ Def.getReg(), SecretMask });
     break;
   }
 }

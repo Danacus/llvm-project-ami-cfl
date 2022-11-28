@@ -64,7 +64,7 @@ public:
 
   TrackSecretsAnalysis();
 
-  void handleUse(MachineInstr &UseInst, Register Reg, uint64_t SecretMask,
+  void handleUse(MachineInstr &UseInst, MachineOperand *MO, uint64_t SecretMask,
                  SecretsSet &WorkSet, SecretsMap &SecretDefs);
   SecretsSet findSecretSources(MachineFunction &MF);
 

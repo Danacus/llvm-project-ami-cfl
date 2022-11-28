@@ -106,7 +106,7 @@ public:
   TargetInstrInfo &operator=(const TargetInstrInfo &) = delete;
   virtual ~TargetInstrInfo();
 
-  static bool isGenericOpcode(unsigned Opc) {
+  static bool isGenericOpcode(const DenseMap<MachineOperand *, uint64_t> &SecretDefs, unsigned Opc) {
     return Opc <= TargetOpcode::GENERIC_OP_END;
   }
 
@@ -257,8 +257,10 @@ public:
     return false;
   }
 
+  virtual void verifySecretTypes(const MachineInstr &MI, const DenseMap<MachineOperand *, uint64_t> &SecretMasks) const {}
+
   virtual void transferSecret(const MachineInstr &MI, MachineOperand *MO, uint64_t &SecretMask, 
-                              const DenseMap<Register, uint64_t> &SecretDefs, SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {}
+                              SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {}
 
   /// If the specified machine instruction is a direct
   /// load from a stack slot, return the virtual or physical register number of

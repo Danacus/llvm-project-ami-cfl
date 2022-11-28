@@ -71,8 +71,7 @@ TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
         if (!AS.consume_front(")"))
           continue;
 
-        if (Mask)
-          SecretGlobals[GV] = Mask;
+        SecretGlobals[GV] = Mask;
       }
     }
   }
@@ -94,14 +93,12 @@ TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
         // pseudoinstruction
         if (Defs.empty()) {
           Secrets[SecretDef(&MI, Reg)] = SecretMask;
-          SecretDefs.insert(SecretDef(&MI, Reg));
         }
 
         // If there are reaching defs, then we need to make sure to start
         // tracking at the reaching def and not the SECRET pseudoinstruction
         for (MachineInstr *DefMI : Defs) {
           Secrets[SecretDef(DefMI, Reg)] = SecretMask;
-          SecretDefs.insert(SecretDef(DefMI, Reg));
         }
       }
     }
@@ -110,61 +107,15 @@ TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
   return SecretDefs;
 }
 
-void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, Register Reg,
+void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, MachineOperand *MO,
                                      uint64_t SecretMask, SecretsSet &WorkSet,
                                      SecretsMap &SecretDefs) {
-  errs() << "handleUse: " << UseInst << "\n";
-  auto &RDA = getAnalysis<ReachingDefAnalysis>();
-  // SmallSet<std::pair<Register, uint64_t>, 8> Map;
-  DenseMap<Register, uint64_t> MaskMap;
+  // errs() << "handleUse: " << UseInst << "\n";
   SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
 
-  // Handle registers coming from SECRET instruction separately,
-  // because they don't count as a reaching def. If there is a closer
-  // reaching def, this will be overwritten.
-  // Essentially, they are hacked to be a reaching def for each instruction,
-  // but at the lowest possible priority ("infinitely far away").
-  for (auto Def : SecretDefs) {
-    if (Def.getFirst().MI->getOpcode() == TargetOpcode::SECRET) {
-      MaskMap[Reg] = Def.second;
-    }
-  }
-
-  for (auto Def : SecretDefs) {
-    SmallPtrSet<MachineInstr *, 8> Defs;
-    RDA.getGlobalReachingDefs(&UseInst, Def.first.Reg.asMCReg(), Defs);
-
-    // Check if the the SecretDef we found is relevant in this context,
-    // by making sure the defining instruction is the closest reaching def of
-    // UseInst
-    if (Defs.contains(Def.first.MI)) {
-      MaskMap[Reg] = Def.second;
-    }
-  }
-
-  // Transfer the register
-  auto *OP =
-      std::find_if(UseInst.operands_begin(), UseInst.operands_end(),
-                [&Reg](MachineOperand O) {
-                  return O.isReg() && O.getReg() == Reg && O.isUse();
-                });
-  if (OP != UseInst.operands_end())
-    TII->transferSecret(UseInst, OP, SecretMask, MaskMap, NewDefs);
+  // Transfer the operand
+  TII->transferSecret(UseInst, MO, SecretMask, NewDefs);
   
-  // Tranfer secret globals (if any)
-  // TODO Should probably move this out of handleUse, 
-  // such that it only runs once for each instruction,
-  // since the secrecy mask of a global should be stable
-  for (auto P : SecretGlobals) {
-    auto *OP =
-        std::find_if(UseInst.operands_begin(), UseInst.operands_end(),
-                  [&P](MachineOperand O) {
-                    return O.isGlobal() && O.getGlobal() == P.first;
-                  });
-    if (OP != UseInst.operands_end())
-      TII->transferSecret(UseInst, OP, P.second, MaskMap, NewDefs);
-  }
-
   for (auto Def : NewDefs) {
     // Add newly defined registers to work set
     WorkSet.insert(SecretDef(&UseInst, Def.first));
@@ -172,68 +123,113 @@ void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, Register Reg,
     // Set or upgrade the mask
     SecretDefs[SecretDef(&UseInst, Def.first)] =
         Def.second | SecretDefs[SecretDef(&UseInst, Def.first)];
+    
+    // errs() << "Add def: " << printReg(Def.first, TRI) << " " << Def.second << "\n";
   }
 }
 
 bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
+  TRI = ST.getRegisterInfo();
+  
+  MF.dump();
 
-  SecretsSet WorkSet = findSecretSources(MF);
-
-  errs() << "Secret globals\n";
-  for (auto SG : SecretGlobals) {
-    SG.first->dump();
-    errs() << SG.second << "\n";
-  }
-
-  errs() << "Secret defs\n";
-  for (auto S : Secrets) {
-    errs() << "Secret: ";
-    errs() << printReg(S.first.Reg, TRI) << " with mask ";
-    errs() << std::bitset<64>(S.second).to_string() << " in ";
-    errs() << *S.first.MI;
-  }
+  SecretsSet WorkSet;
+  findSecretSources(MF);
 
   auto &RDA = getAnalysis<ReachingDefAnalysis>();
+  
+  // Step 1: propagate secret arguments and globals to instructions
 
   for (MachineBasicBlock &MB : MF) {
     for (MachineInstr &MI : MB) {
       for (auto Def : Secrets) {
+        SmallPtrSet<MachineInstr *, 8> Defs;
+        RDA.getGlobalReachingDefs(&MI, Def.first.Reg.asMCReg(), Defs);
+        
+        if (Defs.empty()) {
+          auto *OP = MI.findRegisterUseOperand(Def.first.Reg);
+          if (OP)
+            handleUse(MI, OP, Def.second, WorkSet, Secrets);
+        }
+      }
+      for (auto P : SecretGlobals) {
         auto *OP =
             std::find_if(MI.operands_begin(), MI.operands_end(),
-                      [&Def](MachineOperand O) {
-                        return O.isReg() && O.getReg() == Def.first.Reg && O.isUse();
+                      [&P](MachineOperand O) {
+                        return O.isGlobal() && O.getGlobal()->getName() == P.first->getName();
                       });
         if (OP != MI.operands_end())
-          handleUse(MI, Def.first.Reg, Secrets[Def.first], WorkSet, Secrets);
+          handleUse(MI, OP, P.second, WorkSet, Secrets);
       }
     }
   }
-
+  
+  // Step 2: iteratively propagate secrets from def to uses
+  
   while (!WorkSet.empty()) {
     auto Current = *WorkSet.begin();
     WorkSet.erase(Current);
-
-    // errs() << "Pop: " << *Current.MI << "\n";
 
     SmallPtrSet<MachineInstr *, 8> Uses;
     RDA.getGlobalUses(Current.MI, Current.Reg, Uses);
 
     for (auto *Use : Uses) {
-      if (Secrets[Current] & 1u) {
+      if (Secrets[Current] & 1u)
         SecretUses[SecretDef(Use, Current.Reg)] = Secrets[Current];
-      }
-      handleUse(*Use, Current.Reg, Secrets[Current], WorkSet, Secrets);
+
+      auto *OP = Use->findRegisterUseOperand(Current.Reg);
+      if (OP)
+        handleUse(*Use, OP, Secrets[Current], WorkSet, Secrets);
     }
   }
+  
+  // Step 3: verify secret types, check for errors
+  
+  for (MachineBasicBlock &MB : MF) {
+    for (MachineInstr &MI : MB) {
+      DenseMap<MachineOperand *, uint64_t> MaskMap;
 
-  errs() << "Secret uses\n";
-  for (auto S : SecretUses) {
-    errs() << "Secret: ";
-    errs() << printReg(S.first.Reg, TRI) << " with mask ";
-    errs() << std::bitset<64>(S.second).to_string() << " in ";
-    errs() << *S.first.MI;
+      // Handle registers coming from SECRET instruction separately,
+      // because they don't count as a reaching def. If there is a closer
+      // reaching def, this will be overwritten.
+      // Essentially, they are hacked to be a reaching def for each instruction,
+      // but at the lowest possible priority ("infinitely far away").
+      for (auto Def : Secrets) {
+        if (Def.getFirst().MI->getOpcode() == TargetOpcode::SECRET) {
+          auto *OP = MI.findRegisterUseOperand(Def.first.Reg);
+          if (OP)
+            MaskMap[OP] = Def.second;
+        }
+      }
+
+      for (auto Def : Secrets) {
+        SmallPtrSet<MachineInstr *, 8> Defs;
+        RDA.getGlobalReachingDefs(&MI, Def.first.Reg.asMCReg(), Defs);
+
+        // Check if the the SecretDef we found is relevant in this context,
+        // by making sure the defining instruction is the closest reaching def of
+        // UseInst
+        if (Defs.contains(Def.first.MI)) {
+          auto *OP = MI.findRegisterUseOperand(Def.first.Reg);
+          if (OP)
+            MaskMap[OP] = Def.second;
+        }
+      }
+
+      for (auto P : SecretGlobals) {
+        auto *OP =
+            std::find_if(MI.operands_begin(), MI.operands_end(),
+                      [&P](MachineOperand O) {
+                        return O.isGlobal() && O.getGlobal() == P.first;
+                      });
+        if (OP != MI.operands_end())
+          MaskMap[OP] = P.second;
+      }
+
+      TII->verifySecretTypes(MI, MaskMap);
+    }
   }
 
   return false;

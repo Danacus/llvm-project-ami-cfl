@@ -10183,11 +10183,14 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   assert((CLI.IsTailCall || InVals.size() == CLI.Ins.size()) &&
          "LowerCall didn't emit the correct number of values!");
 
+  uint64_t SecretMask = 0;
   if (CLI.CB->hasRetAttr(Attribute::Secret)) {
-    for (unsigned I = 0, E = InVals.size(); I != E; ++I) {
-      InVals[I] = CLI.DAG.getSecret(CLI.Chain, CLI.DL, InVals[I], InVals[I].getValueType(), CLI.CB->getFnAttr(Attribute::Secret).getValueAsInt());
-      CLI.Chain = InVals[I].getValue(1);
-    }
+    SecretMask = CLI.CB->getParamAttr(0, Attribute::Secret).getValueAsInt();
+  }
+
+  for (unsigned I = 0, E = InVals.size(); I != E; ++I) {
+    InVals[I] = CLI.DAG.getSecret(CLI.Chain, CLI.DL, InVals[I], InVals[I].getValueType(), SecretMask);
+    CLI.Chain = InVals[I].getValue(1);
   }
 
   // For a tail call, the return value is merely live-out and there aren't
@@ -10779,8 +10782,10 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     }
 
     // Add a `Secret` node in front of the InVal
+    uint64_t SecretMask = 0;
     if (Arg.hasAttribute(Attribute::Secret))
-      InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), Arg.getAttribute(Attribute::Secret).getValueAsInt());
+      SecretMask = Arg.getAttribute(Attribute::Secret).getValueAsInt();
+    InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretMask);
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.
