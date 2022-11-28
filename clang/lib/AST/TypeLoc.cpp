@@ -36,6 +36,31 @@ static const unsigned TypeLocMaxDataAlign = alignof(void *);
 // TypeLoc Implementation
 //===----------------------------------------------------------------------===//
 
+
+unsigned TypeLoc::getSecretMask() const {
+  auto TL = TypeLoc(*this);
+  uint64_t SecretMask = 0;
+  uint64_t NumIndirections = 0;
+  
+  while (TL) {
+    if (auto ATL = TL.getAsAdjusted<AttributedTypeLoc>()) {
+      if (ATL.getAttrKind() == attr::AnnotateType) {
+        const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
+        if (ATA->getAnnotation().compare("secret") == 0) {
+          SecretMask |= (1ull << NumIndirections);
+        }
+      }
+    }
+    
+    if (TL.getType()->isAnyPointerType() || TL.getType()->isArrayType()) {
+      NumIndirections++;
+    }
+    TL = TL.getNextTypeLoc();
+  }
+  
+  return SecretMask;
+}
+
 namespace {
 
 class TypeLocRanger : public TypeLocVisitor<TypeLocRanger, SourceRange> {

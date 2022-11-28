@@ -227,6 +227,8 @@ public:
   /// Find the location of the nullability specifier (__nonnull,
   /// __nullable, or __null_unspecifier), if there is one.
   SourceLocation findNullabilityLoc() const;
+  
+  unsigned getSecretMask() const;
 
 private:
   static bool isKind(const TypeLoc&) {

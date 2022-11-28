@@ -2474,32 +2474,13 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
     ArgAttrs[IRArgs.first] = llvm::AttributeSet::get(getLLVMContext(), Attrs);
   }
   
-  
-  if (const auto *FD = dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl().getDecl())) {
-    if (auto TL = FD->getFunctionTypeLoc().getReturnLoc()) {
-      uint64_t SecretMask = 0;
-      uint64_t NumIndirections = 0;
-      
-      while (TL) {
-        if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
-          if (ATL.getAttrKind() == attr::AnnotateType) {
-            const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
-            if (ATA->getAnnotation().compare("secret") == 0) {
-              SecretMask |= (1ull << NumIndirections);
-            }
-          }
-        }
+  const auto *FD = dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl().getDecl());
 
-        if (TL.getType()->isAnyPointerType()) {
-          NumIndirections++;
-          const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
-          TL = PtrTypeLoc.getPointeeLoc();
-        } else {
-          break;
-        }
-      }
-      
-      RetAttrs.addAttribute(llvm::Attribute::get(getLLVMContext(), llvm::Attribute::Secret, SecretMask));      
+  if (FD) {
+    if (auto TL = FD->getFunctionTypeLoc().getReturnLoc()) {
+      uint64_t SecretMask = TL.getSecretMask();      
+      if (SecretMask)
+        RetAttrs.addAttribute(llvm::Attribute::get(getLLVMContext(), llvm::Attribute::Secret, SecretMask));      
     }
   }
 
@@ -2511,33 +2492,13 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
     const ABIArgInfo &AI = I->info;
     llvm::AttrBuilder Attrs(getLLVMContext());
 
-    if (const auto *FD = dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl().getDecl())) {
+    if (FD) {
       const auto *Arg = FD->getParamDecl(ArgNo);
       if (auto *SI = Arg->getTypeSourceInfo()) {
         if (auto TL = SI->getTypeLoc()) {
-          uint64_t SecretMask = 0;
-          uint64_t NumIndirections = 0;
-    
-          while (TL) {
-            if (auto ATL = TL.getAs<AttributedTypeLoc>()) {
-              if (ATL.getAttrKind() == attr::AnnotateType) {
-                const AnnotateTypeAttr *ATA = ATL.getAttrAs<AnnotateTypeAttr>();
-                if (ATA->getAnnotation().compare("secret") == 0) {
-                  SecretMask |= (1ull << NumIndirections);
-                }
-              }
-            }
-
-            if (TL.getType()->isAnyPointerType()) {
-              NumIndirections++;
-              const PointerTypeLoc PtrTypeLoc = TL.getAsAdjusted<PointerTypeLoc>();
-              TL = PtrTypeLoc.getPointeeLoc();
-            } else {
-              break;
-            }
-          }
-
-          Attrs.addAttribute(llvm::Attribute::get(getLLVMContext(), llvm::Attribute::Secret, SecretMask));
+          uint64_t SecretMask = TL.getSecretMask();
+          if (SecretMask)
+            Attrs.addAttribute(llvm::Attribute::get(getLLVMContext(), llvm::Attribute::Secret, SecretMask));
         }
       }
     }

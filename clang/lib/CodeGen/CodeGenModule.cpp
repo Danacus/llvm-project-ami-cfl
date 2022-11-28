@@ -35,6 +35,7 @@
 #include "clang/AST/Mangle.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/StmtVisitor.h"
+#include "clang/Basic/AttributeCommonInfo.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/CodeGenOptions.h"
@@ -4964,6 +4965,19 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
 
   if (D->hasAttr<AnnotateAttr>())
     AddGlobalAnnotations(D, GV);
+  
+  if (auto *SI = D->getTypeSourceInfo()) {
+    if (auto TL = SI->getTypeLoc()) {
+      uint64_t SecretMask = TL.getSecretMask();
+      if (SecretMask) {
+        std::string Attr("secret(");
+        Attr.append(std::to_string(SecretMask));
+        Attr.append(")");
+        auto AA = AnnotateAttr(Context, D->getSourceRange(), Attr);
+        Annotations.push_back(EmitAnnotateAttr(GV, &AA, D->getLocation()));
+      }
+    }
+  }
 
   // Set the llvm linkage type as appropriate.
   llvm::GlobalValue::LinkageTypes Linkage =
