@@ -68,14 +68,8 @@ MCInst RISCVInstrInfo::getNop() const {
 }
 
 
-void RISCVInstrInfo::transferSecret(const MachineInstr &MI, Register &Reg, uint64_t &SecretMask, 
+void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, uint64_t &SecretMask, 
                                     const DenseMap<Register, uint64_t> &SecretDefs, SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {
-  auto IsOpEqReg = [&Reg](MachineOperand MO) {
-    if (!MO.isReg())
-      return false;
-    return MO.getReg() == Reg;
-  };
-  
   auto IsSubtype = [](uint64_t First, uint64_t Second) {
     for (int I = 0; I < 64; I++) {
       // If first has a 1 where second has a 0, it's not a valid subtype,
@@ -103,7 +97,7 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, Register &Reg, uint6
     // Load instructions
             
     // If Reg is a pointer to a secret value
-    if (SecretMask & (1u << 1) && IsOpEqReg(MI.getOperand(1)))
+    if (SecretMask & (1u << 1) && &MI.getOperand(1) == MO)
       NewDefs.insert({ MI.getOperand(0).getReg(), SecretMask >> 1 });
 
     break;   
@@ -143,7 +137,7 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, Register &Reg, uint6
   }
 
   default:
-    if (SecretMask & 1u && std::find_if(MI.operands_begin(), MI.operands_end(), IsOpEqReg) != MI.operands_end())
+    if (SecretMask & 1u)
       for (MachineOperand Def : MI.defs())
         if (Def.isReg())
           NewDefs.insert({ Def.getReg(), SecretMask });

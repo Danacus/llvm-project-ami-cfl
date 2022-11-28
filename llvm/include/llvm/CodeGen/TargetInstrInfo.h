@@ -257,7 +257,7 @@ public:
     return false;
   }
 
-  virtual void transferSecret(const MachineInstr &MI, Register &Reg, uint64_t &SecretMask, 
+  virtual void transferSecret(const MachineInstr &MI, MachineOperand *MO, uint64_t &SecretMask, 
                               const DenseMap<Register, uint64_t> &SecretDefs, SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {}
 
   /// If the specified machine instruction is a direct

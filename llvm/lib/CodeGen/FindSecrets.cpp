@@ -35,6 +35,48 @@ char &llvm::TrackSecretsPassID = TrackSecretsAnalysis::ID;
 
 TrackSecretsAnalysis::SecretsSet
 TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
+  Function &F = MF.getFunction();
+  const Module *M = F.getParent();
+
+  if (GlobalVariable *GA = M->getGlobalVariable("llvm.global.annotations")) {
+    for (Value *AOp : GA->operands()) {
+      ConstantArray *CA = dyn_cast<ConstantArray>(AOp);
+      if (!CA)
+        continue;
+
+      for (Value *CAOp : CA->operands()) {
+        ConstantStruct *CS = dyn_cast<ConstantStruct>(CAOp);
+        if (!CS || CS->getNumOperands() < 2)
+          continue;
+
+        GlobalVariable *GV = dyn_cast<GlobalVariable>(CS->getOperand(0));
+        if (!GV)
+          continue;
+
+        GlobalVariable *GAnn = dyn_cast<GlobalVariable>(CS->getOperand(1));
+        if (!GAnn)
+          continue;
+
+        ConstantDataArray *A = dyn_cast<ConstantDataArray>(GAnn->getOperand(0));
+        if (!A)
+          continue;
+
+        StringRef AS = A->getAsString();
+
+        if (!AS.consume_front("secret("))
+          continue;
+        uint64_t Mask;
+        if (AS.consumeInteger(10, Mask))
+          continue;
+        if (!AS.consume_front(")"))
+          continue;
+
+        if (Mask)
+          SecretGlobals[GV] = Mask;
+      }
+    }
+  }
+
   auto &RDA = getAnalysis<ReachingDefAnalysis>();
   SecretsSet SecretDefs;
 
@@ -71,10 +113,22 @@ TrackSecretsAnalysis::findSecretSources(MachineFunction &MF) {
 void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, Register Reg,
                                      uint64_t SecretMask, SecretsSet &WorkSet,
                                      SecretsMap &SecretDefs) {
+  errs() << "handleUse: " << UseInst << "\n";
   auto &RDA = getAnalysis<ReachingDefAnalysis>();
   // SmallSet<std::pair<Register, uint64_t>, 8> Map;
   DenseMap<Register, uint64_t> MaskMap;
   SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
+
+  // Handle registers coming from SECRET instruction separately,
+  // because they don't count as a reaching def. If there is a closer
+  // reaching def, this will be overwritten.
+  // Essentially, they are hacked to be a reaching def for each instruction,
+  // but at the lowest possible priority ("infinitely far away").
+  for (auto Def : SecretDefs) {
+    if (Def.getFirst().MI->getOpcode() == TargetOpcode::SECRET) {
+      MaskMap[Reg] = Def.second;
+    }
+  }
 
   for (auto Def : SecretDefs) {
     SmallPtrSet<MachineInstr *, 8> Defs;
@@ -83,11 +137,33 @@ void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, Register Reg,
     // Check if the the SecretDef we found is relevant in this context,
     // by making sure the defining instruction is the closest reaching def of
     // UseInst
-    if (Defs.contains(Def.first.MI))
-      MaskMap.insert({Def.first.Reg, Def.second});
+    if (Defs.contains(Def.first.MI)) {
+      MaskMap[Reg] = Def.second;
+    }
   }
 
-  TII->transferSecret(UseInst, Reg, SecretMask, MaskMap, NewDefs);
+  // Transfer the register
+  auto *OP =
+      std::find_if(UseInst.operands_begin(), UseInst.operands_end(),
+                [&Reg](MachineOperand O) {
+                  return O.isReg() && O.getReg() == Reg && O.isUse();
+                });
+  if (OP != UseInst.operands_end())
+    TII->transferSecret(UseInst, OP, SecretMask, MaskMap, NewDefs);
+  
+  // Tranfer secret globals (if any)
+  // TODO Should probably move this out of handleUse, 
+  // such that it only runs once for each instruction,
+  // since the secrecy mask of a global should be stable
+  for (auto P : SecretGlobals) {
+    auto *OP =
+        std::find_if(UseInst.operands_begin(), UseInst.operands_end(),
+                  [&P](MachineOperand O) {
+                    return O.isGlobal() && O.getGlobal() == P.first;
+                  });
+    if (OP != UseInst.operands_end())
+      TII->transferSecret(UseInst, OP, P.second, MaskMap, NewDefs);
+  }
 
   for (auto Def : NewDefs) {
     // Add newly defined registers to work set
@@ -97,7 +173,6 @@ void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, Register Reg,
     SecretDefs[SecretDef(&UseInst, Def.first)] =
         Def.second | SecretDefs[SecretDef(&UseInst, Def.first)];
   }
-  // errs() << "handleUse: " << *UseInst << "\n";
 }
 
 bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
@@ -106,7 +181,35 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
   SecretsSet WorkSet = findSecretSources(MF);
 
+  errs() << "Secret globals\n";
+  for (auto SG : SecretGlobals) {
+    SG.first->dump();
+    errs() << SG.second << "\n";
+  }
+
+  errs() << "Secret defs\n";
+  for (auto S : Secrets) {
+    errs() << "Secret: ";
+    errs() << printReg(S.first.Reg, TRI) << " with mask ";
+    errs() << std::bitset<64>(S.second).to_string() << " in ";
+    errs() << *S.first.MI;
+  }
+
   auto &RDA = getAnalysis<ReachingDefAnalysis>();
+
+  for (MachineBasicBlock &MB : MF) {
+    for (MachineInstr &MI : MB) {
+      for (auto Def : Secrets) {
+        auto *OP =
+            std::find_if(MI.operands_begin(), MI.operands_end(),
+                      [&Def](MachineOperand O) {
+                        return O.isReg() && O.getReg() == Def.first.Reg && O.isUse();
+                      });
+        if (OP != MI.operands_end())
+          handleUse(MI, Def.first.Reg, Secrets[Def.first], WorkSet, Secrets);
+      }
+    }
+  }
 
   while (!WorkSet.empty()) {
     auto Current = *WorkSet.begin();
@@ -123,6 +226,14 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
       }
       handleUse(*Use, Current.Reg, Secrets[Current], WorkSet, Secrets);
     }
+  }
+
+  errs() << "Secret uses\n";
+  for (auto S : SecretUses) {
+    errs() << "Secret: ";
+    errs() << printReg(S.first.Reg, TRI) << " with mask ";
+    errs() << std::bitset<64>(S.second).to_string() << " in ";
+    errs() << *S.first.MI;
   }
 
   return false;
@@ -149,7 +260,7 @@ bool TrackSecretsPrinter::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto S : SecretUses) {
     errs() << "Secret: ";
-    errs() << printReg(S.first.Reg, TRI) << " with mask ";    
+    errs() << printReg(S.first.Reg, TRI) << " with mask ";
     errs() << std::bitset<64>(S.second).to_string() << " in ";
     errs() << *S.first.MI;
   }

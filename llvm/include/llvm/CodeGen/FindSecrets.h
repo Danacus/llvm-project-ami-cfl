@@ -78,6 +78,7 @@ public:
 
 private:
   SecretsMap Secrets;
+  DenseMap<GlobalVariable *, uint64_t> SecretGlobals;
 };
 
 class TrackSecretsPrinter : public MachineFunctionPass {
