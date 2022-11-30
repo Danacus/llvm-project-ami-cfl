@@ -117,12 +117,17 @@ void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, MachineOperand *MO,
   TII->transferSecret(UseInst, MO, SecretMask, NewDefs);
   
   for (auto Def : NewDefs) {
-    // Add newly defined registers to work set
-    WorkSet.insert(SecretDef(&UseInst, Def.first));
+    SecretDef NewDef(&UseInst, Def.first);
 
-    // Set or upgrade the mask
-    SecretDefs[SecretDef(&UseInst, Def.first)] =
-        Def.second | SecretDefs[SecretDef(&UseInst, Def.first)];
+    uint64_t NewMask = Def.second | SecretDefs[NewDef];
+
+    if (NewMask != SecretDefs[NewDef]) {
+      // Add newly defined registers to work set
+      WorkSet.insert(NewDef);
+       
+      // Set or upgrade the mask
+      SecretDefs[NewDef] = NewMask;
+    }
     
     // errs() << "Add def: " << printReg(Def.first, TRI) << " " << Def.second << "\n";
   }

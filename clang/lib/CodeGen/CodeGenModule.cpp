@@ -67,6 +67,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/X86TargetParser.h"
 #include "llvm/Support/xxhash.h"
@@ -4970,9 +4971,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
     if (auto TL = SI->getTypeLoc()) {
       uint64_t SecretMask = TL.getSecretMask();
       //if (SecretMask) {
-        std::string Attr("secret(");
-        Attr.append(std::to_string(SecretMask));
-        Attr.append(")");
+        std::string Attr = llvm::formatv("secret({0})", SecretMask);
         auto AA = AnnotateAttr(Context, D->getSourceRange(), Attr);
         Annotations.push_back(EmitAnnotateAttr(GV, &AA, D->getLocation()));
       //}
