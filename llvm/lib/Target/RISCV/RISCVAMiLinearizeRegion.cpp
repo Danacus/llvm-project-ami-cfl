@@ -139,11 +139,13 @@ void AMiLinearizeRegion::findActivatingRegions() {
       continue;
     // assert((Secret.second & 1u) && "not a secret value or incorrect mask");
     // assert((!Secret.IsDef) && "not a use of a secret value");
+    
+    auto RegDef = std::get<SecretRegisterDef>(Secret.first);
 
-    if (Secret.first.MI->isConditionalBranch()) {
-      errs() << "Conditional branch: " << *Secret.first.MI << "\n";
+    if (RegDef.getMI()->isConditionalBranch()) {
+      errs() << "Conditional branch: " << *RegDef.getMI() << "\n";
       MachineBasicBlock *EntryMBB =
-          Secret.first.MI->getParent()->getFallThrough();
+          RegDef.getMI()->getParent()->getFallThrough();
 
       // Get largest region that starts at BB. (See
       // RegionInfoBase::getMaxRegionExit)
