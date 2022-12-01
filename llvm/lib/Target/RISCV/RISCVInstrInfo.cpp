@@ -67,7 +67,7 @@ MCInst RISCVInstrInfo::getNop() const {
       .addImm(0);
 }
 
-void RISCVInstrInfo::verifySecretTypes(const MachineInstr &MI, const DenseMap<MachineOperand *, uint64_t> &SecretMasks) const {
+void RISCVInstrInfo::verifySecretTypes(const MachineInstr &MI, const DenseMap<MachineOperand, uint64_t> &SecretMasks) const {
   auto IsSubtype = [](uint64_t First, uint64_t Second) {
     for (int I = 0; I < 64; I++) {
       // If first has a 1 where second has a 0, it's not a valid subtype,
@@ -108,11 +108,11 @@ void RISCVInstrInfo::verifySecretTypes(const MachineInstr &MI, const DenseMap<Ma
     uint64_t DestMask = 0;
 
     for (auto P : SecretMasks) {
-      if (P.first == &MI.getOperand(0)) {
+      if (P.first.isIdenticalTo(MI.getOperand(0))) {
         SrcMask = P.second;
       }
 
-      if (P.first == &MI.getOperand(1)) {
+      if (P.first.isIdenticalTo(MI.getOperand(1))) {
         DestMask = P.second;
       }
     }
@@ -135,7 +135,7 @@ void RISCVInstrInfo::verifySecretTypes(const MachineInstr &MI, const DenseMap<Ma
   }
 }
 
-void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, uint64_t &SecretMask, 
+void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand &MO, uint64_t &SecretMask, 
                                     SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const {
   switch (MI.getOpcode()) {
   case RISCV::LB:
@@ -150,7 +150,7 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand *MO, 
   case RISCV::FLD: {
     // Load instructions
             
-    if (&MI.getOperand(1) == MO)
+    if (MI.getOperand(1).isIdenticalTo(MO))
       NewDefs.insert({ MI.getOperand(0).getReg(), SecretMask >> 1 });
 
     break;   

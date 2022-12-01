@@ -185,24 +185,24 @@ public:
   }
 
   /// Find all operands in the given instruction that define or use this SecretDef
-  void findOperands(MachineInstr *MI, SmallPtrSet<MachineOperand *, 8> &Ops,
+  void findOperands(MachineInstr *MI, SmallVector<MachineOperand, 8> &Ops,
                     TargetRegisterInfo *TRI = nullptr) {
-    auto HandleReg = [&](MachineOperand *MO, Register Reg) {
-        if (!MO->isReg())
+    auto HandleReg = [&](MachineOperand &MO, Register Reg) {
+        if (!MO.isReg())
           return;
-        Register MOReg = MO->getReg();
+        Register MOReg = MO.getReg();
         if (!MOReg)
           return;
         if (MOReg == Reg ||
             (TRI && Reg && MOReg && TRI->regsOverlap(MOReg, Reg)))
-          Ops.insert(MO);
+          Ops.push_back(MO);
     };
     
     for (auto MO : MI->operands()) {
       switch (this->getKind()) {
       case SDK_Argument: {
         auto S = this->get<SecretArgument>();
-        HandleReg(&MO, S.getReg());
+        HandleReg(MO, S.getReg());
         break;
       }
       case SDK_Global: {
@@ -213,12 +213,12 @@ public:
         if (!GV)
           break;
         if (GV->getName() == S.getGlobalVar()->getName())
-          Ops.insert(&MO);
+          Ops.push_back(MO);
         break;
       }
       case SDK_SecretRegisterDef: {
         auto S = this->get<SecretRegisterDef>();
-        HandleReg(&MO, S.getReg());
+        HandleReg(MO, S.getReg());
         break;
       }
       }
@@ -247,7 +247,7 @@ template <> struct DenseMapInfo<SecretDef> {
 
 class SecretUse {
 public:
-  using OperandsSet = SmallPtrSet<MachineOperand *, 8>;
+  using OperandsSet = SmallVector<MachineOperand, 8>;
 private:
   SecretDef Def;
   MachineInstr *User;
@@ -268,10 +268,6 @@ public:
   const SecretDef &getDef() const { return Def; };
   MachineInstr *getUser() { return User; }
   const MachineInstr *getUser() const { return User; }
-
-  iterator_range<OperandsSet::iterator> operands() {
-    return Operands;
-  }
 
   iterator_range<OperandsSet::const_iterator> operands() const {
     return Operands;
@@ -295,7 +291,7 @@ public:
   void getUses(MachineFunction &MF, SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses) const;
   void getReachingDefs(SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Defs) const;
 
-  void handleUse(MachineInstr &UseInst, MachineOperand *MO, uint64_t SecretMask,
+  void handleUse(MachineInstr &UseInst, MachineOperand &MO, uint64_t SecretMask,
                  SecretsSet &WorkSet, SecretsMap &SecretDefs);
   SecretsSet findSecretSources(MachineFunction &MF);
 
