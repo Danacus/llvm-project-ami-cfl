@@ -33,6 +33,7 @@ public:
   template <RISCV::AMi::Qualifier Q>
   void setQualifier(MachineInstr *I);
   void findActivatingRegions();
+  bool setBranchActivating(MachineBasicBlock &MBB);
   void handlePersistentInstr(MachineInstr *I);
   void handleRegion(MachineRegion *Region);
 

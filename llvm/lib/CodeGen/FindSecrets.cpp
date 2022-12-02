@@ -242,7 +242,7 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
         }
       }
 
-      TII->verifySecretTypes(MI, MaskMap);
+      // TII->verifySecretTypes(MI, MaskMap);
     }
   }
 

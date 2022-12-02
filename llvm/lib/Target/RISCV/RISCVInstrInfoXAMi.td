@@ -184,6 +184,18 @@ def MARK : RVInstI<0b000, OPC_MARK, (outs),
   let rd = 0;
 }
 
+let isBarrier = 1, isBranch = 1, isTerminator = 1 in
+def APseudoBR : Pseudo<(outs), (ins simm21_lsb0_jal:$imm20), [(br bb:$imm20)]>,
+                PseudoInstExpansion<(AJAL X0, simm21_lsb0_jal:$imm20)>, QualifiedInst;
+
+let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
+def APseudoBRIND : Pseudo<(outs), (ins GPRJALR:$rs1, simm12:$imm12), []>,
+                   PseudoInstExpansion<(AJALR X0, GPR:$rs1, simm12:$imm12)>, QualifiedInst;
+
+def : Pat<(brind GPRJALR:$rs1), (APseudoBRIND GPRJALR:$rs1, 0)>;
+def : Pat<(brind (add GPRJALR:$rs1, simm12:$imm12)),
+          (APseudoBRIND GPRJALR:$rs1, simm12:$imm12)>;
+
 // Always persistent instructions
 def PSB : AMiAlwaysPersistent;
 def PSH : AMiAlwaysPersistent;
