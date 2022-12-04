@@ -203,6 +203,7 @@ void AMiLinearizeRegion::findActivatingRegions() {
         continue;
       }
       errs() << "Conditional branch: " << *User << "\n";
+      errs() << "with mask: " << Secret.second.getSecretMask() << "\n";
 
       MachineBasicBlock *TBB;
       MachineBasicBlock *FBB;
@@ -234,15 +235,22 @@ void AMiLinearizeRegion::findActivatingRegions() {
       // Find the exiting blocks of this region
       SmallVector<MachineBasicBlock *> Exitings;
       FR->getExitingBlocks(Exitings);
+      
+      bool HasElseRegion = false;
 
       for (auto *Exiting : Exitings) {
         MachineBasicBlock *ETBB;
         MachineBasicBlock *EFBB;
         SmallVector<MachineOperand> ECond;
         TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
-
+        
         auto Last = Exiting->getLastNonDebugInstr(false);
         if (Last != Exiting->end() && Last->isUnconditionalBranch()) {
+          // If we are unconditionally jumping to the same block
+          // as the "if" conditional branch, there is no "else" branch
+          if (ETBB == TBB)
+            continue;
+
           DebugLoc DL;
           if (!TII->removeBranch(*Exiting))
             llvm_unreachable("AMi error: failed to remove branch");
@@ -260,17 +268,22 @@ void AMiLinearizeRegion::findActivatingRegions() {
 
           // Revert the change, we don't actually want to change the CFG
           Exiting->removeSuccessor(TBB);
+          
+          setBranchActivating(*Exiting);
+          HasElseRegion = true;
+        }
+      }
 
-          MachineRegion *TR = MRI.getRegionFor(TBB);
-          TR->dump();
-          if (TR->getEntry() != TBB)
-            llvm_unreachable("AMi error: unable to find activating region for "
-                             "secret-dependent branch");
+      if (HasElseRegion) {
+        MachineRegion *TR = MRI.getRegionFor(TBB);
+        TR->dump();
+        if (TR->getEntry() == TBB) {
           while (TR && TR->getParent() && TR->getParent()->getEntry() == TBB)
             TR = TR->getParent();
-
           ActivatingRegions.insert(TR);
-          setBranchActivating(*Exiting);
+        } else {
+          llvm_unreachable("AMi error: unable to find activating region for "
+                           "secret-dependent branch");
         }
       }
 
@@ -288,6 +301,8 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
+
+  MRI.dump();
 
   findActivatingRegions();
   MF.dump();
