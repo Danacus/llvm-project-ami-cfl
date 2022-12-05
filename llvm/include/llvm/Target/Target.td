@@ -1268,6 +1268,7 @@ def SECRET : StandardPseudoInstruction {
   let hasSideEffects = false;
   let isAsCheapAsAMove = true;
   let hasNoSchedulingInfo = false;
+  let isMeta = true;
 }
 def BUNDLE : StandardPseudoInstruction {
   let OutOperandList = (outs);

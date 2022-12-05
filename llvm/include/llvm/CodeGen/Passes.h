@@ -182,8 +182,9 @@ namespace llvm {
   /// This pass reads flow sensitive profile.
   extern char &MIRProfileLoaderPassID;
 
-  extern char &TrackSecretsPassID;
-  extern char &TrackSecretsPrinterID;
+  extern char &TrackSecretsVirtRegPassID;
+  extern char &TrackSecretsPhysRegPassID;
+  //extern char &TrackSecretsPrinterID;
   extern char &PrintSecretsPassID;
 
   /// FastRegisterAllocation Pass - This pass register allocates as fast as

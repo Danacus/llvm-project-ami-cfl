@@ -1272,7 +1272,7 @@ void TargetPassConfig::addMachinePasses() {
 
   PM->add(createStackFrameLayoutAnalysisPass());
 
-  addPass(&llvm::TrackSecretsPassID);
+  //addPass(&llvm::TrackSecretsPhysRegPassID);
   
   // Add passes that directly emit MI after all other MI passes.
   addPreEmitPass2();

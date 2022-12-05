@@ -20,29 +20,37 @@ using namespace llvm;
 
 namespace {
 
-class AMiLinearizeRegion : public MachineFunctionPass {
+struct ActivatingBranch {
+  MachineInstr *MI;
+  MachineRegion *ElseRegion;
+  MachineRegion *IfRegion;
+
+  ActivatingBranch(MachineInstr *MI, MachineRegion *TR, MachineRegion *FR)
+      : MI(MI), ElseRegion(TR), IfRegion(FR) {}
+};
+
+class AMiLinearizeBranch : public MachineFunctionPass {
 public:
   static char ID;
 
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
+  SmallVector<ActivatingBranch, 16> ActivatingBranches;
 
-  AMiLinearizeRegion();
+  AMiLinearizeBranch();
 
-  template <RISCV::AMi::Qualifier Q>
-  void setQualifier(MachineInstr *I);
-  bool isActivatingBranch(MachineBasicBlock &MBB);
-  void findActivatingRegions();
-  void handlePersistentInstr(MachineInstr *I);
-  void handleRegion(MachineRegion *Region);
+  template <RISCV::AMi::Qualifier Q> void setQualifier(MachineInstr *I);
+  void findActivatingRegionsOld();
+  void findActivatingBranches();
+  bool setBranchActivating(MachineBasicBlock &MBB);
+  void removePseudoSecret(MachineFunction &MF);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
-    AU.addRequired<ReachingDefAnalysis>();
     AU.addRequired<MachineRegionInfoPass>();
+    AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

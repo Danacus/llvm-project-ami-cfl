@@ -74,6 +74,9 @@ void initializeRISCVRedundantCopyEliminationPass(PassRegistry &);
 FunctionPass *createAMiLinearizeRegionPass();
 void initializeAMiLinearizeRegionPass(PassRegistry &);
 
+FunctionPass *createAMiLinearizeBranchPass();
+void initializeAMiLinearizeBranchPass(PassRegistry &);
+
 InstructionSelector *createRISCVInstructionSelector(const RISCVTargetMachine &,
                                                     RISCVSubtarget &,
                                                     RISCVRegisterBankInfo &);

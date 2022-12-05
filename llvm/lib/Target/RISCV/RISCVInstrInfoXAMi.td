@@ -53,7 +53,7 @@ class AMiAlwaysPersistent : QualifiedInst<1> {
 //===----------------------------------------------------------------------===//
 
 multiclass AMiBranchCC_rri<bits<3> funct3, string opcodestr> {
-let AMiClass = Activatable in {
+let AMiClass = Activatable, isBranch = false, isIndirectBranch = false, hasSideEffects = true in {
   let Opcode = OPC_ABRANCH.Value in
   def A#NAME : BranchCC_rri<funct3, "a."#opcodestr>, QualifiedInst;
   let Opcode = OPC_CTBRANCH.Value in
@@ -184,11 +184,11 @@ def MARK : RVInstI<0b000, OPC_MARK, (outs),
   let rd = 0;
 }
 
-let isBarrier = 1, isBranch = 1, isTerminator = 1 in
+let isBarrier = 1, isBranch = 0, isTerminator = 1, hasSideEffects = 1 in
 def APseudoBR : Pseudo<(outs), (ins simm21_lsb0_jal:$imm20), [(br bb:$imm20)]>,
                 PseudoInstExpansion<(AJAL X0, simm21_lsb0_jal:$imm20)>, QualifiedInst;
 
-let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
+let isBarrier = 1, isBranch = 0, isIndirectBranch = 0, isTerminator = 1, hasSideEffects = 1 in
 def APseudoBRIND : Pseudo<(outs), (ins GPRJALR:$rs1, simm12:$imm12), []>,
                    PseudoInstExpansion<(AJALR X0, GPR:$rs1, simm12:$imm12)>, QualifiedInst;
 

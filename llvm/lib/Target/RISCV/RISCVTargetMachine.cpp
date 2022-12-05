@@ -10,11 +10,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVTargetMachine.h"
 #include "MCTargetDesc/RISCVBaseInfo.h"
 #include "RISCV.h"
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVMacroFusion.h"
+#include "RISCVTargetMachine.h"
 #include "RISCVTargetObjectFile.h"
 #include "RISCVTargetTransformInfo.h"
 #include "TargetInfo/RISCVTargetInfo.h"
@@ -32,6 +32,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO.h"
@@ -66,6 +67,10 @@ static cl::opt<int> RVVVectorBitsMinOpt(
              "means use Zvl*b extension. This is primarily used to enable "
              "autovectorization with fixed width vectors."),
     cl::init(-1), cl::Hidden);
+static cl::opt<bool>
+    EnableAMiLinearization("riscv-enable-ami-linearization",
+                           cl::desc("Enable AMi linearization"), cl::init(false),
+                           cl::Hidden);
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCVTargetMachine> X(getTheRISCV32Target());
@@ -82,6 +87,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVExpandPseudoPass(*PR);
   initializeRISCVInsertVSETVLIPass(*PR);
   initializeRISCVDAGToDAGISelPass(*PR);
+  initializeAMiLinearizeBranchPass(*PR);
   initializeAMiLinearizeRegionPass(*PR);
 }
 
@@ -190,8 +196,13 @@ RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
       }
       ABIName = ModuleTargetABI->getString();
     }
+<<<<<<< HEAD
     I = std::make_unique<RISCVSubtarget>(
         TargetTriple, CPU, TuneCPU, FS, ABIName, RVVBitsMin, RVVBitsMax, *this);
+=======
+    I = std::make_unique<RISCVSubtarget>(TargetTriple, CPU, TuneCPU, FS,
+                                         ABIName, *this);
+>>>>>>> 7d5fc6a2dc9a (Linearization of if-then-else)
   }
   return I.get();
 }
@@ -337,12 +348,21 @@ void RISCVPassConfig::addPreEmitPass2() {
   // possibility for other passes to break the requirements for forward
   // progress in the LR/SC block.
   addPass(createRISCVExpandAtomicPseudoPass());
-  addPass(createAMiLinearizeRegionPass());
+  
+  if (EnableAMiLinearization == cl::BOU_TRUE)
+    addPass(createAMiLinearizeRegionPass());
 }
 
 void RISCVPassConfig::addMachineSSAOptimization() {
   TargetPassConfig::addMachineSSAOptimization();
+<<<<<<< HEAD
   if (EnableMachineCombiner)
+=======
+  if (EnableAMiLinearization == cl::BOU_TRUE)
+    addPass(createAMiLinearizeBranchPass());
+
+  if (TM->getOptLevel() == CodeGenOpt::Aggressive && EnableMachineCombiner)
+>>>>>>> 870ee5f45533 (Identify activating regions)
     addPass(&MachineCombinerID);
 
   if (TM->getTargetTriple().getArch() == Triple::riscv64) {
@@ -352,6 +372,7 @@ void RISCVPassConfig::addMachineSSAOptimization() {
 }
 
 void RISCVPassConfig::addPreRegAlloc() {
+  //addPass(&llvm::TrackSecretsVirtRegPassID);
   addPass(createRISCVPreRAExpandPseudoPass());
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createRISCVMergeBaseOffsetOptPass());
@@ -361,8 +382,8 @@ void RISCVPassConfig::addPreRegAlloc() {
 void RISCVPassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
     addPass(createRISCVRedundantCopyEliminationPass());
-  
-  //addPass(createAMiLinearizeRegionPass());
+
+  // addPass(createAMiLinearizeRegionPass());
 }
 
 yaml::MachineFunctionInfo *

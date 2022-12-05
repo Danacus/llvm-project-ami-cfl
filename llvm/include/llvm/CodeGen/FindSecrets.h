@@ -2,10 +2,13 @@
 #define LLVM_CODEGEN_FINDSECRETS_H
 
 #include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/Register.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -168,62 +171,26 @@ public:
   bool operator<(const SecretDef &Other) const {
     return Other.getVariant() < getVariant();
   }
-  
+
   bool hasReg() const {
     return getKind() == SDK_Argument || getKind() == SDK_SecretRegisterDef;
   }
-  
+
   Register getReg() const {
     switch (getKind()) {
-      case SDK_Argument:
-        return get<SecretArgument>().getReg();
-      case SDK_SecretRegisterDef:
-        return get<SecretRegisterDef>().getReg();
-      default:
-        llvm_unreachable("secret def does not have a reg");
+    case SDK_Argument:
+      return get<SecretArgument>().getReg();
+    case SDK_SecretRegisterDef:
+      return get<SecretRegisterDef>().getReg();
+    default:
+      llvm_unreachable("secret def does not have a reg");
     }
   }
 
-  /// Find all operands in the given instruction that define or use this SecretDef
+  /// Find all operands in the given instruction that define or use this
+  /// SecretDef
   void findOperands(MachineInstr *MI, SmallVector<MachineOperand, 8> &Ops,
-                    TargetRegisterInfo *TRI = nullptr) {
-    auto HandleReg = [&](MachineOperand &MO, Register Reg) {
-        if (!MO.isReg())
-          return;
-        Register MOReg = MO.getReg();
-        if (!MOReg)
-          return;
-        if (MOReg == Reg ||
-            (TRI && Reg && MOReg && TRI->regsOverlap(MOReg, Reg)))
-          Ops.push_back(MO);
-    };
-    
-    for (auto MO : MI->operands()) {
-      switch (this->getKind()) {
-      case SDK_Argument: {
-        auto S = this->get<SecretArgument>();
-        HandleReg(MO, S.getReg());
-        break;
-      }
-      case SDK_Global: {
-        auto S = this->get<SecretGlobal>();
-        if (!MO.isGlobal())
-          break;
-        const GlobalValue *GV = MO.getGlobal();
-        if (!GV)
-          break;
-        if (GV->getName() == S.getGlobalVar()->getName())
-          Ops.push_back(MO);
-        break;
-      }
-      case SDK_SecretRegisterDef: {
-        auto S = this->get<SecretRegisterDef>();
-        HandleReg(MO, S.getReg());
-        break;
-      }
-      }
-    }
-  }
+                    TargetRegisterInfo *TRI = nullptr) const;
 };
 
 template <> struct DenseMapInfo<SecretDef> {
@@ -245,9 +212,43 @@ template <> struct DenseMapInfo<SecretDef> {
   }
 };
 
+class GraphDataPhysReg {
+public:
+  ReachingDefAnalysis &RDA;
+
+  GraphDataPhysReg(ReachingDefAnalysis &RDA) : RDA(RDA) {}
+};
+
+class GraphDataVirtReg {
+public:
+  const MachineRegisterInfo &MRI;
+
+  GraphDataVirtReg(const MachineRegisterInfo &MRI) : MRI(MRI) {}
+};
+
+enum GraphType {
+  GT_PhysReg,
+  GT_VirtReg,
+};
+
+template <class GraphDataT, GraphType GT> class FlowGraph {
+private:
+  GraphDataT Data;
+  MachineFunction &MF;
+
+public:
+  FlowGraph(GraphDataT Data, MachineFunction &MF) : Data(Data), MF(MF) {}
+  void getSources(SmallSet<SecretDef, 8> &Defs,
+                  DenseMap<SecretDef, uint64_t> &Secrets) const;
+  void getUses(SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses) const;
+  void getReachingDefs(SecretDef &SD,
+                       SmallPtrSet<MachineInstr *, 8> &Defs) const;
+};
+
 class SecretUse {
 public:
   using OperandsSet = SmallVector<MachineOperand, 8>;
+
 private:
   SecretDef Def;
   MachineInstr *User;
@@ -255,14 +256,17 @@ private:
   uint64_t SecretMask;
 
 public:
-  SecretUse() : Def(SecretDef::argument(0)), User(nullptr), Operands(OperandsSet()), SecretMask(0) {}
-  SecretUse(SecretDef Def, MachineInstr *User, OperandsSet Operands, uint64_t SecretMask)
+  SecretUse()
+      : Def(SecretDef::argument(0)), User(nullptr), Operands(OperandsSet()),
+        SecretMask(0) {}
+  SecretUse(SecretDef Def, MachineInstr *User, OperandsSet Operands,
+            uint64_t SecretMask)
       : Def(Def), User(User), Operands(Operands), SecretMask(SecretMask) {}
   SecretUse(SecretDef Def, MachineInstr *User, uint64_t SecretMask)
       : Def(Def), User(User), Operands(OperandsSet()), SecretMask(SecretMask) {
     Def.findOperands(User, Operands);
   }
-  
+
   uint64_t getSecretMask() { return SecretMask; }
   SecretDef &getDef() { return Def; };
   const SecretDef &getDef() const { return Def; };
@@ -274,7 +278,7 @@ public:
   }
 };
 
-class TrackSecretsAnalysis : public MachineFunctionPass {
+template <class GraphDataT, GraphType GT> class TrackSecretsAnalysis {
 public:
   static char ID;
   const TargetInstrInfo *TII;
@@ -282,20 +286,53 @@ public:
 
   using SecretsSet = SmallSet<SecretDef, 8>;
   using SecretsMap = DenseMap<SecretDef, uint64_t>;
-  using SecretsUseMap = DenseMap<std::pair<MachineInstr *, SecretDef>, SecretUse>;
+  using SecretsUseMap =
+      DenseMap<std::pair<MachineInstr *, SecretDef>, SecretUse>;
 
   SecretsUseMap SecretUses;
 
-  TrackSecretsAnalysis();
-  
-  void getUses(MachineFunction &MF, SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses) const;
-  void getReachingDefs(SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Defs) const;
+  TrackSecretsAnalysis() {}
 
   void handleUse(MachineInstr &UseInst, MachineOperand &MO, uint64_t SecretMask,
                  SecretsSet &WorkSet, SecretsMap &SecretDefs);
-  SecretsSet findSecretSources(MachineFunction &MF);
 
-  bool runOnMachineFunction(MachineFunction &MF) override;
+  bool run(MachineFunction &MF, FlowGraph<GraphDataT, GT> Graph);
+
+private:
+  SecretsMap Secrets;
+};
+
+class TrackSecretsAnalysisVirtReg : public MachineFunctionPass {
+public:
+  static char ID;
+
+  TrackSecretsAnalysisVirtReg();
+
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    return TSA.run(
+        MF, FlowGraph<GraphDataVirtReg, GT_VirtReg>(
+                GraphDataVirtReg(MF.getRegInfo()), MF));
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+    MachineFunctionPass::getAnalysisUsage(AU);
+  }
+
+  TrackSecretsAnalysis<GraphDataVirtReg, GT_VirtReg> TSA;
+};
+
+class TrackSecretsAnalysisPhysReg : public MachineFunctionPass {
+public:
+  static char ID;
+
+  TrackSecretsAnalysisPhysReg();
+
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    return TSA.run(
+        MF, FlowGraph<GraphDataPhysReg, GT_PhysReg>(
+                GraphDataPhysReg(getAnalysis<ReachingDefAnalysis>()), MF));
+  }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<ReachingDefAnalysis>();
@@ -303,24 +340,7 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-private:
-  SecretsMap Secrets;
-  DenseMap<GlobalVariable *, uint64_t> SecretGlobals;
-};
-
-class TrackSecretsPrinter : public MachineFunctionPass {
-public:
-  static char ID;
-
-  TrackSecretsPrinter();
-
-  bool runOnMachineFunction(MachineFunction &MF) override;
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<TrackSecretsAnalysis>();
-    AU.setPreservesAll();
-    MachineFunctionPass::getAnalysisUsage(AU);
-  }
+  TrackSecretsAnalysis<GraphDataPhysReg, GT_PhysReg> TSA;
 };
 
 } // namespace llvm

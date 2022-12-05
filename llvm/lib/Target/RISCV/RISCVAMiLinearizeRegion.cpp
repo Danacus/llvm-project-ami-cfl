@@ -13,6 +13,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -34,7 +35,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "ami-linearize"
+#define DEBUG_TYPE "ami-linearize-region"
 
 char AMiLinearizeRegion::ID = 0;
 
@@ -48,9 +49,7 @@ void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
   if (PersistentInstr != -1) {
     I->setDesc(TII->get(PersistentInstr));
   } else {
-    errs() << "Unsupported instruction: " << *I;
-    // llvm_unreachable(
-    //"AMi error: unsupported instruction cannot be qualified!");
+    llvm_unreachable("AMi error: unsupported instruction cannot be qualified!");
   }
 }
 
@@ -96,21 +95,6 @@ void AMiLinearizeRegion::handlePersistentInstr(MachineInstr *I) {
 void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   errs() << "Handling region " << *Region << "\n";
 
-  /*
-  // Make the predecessing branch instruction activating
-  assert(Region->getEntry()->pred_size() <= 1 &&
-         "AMi error: activating region cannot have multiple entry points!");
-  for (MachineBasicBlock *Pred : Region->getEntry()->predecessors()) {
-    MachineInstr &BranchI = Pred->instr_back();
-    if (BranchI.isBranch()) {
-      setQualifier<RISCV::AMi::Activating>(&BranchI);
-    } else {
-      llvm_unreachable(
-          "AMi error: unsupported branch instruction for activating region!");
-    }
-  }
-  */
-
   SmallVector<MachineInstr *> AlwaysPersistent;
 
   for (auto &MRNode : Region->elements()) {
@@ -132,163 +116,49 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   }
 }
 
-bool AMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
+bool AMiLinearizeRegion::isActivatingBranch(MachineBasicBlock &MBB) {
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
-  if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
+  if (I == MBB.end() ||
+      !RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(I->getOpcode()))
     return false;
 
-  // Count the number of terminators and find the first unconditional or
-  // indirect branch.
-  MachineBasicBlock::iterator FirstUncondOrIndirectBr = MBB.end();
-  int NumTerminators = 0;
+  // Count the number of terminators and find the first activating branch
+  MachineBasicBlock::iterator FirstActBr = MBB.end();
+  int NumActivating = 0;
   for (auto J = I.getReverse();
-       J != MBB.rend() && TII->isUnpredicatedTerminator(*J); J++) {
-    NumTerminators++;
-    if (J->getDesc().isUnconditionalBranch() ||
-        J->getDesc().isIndirectBranch()) {
-      FirstUncondOrIndirectBr = J.getReverse();
+       J != MBB.rend() &&
+       RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(J->getOpcode());
+       J++) {
+    NumActivating++;
+    if (RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(
+            J->getOpcode())) {
+      FirstActBr = J.getReverse();
     }
   }
 
-  // We can't handle blocks that end in an indirect branch.
-  if (I->getDesc().isIndirectBranch())
-    return true;
-
   // We can't handle blocks with more than 2 terminators.
-  if (NumTerminators > 2)
-    return true;
-
-  // Handle a single unconditional branch.
-  if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+  if (NumActivating > 2)
     return false;
-  }
 
-  // Handle a single conditional branch.
-  if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
-    return false;
-  }
-
-  // Handle a conditional branch followed by an unconditional branch.
-  if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
-      I->getDesc().isUnconditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
-    setQualifier<llvm::RISCV::AMi::Activating>(&*std::prev(I));
-    return false;
-  }
-
-  // Otherwise, we can't handle this.
   return true;
 }
 
 void AMiLinearizeRegion::findActivatingRegions() {
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  auto &Secrets = getAnalysis<TrackSecretsAnalysis>().SecretUses;
+  SmallVector<MachineRegion *, 8> ToScan;
+  ToScan.push_back(MRI.getTopLevelRegion());
+  
+  while (!ToScan.empty()) {
+    MachineRegion *Next = ToScan.pop_back_val();
 
-  for (auto &Secret : Secrets) {
-    if (!(Secret.second.getSecretMask() & 1u))
-      continue;
-    // assert((Secret.second & 1u) && "not a secret value or incorrect mask");
-    // assert((!Secret.IsDef) && "not a use of a secret value");
-
-    // auto RegDef = Secret.first.get<SecretRegisterDef>();
-    auto *User = Secret.second.getUser();
-
-    if (User->isConditionalBranch()) {
-      if (RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(
-              User->getOpcode())) {
-        // Already handled this branch
-        continue;
-      }
-      errs() << "Conditional branch: " << *User << "\n";
-      errs() << "with mask: " << Secret.second.getSecretMask() << "\n";
-
-      MachineBasicBlock *TBB;
-      MachineBasicBlock *FBB;
-      SmallVector<MachineOperand> Cond;
-      SmallVector<MachineOperand> CondReversed;
-
-      if (TII->analyzeBranch(*User->getParent(), TBB, FBB, Cond))
-        llvm_unreachable(
-            "AMi error: failed to analyze secret-dependent branch");
-
-      CondReversed = Cond;
-      TII->reverseBranchCondition(CondReversed);
-
-      // When there is only a single conditional branch as terminator,
-      // FBB will not be set. In this case it is probably safe to assume that
-      // FBB is the fallthrough block (at least for RISC-V).
-      if (!FBB)
-        FBB = User->getParent()->getFallThrough();
-
-      // Get largest region that starts at BB. (See
-      // RegionInfoBase::getMaxRegionExit)
-      MachineRegion *FR = MRI.getRegionFor(FBB);
-      if (FR->getEntry() != FBB)
-        llvm_unreachable("AMi error: unable to find activating region for "
-                         "secret-dependent branch");
-      while (FR && FR->getParent() && FR->getParent()->getEntry() == FBB)
-        FR = FR->getParent();
-
-      // Find the exiting blocks of this region
-      SmallVector<MachineBasicBlock *> Exitings;
-      FR->getExitingBlocks(Exitings);
-      
-      bool HasElseRegion = false;
-
-      for (auto *Exiting : Exitings) {
-        MachineBasicBlock *ETBB;
-        MachineBasicBlock *EFBB;
-        SmallVector<MachineOperand> ECond;
-        TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
-        
-        auto Last = Exiting->getLastNonDebugInstr(false);
-        if (Last != Exiting->end() && Last->isUnconditionalBranch()) {
-          // If we are unconditionally jumping to the same block
-          // as the "if" conditional branch, there is no "else" branch
-          if (ETBB == TBB)
-            continue;
-
-          DebugLoc DL;
-          if (!TII->removeBranch(*Exiting))
-            llvm_unreachable("AMi error: failed to remove branch");
-
-          MachineBasicBlock *Target = TBB;
-
-          // Allow succeeding with the "else" branch
-          Exiting->addSuccessor(TBB);
-
-          // Create one-way branch if our target is the fallthrough
-          if (Target == Exiting->getFallThrough())
-            Target = nullptr;
-
-          TII->insertBranch(*Exiting, ETBB, Target, CondReversed, DL);
-
-          // Revert the change, we don't actually want to change the CFG
-          Exiting->removeSuccessor(TBB);
-          
-          setBranchActivating(*Exiting);
-          HasElseRegion = true;
-        }
-      }
-
-      if (HasElseRegion) {
-        MachineRegion *TR = MRI.getRegionFor(TBB);
-        TR->dump();
-        if (TR->getEntry() == TBB) {
-          while (TR && TR->getParent() && TR->getParent()->getEntry() == TBB)
-            TR = TR->getParent();
-          ActivatingRegions.insert(TR);
-        } else {
-          llvm_unreachable("AMi error: unable to find activating region for "
-                           "secret-dependent branch");
-        }
-      }
-
-      ActivatingRegions.insert(FR);
-      setBranchActivating(*User->getParent());
+    auto *Entering = Next->getEnteringBlock();
+    if (Entering && isActivatingBranch(*Entering)) {
+      ActivatingRegions.insert(Next);
+    }
+    
+    for (std::unique_ptr<MachineRegion> &R : *Next) {
+      ToScan.push_back(&*R);
     }
   }
 }
@@ -302,10 +172,7 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  MRI.dump();
-
   findActivatingRegions();
-  MF.dump();
 
   auto *TopRegion = MRI.getTopLevelRegion();
 
@@ -353,7 +220,6 @@ INITIALIZE_PASS_BEGIN(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
-INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysis)
 INITIALIZE_PASS_END(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)
 
