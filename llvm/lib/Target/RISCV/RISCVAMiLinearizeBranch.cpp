@@ -169,6 +169,19 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
           }
         }
       }
+
+      for (auto &MI : *Branch.IfRegion->getExit()) {
+        if (MI.getOpcode() == TargetOpcode::PHI) {
+          for (auto *Exiting : Exitings) {
+            if (Exiting == MI.getOperand(2).getMBB()) {
+              MI.getOperand(2).setMBB(EndBlock);
+            }
+            if (Exiting == MI.getOperand(4).getMBB()) {
+              MI.getOperand(4).setMBB(EndBlock);
+            }
+          }
+        }
+      }
     }
   }
 }
