@@ -104,89 +104,30 @@ bool AMiLinearizeBranch::setBranchActivating(MachineBasicBlock &MBB) {
   return true;
 }
 
-void AMiLinearizeBranch::findActivatingRegionsOld() {
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().TSA.SecretUses;
+void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
+  for (auto Branch : ActivatingBranches) {
+    ActivatingRegions.insert(Branch.IfRegion);
+    setBranchActivating(*Branch.MI->getParent());
 
-  for (auto &Secret : Secrets) {
-    if (!(Secret.second.getSecretMask() & 1u))
-      continue;
-    // assert((Secret.second & 1u) && "not a secret value or incorrect mask");
-    // assert((!Secret.IsDef) && "not a use of a secret value");
+    if (Branch.ElseRegion) {
+      // Find the exiting blocks of the if region
+      SmallVector<MachineBasicBlock *> Exitings;
+      Branch.IfRegion->getExitingBlocks(Exitings);
 
-    // auto RegDef = Secret.first.get<SecretRegisterDef>();
-    auto *User = Secret.second.getUser();
-
-    if (User->isConditionalBranch()) {
-      if (RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(
-              User->getOpcode())) {
-        // Already handled this branch
-        continue;
-      }
-      errs() << "Conditional branch: " << *User << "\n";
-      errs() << "with mask: " << Secret.second.getSecretMask() << "\n";
-
-      // We still need those registers
-      for (auto &MO : User->uses()) {
-        if (MO.isReg())
-          MO.setIsKill(false);
-      }      
-
-      MachineBasicBlock *TBB;
-      MachineBasicBlock *FBB;
-      SmallVector<MachineOperand> Cond;
-      SmallVector<MachineOperand> CondReversed;
-
-      if (TII->analyzeBranch(*User->getParent(), TBB, FBB, Cond))
-        llvm_unreachable(
-            "AMi error: failed to analyze secret-dependent branch");
-
-      CondReversed = Cond;
+      SmallVector<MachineOperand> CondReversed = Branch.Cond;
       TII->reverseBranchCondition(CondReversed);
 
-      // When there is only a single conditional branch as terminator,
-      // FBB will not be set. In this case it is probably safe to assume that
-      // FBB is the fallthrough block (at least for RISC-V).
-      if (!FBB)
-        FBB = User->getParent()->getFallThrough();
-
-      // Get largest region that starts at BB. (See
-      // RegionInfoBase::getMaxRegionExit)
-      MachineRegion *FR = MRI.getRegionFor(FBB);      
-      if (FR->getEntry() != FBB || !FR->getExit())
-        llvm_unreachable("AMi error: unable to find activating region for "
-                         "secret-dependent branch");
-      while (FR && FR->getParent() && FR->getParent()->getEntry() == FBB && FR->getExit())
-        FR = FR->getParent();
-      
-      FR->dump();
-      FR->getExit()->dump();
-
-      // Find the exiting blocks of this region
-      SmallVector<MachineBasicBlock *> Exitings;
-      FR->getExitingBlocks(Exitings);
-      
-      // for (auto *Exiting : Exitings) {
-      //   errs() << "Exiting: \n";
-      //   Exiting->dump();
-      // }
-
-      bool HasElseRegion = false;
-      
-      MachineFunction *MF = FBB->getParent();
-      
       DebugLoc DL;
 
-      MachineBasicBlock *EndBlock = MF->CreateMachineBasicBlock();
-      MF->insert(std::prev(FR->getExit()->getIterator()), EndBlock);
-      TII->insertBranch(*EndBlock, FR->getExit(), TBB, CondReversed, DL);
-      EndBlock->addSuccessor(TBB);
-      EndBlock->addSuccessor(FR->getExit());
+      MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
+      MF.insert(std::prev(Branch.IfRegion->getExit()->getIterator()), EndBlock);
+      TII->insertBranch(*EndBlock, Branch.IfRegion->getExit(),
+                        Branch.ElseRegion->getEntry(), CondReversed, DL);
+      EndBlock->addSuccessor(Branch.ElseRegion->getEntry());
+      EndBlock->addSuccessor(Branch.IfRegion->getExit());
       setBranchActivating(*EndBlock);
 
       for (auto *Exiting : Exitings) {
-        errs() << "Exiting: \n";
-        Exiting->dump();
         MachineBasicBlock *ETBB;
         MachineBasicBlock *EFBB;
         SmallVector<MachineOperand> ECond;
@@ -195,103 +136,51 @@ void AMiLinearizeBranch::findActivatingRegionsOld() {
         if (!ETBB)
           ETBB = Exiting->getFallThrough();
 
-        // if (EFBB != nullptr) {
-          // llvm_unreachable("AMi error: exiting block of activating region must jump unconditionally");
-        // }
+        assert(ETBB == Branch.IfRegion->getExit() &&
+               "AMi error: exiting block of activating region must jump to "
+               "region exit");
 
-        if (ETBB != FR->getExit()) {
-          llvm_unreachable("AMi error: exiting block of activating region must jump to region exit");
+        DebugLoc DL;
+
+        if (!TII->removeBranch(*Exiting)) {
+          assert(Exiting->getFallThrough() &&
+                 "AMi error: branchless exiting block needs to have a "
+                 "fallthrough");
         }
 
-        // auto Last = Exiting->getLastNonDebugInstr(false);
-        // if (Last != Exiting->end() && Last->isUnconditionalBranch()) {
+        // Allow succeeding with the "else" branch
+        Exiting->removeSuccessor(ETBB);
+        Exiting->addSuccessor(EndBlock);
+
+        MachineBasicBlock *Target = EndBlock;
+
         if (EFBB == nullptr) {
-          // If we are unconditionally jumping to the same block
-          // as the "if" conditional branch, there is no "else" branch
-          if (ETBB == TBB)
-            continue;
-          
-          DebugLoc DL;
-
-          if (!TII->removeBranch(*Exiting)) {
-            assert(Exiting->getFallThrough() && "AMi error: branchless exiting block needs to have a fallthrough");
-          }
-
-          // Allow succeeding with the "else" branch
-          Exiting->removeSuccessor(ETBB);
-          Exiting->addSuccessor(EndBlock);
-
-          MachineBasicBlock *Target = EndBlock;
-
-          // Don't need a branch if it's the fallthrough
+          // Unconditional branch
+          // Don't need a branch if the target is the fallthrough
           if (Target != Exiting->getFallThrough()) {
             TII->insertUnconditionalBranch(*Exiting, Target, DL);
-            // setBranchActivating(*Exiting);
           }
-
-          HasElseRegion = true;
         } else {
-          if (ETBB == TBB || EFBB == TBB)
-            continue;
-          
-          // Conditional jump
-          DebugLoc DL;
-
-          if (!TII->removeBranch(*Exiting)) {
-            assert(Exiting->getFallThrough() && "AMi error: branchless exiting block needs to have a fallthrough");
-          }
-
-          // Allow succeeding with the "else" branch
-          Exiting->removeSuccessor(ETBB);
-          Exiting->addSuccessor(EndBlock);
-
-          MachineBasicBlock *Target = EndBlock;
-
-          if (ETBB == FR->getExit()) {
+          // Conditional branch
+          if (ETBB == Branch.IfRegion->getExit()) {
             TII->insertBranch(*Exiting, Target, EFBB, ECond, DL);
-          } else if (EFBB == FR->getExit()) {
+          } else if (EFBB == Branch.IfRegion->getExit()) {
             TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
           }
-            
-          // setBranchActivating(*Exiting);
-
-          HasElseRegion = true;
         }
       }
-
-      if (HasElseRegion) {
-        MachineRegion *TR = MRI.getRegionFor(TBB);
-        TR->dump();
-        if (TR->getEntry() == TBB) {
-          while (TR && TR->getParent() && TR->getParent()->getEntry() == TBB)
-            TR = TR->getParent();
-          ActivatingRegions.insert(TR);
-        } else {
-          llvm_unreachable("AMi error: unable to find activating region for "
-                           "secret-dependent branch");
-        }
-      } else {
-        //EndBlock->eraseFromParent();
-      }
-
-      ActivatingRegions.insert(FR);
-      setBranchActivating(*User->getParent());
     }
   }
 }
 
 void AMiLinearizeBranch::findActivatingBranches() {
-  
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().TSA.SecretUses;
 
   for (auto &Secret : Secrets) {
     if (!(Secret.second.getSecretMask() & 1u))
       continue;
-    // assert((Secret.second & 1u) && "not a secret value or incorrect mask");
-    // assert((!Secret.IsDef) && "not a use of a secret value");
 
-    // auto RegDef = Secret.first.get<SecretRegisterDef>();
     auto *User = Secret.second.getUser();
 
     if (User->isConditionalBranch()) {
@@ -300,14 +189,12 @@ void AMiLinearizeBranch::findActivatingBranches() {
         // Already handled this branch
         continue;
       }
-      errs() << "Conditional branch: " << *User << "\n";
-      errs() << "with mask: " << Secret.second.getSecretMask() << "\n";
 
       // We still need those registers
       for (auto &MO : User->uses()) {
         if (MO.isReg())
           MO.setIsKill(false);
-      }      
+      }
 
       MachineBasicBlock *TBB;
       MachineBasicBlock *FBB;
@@ -325,7 +212,7 @@ void AMiLinearizeBranch::findActivatingBranches() {
 
       // Get largest region that starts at BB. (See
       // RegionInfoBase::getMaxRegionExit)
-      MachineRegion *FR = MRI.getRegionFor(FBB);      
+      MachineRegion *FR = MRI.getRegionFor(FBB);
       if (auto *Expanded = FR->getExpandedRegion()) {
         // I like large regions, expanded sounds good
         FR = Expanded;
@@ -333,16 +220,17 @@ void AMiLinearizeBranch::findActivatingBranches() {
       if (FR->getEntry() != FBB || !FR->getExit())
         llvm_unreachable("AMi error: unable to find activating region for "
                          "secret-dependent branch");
-      while (FR && FR->getParent() && FR->getParent()->getEntry() == FBB && FR->getExit())
+      while (FR && FR->getParent() && FR->getParent()->getEntry() == FBB &&
+             FR->getExit())
         FR = FR->getParent();
-      
+
       FR->dump();
       FR->getExit()->dump();
 
       // Find the exiting blocks of this region
       SmallVector<MachineBasicBlock *> Exitings;
       FR->getExitingBlocks(Exitings);
-      
+
       bool HasElseRegion = FR->getExit() != TBB;
 
       MachineRegion *TR = nullptr;
@@ -359,9 +247,12 @@ void AMiLinearizeBranch::findActivatingBranches() {
           llvm_unreachable("AMi error: unable to find activating region for "
                            "secret-dependent branch");
         }
+      } else {
+        assert(FR->getExit() == TBB && "AMi error: if branch without else "
+                                       "region must exit to branch target");
       }
-      
-      ActivatingBranches.push_back(ActivatingBranch(User, TR, FR));
+
+      ActivatingBranches.push_back(ActivatingBranch(User, Cond, TR, FR));
     }
   }
 }
@@ -375,7 +266,7 @@ void AMiLinearizeBranch::removePseudoSecret(MachineFunction &MF) {
         ToRemove.insert(&MI);
     }
   }
-  
+
   for (auto *MI : ToRemove) {
     MI->eraseFromParent();
   }
@@ -391,9 +282,12 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   MRI.dump();
-  
+
   findActivatingBranches();
-  
+
+  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
+            std::greater<ActivatingBranch>());
+
   for (auto &B : ActivatingBranches) {
     errs() << "Activating branch: " << *B.MI;
     errs() << "if region:\n";
@@ -405,7 +299,8 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  //findActivatingRegionsOld();
+  linearizeBranches(MF);
+
   removePseudoSecret(MF);
 
   MF.dump();

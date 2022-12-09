@@ -22,11 +22,21 @@ namespace {
 
 struct ActivatingBranch {
   MachineInstr *MI;
+  SmallVector<MachineOperand> Cond;
   MachineRegion *ElseRegion;
   MachineRegion *IfRegion;
 
-  ActivatingBranch(MachineInstr *MI, MachineRegion *TR, MachineRegion *FR)
-      : MI(MI), ElseRegion(TR), IfRegion(FR) {}
+  ActivatingBranch(MachineInstr *MI, SmallVector<MachineOperand> Cond,
+                   MachineRegion *TR, MachineRegion *FR)
+      : MI(MI), Cond(Cond), ElseRegion(TR), IfRegion(FR) {}
+
+  bool operator<(const ActivatingBranch &Other) const {
+    return IfRegion->getDepth() < Other.IfRegion->getDepth();
+  }
+
+  bool operator>(const ActivatingBranch &Other) const {
+    return IfRegion->getDepth() > Other.IfRegion->getDepth();
+  }
 };
 
 class AMiLinearizeBranch : public MachineFunctionPass {
@@ -43,6 +53,7 @@ public:
   template <RISCV::AMi::Qualifier Q> void setQualifier(MachineInstr *I);
   void findActivatingRegionsOld();
   void findActivatingBranches();
+  void linearizeBranches(MachineFunction &MF);
   bool setBranchActivating(MachineBasicBlock &MBB);
   void removePseudoSecret(MachineFunction &MF);
 
