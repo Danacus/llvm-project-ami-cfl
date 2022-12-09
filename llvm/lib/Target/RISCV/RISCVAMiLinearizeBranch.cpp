@@ -126,6 +126,8 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       EndBlock->addSuccessor(Branch.ElseRegion->getEntry());
       EndBlock->addSuccessor(Branch.IfRegion->getExit());
       setBranchActivating(*EndBlock);
+      
+      bool NeedEndBlock = false;
 
       for (auto *Exiting : Exitings) {
         MachineBasicBlock *ETBB;
@@ -148,18 +150,17 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
                  "fallthrough");
         }
 
-        // Allow succeeding with the "else" branch
         Exiting->removeSuccessor(ETBB);
-        Exiting->addSuccessor(EndBlock);
 
         MachineBasicBlock *Target = EndBlock;
 
         if (EFBB == nullptr) {
           // Unconditional branch
-          // Don't need a branch if the target is the fallthrough
-          if (Target != Exiting->getFallThrough()) {
-            TII->insertUnconditionalBranch(*Exiting, Target, DL);
-          }
+          TII->insertBranch(*Exiting, Branch.IfRegion->getExit(),
+                            Branch.ElseRegion->getEntry(), CondReversed, DL);
+          Exiting->addSuccessor(Branch.ElseRegion->getEntry());
+          Exiting->addSuccessor(Branch.IfRegion->getExit());
+          setBranchActivating(*Exiting);
         } else {
           // Conditional branch
           if (ETBB == Branch.IfRegion->getExit()) {
@@ -167,17 +168,26 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
           } else if (EFBB == Branch.IfRegion->getExit()) {
             TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
           }
+          Exiting->addSuccessor(EndBlock);
+          
+          NeedEndBlock = true;
         }
+      }
+      
+      if (!NeedEndBlock) {
+        EndBlock->eraseFromParent();
       }
 
       for (auto &MI : *Branch.IfRegion->getExit()) {
         if (MI.getOpcode() == TargetOpcode::PHI) {
           for (auto *Exiting : Exitings) {
-            if (Exiting == MI.getOperand(2).getMBB()) {
-              MI.getOperand(2).setMBB(EndBlock);
-            }
-            if (Exiting == MI.getOperand(4).getMBB()) {
-              MI.getOperand(4).setMBB(EndBlock);
+            if (EndBlock->isSuccessor(Exiting)) {
+              if (Exiting == MI.getOperand(2).getMBB()) {
+                MI.getOperand(2).setMBB(EndBlock);
+              }
+              if (Exiting == MI.getOperand(4).getMBB()) {
+                MI.getOperand(4).setMBB(EndBlock);
+              }
             }
           }
         }
