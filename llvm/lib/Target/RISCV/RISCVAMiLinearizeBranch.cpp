@@ -105,9 +105,11 @@ bool AMiLinearizeBranch::setBranchActivating(MachineBasicBlock &MBB) {
 }
 
 void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
+  SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
+
   for (auto Branch : ActivatingBranches) {
     ActivatingRegions.insert(Branch.IfRegion);
-    setBranchActivating(*Branch.MI->getParent());
+    ToActivate.insert(Branch.MI->getParent());
 
     if (Branch.ElseRegion) {
       // Find the exiting blocks of the if region
@@ -125,8 +127,8 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
                         Branch.ElseRegion->getEntry(), CondReversed, DL);
       EndBlock->addSuccessor(Branch.ElseRegion->getEntry());
       EndBlock->addSuccessor(Branch.IfRegion->getExit());
-      setBranchActivating(*EndBlock);
-      
+      ToActivate.insert(EndBlock);
+
       bool NeedEndBlock = false;
 
       for (auto *Exiting : Exitings) {
@@ -160,7 +162,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
                             Branch.ElseRegion->getEntry(), CondReversed, DL);
           Exiting->addSuccessor(Branch.ElseRegion->getEntry());
           Exiting->addSuccessor(Branch.IfRegion->getExit());
-          setBranchActivating(*Exiting);
+          ToActivate.insert(Exiting);
         } else {
           // Conditional branch
           if (ETBB == Branch.IfRegion->getExit()) {
@@ -169,30 +171,38 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
             TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
           }
           Exiting->addSuccessor(EndBlock);
-          
+
           NeedEndBlock = true;
         }
       }
-      
+
       if (!NeedEndBlock) {
         EndBlock->eraseFromParent();
-      }
-
-      for (auto &MI : *Branch.IfRegion->getExit()) {
-        if (MI.getOpcode() == TargetOpcode::PHI) {
-          for (auto *Exiting : Exitings) {
-            if (EndBlock->isSuccessor(Exiting)) {
-              if (Exiting == MI.getOperand(2).getMBB()) {
-                MI.getOperand(2).setMBB(EndBlock);
-              }
-              if (Exiting == MI.getOperand(4).getMBB()) {
-                MI.getOperand(4).setMBB(EndBlock);
+      } else {
+        // Fix PHI instructions
+        for (auto &MI : *Branch.IfRegion->getExit()) {
+          if (MI.getOpcode() == TargetOpcode::PHI) {
+            for (auto *MBB : Exitings) {
+              if (MBB->isSuccessor(EndBlock)) {
+                for (auto *MO = MI.operands_begin(); MO != MI.operands_end();
+                     ++MO) {
+                  if (MI.getOperandNo(MO) % 2 == 0 &&
+                      MI.getOperandNo(MO) != 0) {
+                    if (MBB == MO->getMBB()) {
+                      MO->setMBB(EndBlock);
+                    }
+                  }
+                }
               }
             }
           }
         }
       }
     }
+  }
+
+  for (auto *MBB : ToActivate) {
+    setBranchActivating(*MBB);
   }
 }
 
