@@ -177,6 +177,12 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       }
 
       if (!NeedEndBlock) {
+        for (auto *Pred : EndBlock->predecessors()) {
+          Pred->removeSuccessor(EndBlock);
+        }
+        for (auto *Succ : EndBlock->successors()) {
+          EndBlock->removeSuccessor(Succ);
+        }
         EndBlock->eraseFromParent();
       } else {
         // Fix PHI instructions
@@ -223,12 +229,6 @@ void AMiLinearizeBranch::findActivatingBranches() {
         continue;
       }
 
-      // We still need those registers
-      for (auto &MO : User->uses()) {
-        if (MO.isReg())
-          MO.setIsKill(false);
-      }
-
       MachineBasicBlock *TBB;
       MachineBasicBlock *FBB;
       SmallVector<MachineOperand> Cond;
@@ -268,6 +268,12 @@ void AMiLinearizeBranch::findActivatingBranches() {
 
       MachineRegion *TR = nullptr;
       if (HasElseRegion) {
+        // We still need those registers
+        for (auto &MO : User->uses()) {
+          if (MO.isReg())
+            MO.setIsKill(false);
+        }
+
         TR = MRI.getRegionFor(TBB);
         if (auto *Expanded = TR->getExpandedRegion()) {
           // I like large regions, expanded sounds good
