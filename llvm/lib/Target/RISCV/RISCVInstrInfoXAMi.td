@@ -15,7 +15,7 @@ def OPC_OP_GIMM   : RISCVOpcode<"OP_GIMM",   0b0010000>;
 def OPC_OP_MIMM   : RISCVOpcode<"OP_MIMM",   0b0010001>;
 def OPC_OP_PIMM   : RISCVOpcode<"OP_PIMM",   0b0010010>;
 def OPC_OPM       : RISCVOpcode<"OPM",       0b0110001>;
-def OPC_OPP       : RISCVOpcode<"OPM",       0b0110010>;
+def OPC_OPP       : RISCVOpcode<"OPP",       0b0110010>;
 def OPC_PLUI      : RISCVOpcode<"PLUI",      0b0110110>;
 def OPC_ABRANCH   : RISCVOpcode<"ABRANCH",   0b1100001>;
 def OPC_CTBRANCH  : RISCVOpcode<"CTBRANCH",  0b1100000>;
@@ -48,6 +48,15 @@ class AMiAlwaysPersistent : QualifiedInst<1> {
   let AMiClass = AlwaysPersistent;
 }
 
+class DefP {
+  dag OutOperandList = (outs GPRAMiP:$rd);
+}
+
+class DefM {
+  dag OutOperandList = (outs GPRAMiM:$rd);
+}
+
+
 //===----------------------------------------------------------------------===//
 // AMi Qualified Instruction Template Multiclasses
 //===----------------------------------------------------------------------===//
@@ -58,6 +67,8 @@ let AMiClass = Activatable, isBranch = false, isIndirectBranch = false, hasSideE
   def A#NAME : BranchCC_rri<funct3, "a."#opcodestr>, QualifiedInst;
   let Opcode = OPC_CTBRANCH.Value in
   def CT#NAME : BranchCC_rri<funct3, "ct."#opcodestr>, QualifiedInst<2>;
+  let Opcode = OPC_BRANCH.Value in
+  def P#NAME : BranchCC_rri<funct3, "p."#opcodestr>, QualifiedInst;
 }
 }
 
@@ -68,7 +79,9 @@ let AMiClass = Mimicable in {
   let Opcode = OPC_MLOAD.Value in
   def M#NAME : Load_ri<funct3, "m."#opcodestr>, QualifiedInst;
   let Opcode = OPC_PLOAD.Value in
-  def P#NAME : Load_ri<funct3, "p."#opcodestr>, QualifiedInst;
+  def P#NAME : Load_ri<funct3, "p."#opcodestr>, QualifiedInst, DefP;
+  let Opcode = OPC_LOAD.Value in
+  def S#NAME : Load_ri<funct3, "s."#opcodestr>, QualifiedInst, DefM;
 }
 }
 
@@ -79,7 +92,9 @@ let AMiClass = Mimicable in {
   let Opcode = OPC_OP_MIMM.Value in
   def M#NAME : ALU_ri<funct3, "m."#opcodestr>, QualifiedInst;
   let Opcode = OPC_OP_PIMM.Value in
-  def P#NAME : ALU_ri<funct3, "p."#opcodestr>, QualifiedInst;
+  def P#NAME : ALU_ri<funct3, "p."#opcodestr>, QualifiedInst, DefP;
+  let Opcode = OPC_OP_IMM.Value in
+  def S#NAME : ALU_ri<funct3, "s."#opcodestr>, QualifiedInst, DefM;
 }
 }
 
@@ -90,7 +105,9 @@ let AMiClass = Mimicable in {
   let Opcode = OPC_OP_MIMM.Value in
   def M#NAME : Shift_ri<imm11_7, funct3, "m."#opcodestr>, QualifiedInst;
   let Opcode = OPC_OP_PIMM.Value in
-  def P#NAME : Shift_ri<imm11_7, funct3, "p."#opcodestr>, QualifiedInst;
+  def P#NAME : Shift_ri<imm11_7, funct3, "p."#opcodestr>, QualifiedInst, DefP;
+  let Opcode = OPC_OP_IMM.Value in
+  def S#NAME : Shift_ri<imm11_7, funct3, "s."#opcodestr>, QualifiedInst, DefM;
 }
 }
 
@@ -99,7 +116,9 @@ let AMiClass = Mimicable in {
   let Opcode = OPC_OPM.Value in
   def M#NAME : ALU_rr<funct7, funct3, "m."#opcodestr, Commutable>, QualifiedInst;
   let Opcode = OPC_OPP.Value in
-  def P#NAME : ALU_rr<funct7, funct3, "p."#opcodestr, Commutable>, QualifiedInst;
+  def P#NAME : ALU_rr<funct7, funct3, "p."#opcodestr, Commutable>, QualifiedInst, DefP;
+  let Opcode = OPC_OP.Value in
+  def S#NAME : ALU_rr<funct7, funct3, "s."#opcodestr, Commutable>, QualifiedInst, DefM;
 }
 }
 
@@ -110,7 +129,9 @@ let AMiClass = Mimicable in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def PLUI : RVInstU<OPC_PLUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
-                  "p.lui", "$rd, $imm20">, Sched<[WriteIALU]>, QualifiedInst;
+                  "p.lui", "$rd, $imm20">, Sched<[WriteIALU]>, QualifiedInst, DefP;
+def SLUI : RVInstU<OPC_LUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
+                  "s.lui", "$rd, $imm20">, Sched<[WriteIALU]>, QualifiedInst, DefM;
 
 let AMiClass = Activatable in {
 let isCall = 1 in
@@ -184,13 +205,15 @@ def MARK : RVInstI<0b000, OPC_MARK, (outs),
   let rd = 0;
 }
 
-let isBarrier = 1, isBranch = 0, isTerminator = 1, hasSideEffects = 1 in
+let isBarrier = 1, isBranch = 0, isTerminator = 1, hasSideEffects = 1 in {
 def APseudoBR : Pseudo<(outs), (ins simm21_lsb0_jal:$imm20), [(br bb:$imm20)]>,
                 PseudoInstExpansion<(AJAL X0, simm21_lsb0_jal:$imm20)>, QualifiedInst;
+}
 
-let isBarrier = 1, isBranch = 0, isIndirectBranch = 0, isTerminator = 1, hasSideEffects = 1 in
+let isBarrier = 1, isBranch = 0, isIndirectBranch = 0, isTerminator = 1, hasSideEffects = 1 in {
 def APseudoBRIND : Pseudo<(outs), (ins GPRJALR:$rs1, simm12:$imm12), []>,
                    PseudoInstExpansion<(AJALR X0, GPR:$rs1, simm12:$imm12)>, QualifiedInst;
+}
 
 def : Pat<(brind GPRJALR:$rs1), (APseudoBRIND GPRJALR:$rs1, 0)>;
 def : Pat<(brind (add GPRJALR:$rs1, simm12:$imm12)),
