@@ -155,24 +155,6 @@ def GPRJALR : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, (sequence "X%u", 0,
   let RegInfos = XLenRI;
 }
 
-def GPRAMiP : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, 
-    (sequence "X%u", 14, 17),
-    (sequence "X%u", 28, 31),
-    (sequence "X%u", 24, 27)
-  )> {
-  let RegInfos = XLenRI;
-}
-
-def GPRAMiM : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, 
-    (sequence "X%u", 10, 13),
-    (sequence "X%u", 5, 7),
-    (sequence "X%u", 8, 9),
-    (sequence "X%u", 18, 23),
-    (sequence "X%u", 0, 4)
-  )> {
-  let RegInfos = XLenRI;
-}
-
 def GPRC : RegisterClass<"RISCV", [XLenVT], 32, (add
     (sequence "X%u", 10, 15),
     (sequence "X%u", 8, 9)
