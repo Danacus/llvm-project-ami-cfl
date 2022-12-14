@@ -1270,6 +1270,15 @@ def SECRET : StandardPseudoInstruction {
   let hasNoSchedulingInfo = false;
   let isMeta = true;
 }
+def EXTEND : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins variable_ops);
+  let AsmString = "EXTEND";
+  let hasSideEffects = true;
+  let isAsCheapAsAMove = true;
+  let hasNoSchedulingInfo = false;
+  let isMeta = true;
+}
 def BUNDLE : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins variable_ops);
