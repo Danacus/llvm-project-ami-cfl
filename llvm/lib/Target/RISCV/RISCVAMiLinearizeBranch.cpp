@@ -12,6 +12,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
+#include "llvm/CodeGen/MachineSSAUpdater.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/IR/Argument.h"
@@ -104,106 +105,173 @@ bool AMiLinearizeBranch::setBranchActivating(MachineBasicBlock &MBB) {
   return true;
 }
 
+MachineBasicBlock *AMiLinearizeBranch::linearizeRegion(MachineFunction &MF,
+                                                       MachineRegion *MR) {
+  // Find the exiting blocks of the if region
+  SmallVector<MachineBasicBlock *> Exitings;
+  MR->getExitingBlocks(Exitings);
+
+  DebugLoc DL;
+
+  MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
+  MF.insert(std::prev(MR->getExit()->getIterator()), EndBlock);
+
+  for (auto *Exiting : Exitings) {
+    MachineBasicBlock *ETBB;
+    MachineBasicBlock *EFBB;
+    SmallVector<MachineOperand> ECond;
+    TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
+
+    if (!ETBB)
+      ETBB = Exiting->getFallThrough();
+
+    assert(ETBB == MR->getExit() &&
+           "AMi error: exiting block of activating region must jump to "
+           "region exit");
+
+    DebugLoc DL;
+
+    if (!TII->removeBranch(*Exiting)) {
+      assert(Exiting->getFallThrough() &&
+             "AMi error: branchless exiting block needs to have a "
+             "fallthrough");
+    }
+
+    Exiting->removeSuccessor(ETBB);
+
+    MachineBasicBlock *Target = EndBlock;
+
+    if (EFBB == nullptr) {
+      // Unconditional branch
+      TII->insertUnconditionalBranch(*Exiting, Target, DL);
+    } else {
+      // Conditional branch
+      if (ETBB == MR->getExit()) {
+        TII->insertBranch(*Exiting, Target, EFBB, ECond, DL);
+      } else if (EFBB == MR->getExit()) {
+        TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
+      }
+    }
+
+    Exiting->addSuccessor(EndBlock);
+  }
+
+  ActivatingRegions.insert(MR);
+  return EndBlock;
+}
+
 void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
   SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
 
   for (auto Branch : ActivatingBranches) {
-    ActivatingRegions.insert(Branch.IfRegion);
     ToActivate.insert(Branch.MI->getParent());
 
+    auto *IfExit = Branch.IfRegion->getExit();
+
+    auto *NewIfExit = linearizeRegion(MF, Branch.IfRegion);
+
+    DebugLoc DL;
+
+    auto *BranchBlock = Branch.MI->getParent();
+
+    SmallVector<MachineOperand> NewCond;
+
+    for (auto OP : Branch.Cond) {
+      if (OP.isReg() && !OP.isDef())
+        OP.setIsKill(false);
+      NewCond.push_back(OP);
+    }
+
+    TII->removeBranch(*BranchBlock);
+    BranchBlock->removeSuccessor(Branch.ElseRegion->getEntry());
+    TII->insertBranch(*BranchBlock, Branch.IfRegion->getEntry(), NewIfExit,
+                      NewCond, DL);
+    BranchBlock->addSuccessor(NewIfExit);
+
+    MachineBasicBlock *NewElseExit = nullptr;
+
     if (Branch.ElseRegion) {
-      // Find the exiting blocks of the if region
-      SmallVector<MachineBasicBlock *> Exitings;
-      Branch.IfRegion->getExitingBlocks(Exitings);
+      NewElseExit = linearizeRegion(MF, Branch.ElseRegion);
 
       SmallVector<MachineOperand> CondReversed = Branch.Cond;
       TII->reverseBranchCondition(CondReversed);
 
-      DebugLoc DL;
+      TII->insertBranch(*NewIfExit, NewElseExit, Branch.ElseRegion->getEntry(),
+                        CondReversed, DL);
+      NewIfExit->addSuccessor(Branch.ElseRegion->getEntry());
+      NewIfExit->addSuccessor(NewElseExit);
+      ToActivate.insert(NewIfExit);
 
-      MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
-      MF.insert(std::prev(Branch.IfRegion->getExit()->getIterator()), EndBlock);
-      TII->insertBranch(*EndBlock, Branch.IfRegion->getExit(),
-                        Branch.ElseRegion->getEntry(), CondReversed, DL);
-      EndBlock->addSuccessor(Branch.ElseRegion->getEntry());
-      EndBlock->addSuccessor(Branch.IfRegion->getExit());
-      ToActivate.insert(EndBlock);
+      TII->insertUnconditionalBranch(*NewElseExit, IfExit, DL);
+      NewElseExit->addSuccessor(IfExit);
+    } else {
+      TII->insertUnconditionalBranch(*NewIfExit, IfExit, DL);
+      NewIfExit->addSuccessor(IfExit);
+    }
 
-      bool NeedEndBlock = false;
+    MachineSSAUpdater Updater(MF);
 
-      for (auto *Exiting : Exitings) {
-        MachineBasicBlock *ETBB;
-        MachineBasicBlock *EFBB;
-        SmallVector<MachineOperand> ECond;
-        TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
+    for (const auto &MI : *IfExit) {
+      if (!MI.isPHI())
+        break;
+      Register IfReg;
+      MachineBasicBlock *IfBlock;
+      Register ElseReg;
+      MachineBasicBlock *ElseBlock;
 
-        if (!ETBB)
-          ETBB = Exiting->getFallThrough();
+      for (unsigned i = 1, e = MI.getNumOperands(); i != e; i += 2) {
+        Register Reg = MI.getOperand(i).getReg();
+        MachineBasicBlock *MBB = MI.getOperand(i + 1).getMBB();
 
-        assert(ETBB == Branch.IfRegion->getExit() &&
-               "AMi error: exiting block of activating region must jump to "
-               "region exit");
-
-        DebugLoc DL;
-
-        if (!TII->removeBranch(*Exiting)) {
-          assert(Exiting->getFallThrough() &&
-                 "AMi error: branchless exiting block needs to have a "
-                 "fallthrough");
-        }
-
-        Exiting->removeSuccessor(ETBB);
-
-        MachineBasicBlock *Target = EndBlock;
-
-        if (EFBB == nullptr) {
-          // Unconditional branch
-          TII->insertBranch(*Exiting, Branch.IfRegion->getExit(),
-                            Branch.ElseRegion->getEntry(), CondReversed, DL);
-          Exiting->addSuccessor(Branch.ElseRegion->getEntry());
-          Exiting->addSuccessor(Branch.IfRegion->getExit());
-          ToActivate.insert(Exiting);
-        } else {
-          // Conditional branch
-          if (ETBB == Branch.IfRegion->getExit()) {
-            TII->insertBranch(*Exiting, Target, EFBB, ECond, DL);
-          } else if (EFBB == Branch.IfRegion->getExit()) {
-            TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
-          }
-          Exiting->addSuccessor(EndBlock);
-
-          NeedEndBlock = true;
+        if (Branch.IfRegion->contains(MBB)) {
+          IfReg = Reg;
+          IfBlock = MBB;
+        } else if (Branch.ElseRegion && Branch.ElseRegion->contains(MBB)) {
+          ElseReg = Reg;
+          ElseBlock = MBB;
         }
       }
 
-      if (!NeedEndBlock) {
-        for (auto *Pred : EndBlock->predecessors()) {
-          Pred->removeSuccessor(EndBlock);
+      if (IfBlock) {
+        Updater.Initialize(IfReg);
+
+        //Updater.
+      }
+
+      /*
+      if (IfBlock) {
+        TRI->dumpReg(IfReg);
+        Register DummyReg =
+            MF.getRegInfo().createVirtualRegister(TRI->getRegClass(IfReg));
+        MachineInstr &DummyDef =
+            TII->duplicate(*BranchBlock, BranchBlock->getFirstTerminator(),
+                           *MF.getRegInfo().def_instr_begin(IfReg));
+        DummyDef.getOperand(0).setReg(DummyReg);
+
+        Register NewIfVR =
+            MF.getRegInfo().createVirtualRegister(TRI->getRegClass(IfReg));
+        auto IfPHI =
+            BuildMI(*NewIfExit,
+                    NewIfExit->empty() ? NewIfExit->end() : NewIfExit->begin(),
+                    DebugLoc(), TII->get(TargetOpcode::PHI), NewIfVR);
+        IfPHI.addReg(IfReg).addMBB(IfBlock);
+        IfPHI.addReg(DummyReg).addMBB(BranchBlock);
+
+        if (ElseBlock && Branch.IfRegion) {
+          TRI->dumpReg(ElseReg);
+          Register NewElseVR =
+              MF.getRegInfo().createVirtualRegister(TRI->getRegClass(ElseReg));
+          auto ElsePHI = BuildMI(
+              *NewElseExit,
+              NewElseExit->empty() ? NewIfExit->end() : NewIfExit->begin(),
+              DebugLoc(), TII->get(TargetOpcode::PHI), NewElseVR);
+          ElsePHI.addReg(ElseReg).addMBB(IfBlock);
+          ElsePHI.addReg(NewIfVR).addMBB(NewIfExit);
         }
-        for (auto *Succ : EndBlock->successors()) {
-          EndBlock->removeSuccessor(Succ);
-        }
-        EndBlock->eraseFromParent();
       } else {
-        // Fix PHI instructions
-        for (auto &MI : *Branch.IfRegion->getExit()) {
-          if (MI.getOpcode() == TargetOpcode::PHI) {
-            for (auto *MBB : Exitings) {
-              if (MBB->isSuccessor(EndBlock)) {
-                for (auto *MO = MI.operands_begin(); MO != MI.operands_end();
-                     ++MO) {
-                  if (MI.getOperandNo(MO) % 2 == 0 &&
-                      MI.getOperandNo(MO) != 0) {
-                    if (MBB == MO->getMBB()) {
-                      MO->setMBB(EndBlock);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        errs() << "No if block\n";
       }
+      */
     }
   }
 

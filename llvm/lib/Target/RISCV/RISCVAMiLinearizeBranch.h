@@ -53,6 +53,10 @@ public:
   template <RISCV::AMi::Qualifier Q> void setQualifier(MachineInstr *I);
   void findActivatingRegionsOld();
   void findActivatingBranches();
+
+  // Linearize a region, returns the new exit
+  MachineBasicBlock *linearizeRegion(MachineFunction &MF, MachineRegion *MR);
+
   void linearizeBranches(MachineFunction &MF);
   bool setBranchActivating(MachineBasicBlock &MBB);
   void removePseudoSecret(MachineFunction &MF);
