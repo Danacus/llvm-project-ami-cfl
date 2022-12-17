@@ -379,6 +379,10 @@ protected:
   /// immediately before register allocation.
   virtual void addPreRegAlloc() { }
 
+  virtual void addPreSSADestruction() { }
+
+  virtual void addPostSSADestruction() { }
+
   /// createTargetRegisterAllocator - Create the register allocator pass for
   /// this target at the current optimization level.
   virtual FunctionPass *createTargetRegisterAllocator(bool Optimized);

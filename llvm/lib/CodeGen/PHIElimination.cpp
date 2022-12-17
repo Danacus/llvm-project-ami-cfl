@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PHIEliminationUtils.h"
+#include "llvm/CodeGen/PHIEliminationUtils.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"

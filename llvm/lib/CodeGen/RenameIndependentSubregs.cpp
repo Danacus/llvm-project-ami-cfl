@@ -27,7 +27,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "LiveRangeUtils.h"
-#include "PHIEliminationUtils.h"
+#include "llvm/CodeGen/PHIEliminationUtils.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"

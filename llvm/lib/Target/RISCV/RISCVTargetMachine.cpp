@@ -196,13 +196,8 @@ RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
       }
       ABIName = ModuleTargetABI->getString();
     }
-<<<<<<< HEAD
     I = std::make_unique<RISCVSubtarget>(
         TargetTriple, CPU, TuneCPU, FS, ABIName, RVVBitsMin, RVVBitsMax, *this);
-=======
-    I = std::make_unique<RISCVSubtarget>(TargetTriple, CPU, TuneCPU, FS,
-                                         ABIName, *this);
->>>>>>> 7d5fc6a2dc9a (Linearization of if-then-else)
   }
   return I.get();
 }
@@ -273,6 +268,8 @@ public:
   void addMachineSSAOptimization() override;
   void addPreRegAlloc() override;
   void addPostRegAlloc() override;
+  void addPreSSADestruction() override;
+  void addPostSSADestruction() override;
 };
 } // namespace
 
@@ -356,10 +353,13 @@ void RISCVPassConfig::addPreEmitPass2() {
 void RISCVPassConfig::addMachineSSAOptimization() {
   TargetPassConfig::addMachineSSAOptimization();
 <<<<<<< HEAD
+<<<<<<< HEAD
   if (EnableMachineCombiner)
 =======
   if (EnableAMiLinearization == cl::BOU_TRUE)
     addPass(createAMiLinearizeBranchPass());
+=======
+>>>>>>> a90b6bd60bae (Pre-regalloc linearization)
 
   if (TM->getOptLevel() == CodeGenOpt::Aggressive && EnableMachineCombiner)
 >>>>>>> 870ee5f45533 (Identify activating regions)
@@ -369,6 +369,14 @@ void RISCVPassConfig::addMachineSSAOptimization() {
     addPass(createRISCVSExtWRemovalPass());
     addPass(createRISCVStripWSuffixPass());
   }
+}
+
+void RISCVPassConfig::addPreSSADestruction() {
+  if (EnableAMiLinearization == cl::BOU_TRUE)
+    addPass(createAMiLinearizeBranchPass());
+}
+
+void RISCVPassConfig::addPostSSADestruction() {
 }
 
 void RISCVPassConfig::addPreRegAlloc() {

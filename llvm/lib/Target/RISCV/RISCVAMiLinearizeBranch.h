@@ -24,9 +24,9 @@ struct ActivatingBranch {
   MachineInstr *MI;
   SmallVector<MachineOperand> Cond;
   MachineRegion *ElseRegion;
-  MachineBasicBlock *NewElseExit;
+  // MachineBasicBlock *NewElseExit;
   MachineRegion *IfRegion;
-  MachineBasicBlock *NewIfExit;
+  // MachineBasicBlock *NewIfExit;
 
   ActivatingBranch(MachineInstr *MI, SmallVector<MachineOperand> Cond,
                    MachineRegion *TR, MachineRegion *FR)
@@ -53,12 +53,12 @@ public:
   AMiLinearizeBranch();
 
   template <RISCV::AMi::Qualifier Q> void setQualifier(MachineInstr *I);
-  void findActivatingRegionsOld();
   void findActivatingBranches();
 
-  // Linearize a region, returns the new exit
-  MachineBasicBlock *linearizeRegion(MachineFunction &MF, MachineRegion *MR);
-
+  MachineBasicBlock *simplifyRegion(MachineFunction &MF, MachineRegion *MR);
+  void rewritePHIForRegion(MachineFunction &MF, MachineRegion *MR);
+  void eliminatePHI(MachineFunction &MF, ActivatingBranch &Branch, MachineBasicBlock &MBB);
+  void simplifyBranchRegions(MachineFunction &MF);
   void linearizeBranches(MachineFunction &MF);
   bool setBranchActivating(MachineBasicBlock &MBB);
   void removePseudoSecret(MachineFunction &MF);

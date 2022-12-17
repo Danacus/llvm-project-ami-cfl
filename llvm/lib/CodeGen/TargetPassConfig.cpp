@@ -1453,9 +1453,13 @@ void TargetPassConfig::addOptimizedRegAlloc() {
   addPass(&UnreachableMachineBlockElimID);
   addPass(&LiveVariablesID);
 
+  addPreSSADestruction();
+
   // Edge splitting is smarter with machine loop info.
   addPass(&MachineLoopInfoID);
   addPass(&PHIEliminationID);
+
+  addPostSSADestruction();
 
   // Eventually, we want to run LiveIntervals before PHI elimination.
   if (EarlyLiveIntervals)
