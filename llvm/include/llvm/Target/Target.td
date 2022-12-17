@@ -1279,6 +1279,17 @@ def EXTEND : StandardPseudoInstruction {
   let hasNoSchedulingInfo = false;
   let isMeta = true;
 }
+def AMI_BR_TARGET : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins unknown:$src);
+  let AsmString = "AMI_BR_TARGET";
+  let hasSideEffects = false;
+  let isAsCheapAsAMove = true;
+  let hasNoSchedulingInfo = false;
+  let isMeta = true;
+  let isConvergent = true;
+  let isNotDuplicable = true;
+}
 def BUNDLE : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins variable_ops);

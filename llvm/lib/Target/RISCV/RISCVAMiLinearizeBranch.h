@@ -24,7 +24,9 @@ struct ActivatingBranch {
   MachineInstr *MI;
   SmallVector<MachineOperand> Cond;
   MachineRegion *ElseRegion;
+  MachineBasicBlock *NewElseExit;
   MachineRegion *IfRegion;
+  MachineBasicBlock *NewIfExit;
 
   ActivatingBranch(MachineInstr *MI, SmallVector<MachineOperand> Cond,
                    MachineRegion *TR, MachineRegion *FR)
