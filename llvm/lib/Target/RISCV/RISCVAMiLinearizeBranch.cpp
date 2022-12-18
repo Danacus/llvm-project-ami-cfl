@@ -266,7 +266,9 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
     TII->reverseBranchCondition(CondReversed);
 
     TII->removeBranch(*BranchBlock);
-    BranchBlock->removeSuccessor(Branch.ElseRegion->getEntry());
+    for (auto *Succ : BranchBlock->successors())
+      if (Succ != Branch.IfRegion->getEntry())
+        BranchBlock->removeSuccessor(Succ);
     TII->insertBranch(*BranchBlock, Branch.IfRegion->getExit(),
                       Branch.IfRegion->getEntry(), NewCond, DL);
 
@@ -296,7 +298,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
 void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
                                       ActivatingBranch &Branch,
                                       MachineBasicBlock &Exit) {
-  errs() << "here\n";
+  auto &MRI = MF.getRegInfo();
 
   SmallVector<MachineInstr *> PHIToRemove;
 
@@ -310,20 +312,82 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
     errs() << "eliminating PHI\n";
     MI.dump();
 
+    bool HasEntryReg = false;
+
+    Register EntryReg;
+    unsigned EntrySubReg;
+    MachineBasicBlock *EntryMBB;
+
+    Register IfReg;
+    unsigned IfSubReg;
+    MachineBasicBlock *IfMBB;
+
+    Register ElseReg;
+    unsigned ElseSubReg;
+    MachineBasicBlock *ElseMBB;
+
     for (unsigned I = 1, E = MI.getNumOperands(); I != E; I += 2) {
       Register Reg = MI.getOperand(I).getReg();
       unsigned SubReg = MI.getOperand(I).getSubReg();
       MachineBasicBlock *MBB = MI.getOperand(I + 1).getMBB();
 
-      if (Branch.IfRegion->getExit() == MBB ||
-          Branch.ElseRegion->getExit() == MBB ||
-          Branch.IfRegion->contains(MBB) || Branch.ElseRegion->contains(MBB)) {
-        TII->createPHISourceCopy(
-            *MBB, findPHICopyInsertPoint(MBB, &Exit, Reg), DebugLoc(),
-            Reg, SubReg, MI.getOperand(0).getReg());
+      if (Branch.MI->getParent() == MBB) {
+        EntryReg = Reg;
+        EntrySubReg = SubReg;
+        EntryMBB = MBB;
+        HasEntryReg = true;
+      }
+
+      if (Branch.IfRegion->getExit() == MBB || Branch.IfRegion->contains(MBB)) {
+        IfReg = Reg;
+        IfSubReg = SubReg;
+        IfMBB = MBB;
+      }
+
+      if (Branch.ElseRegion && (Branch.ElseRegion->getExit() == MBB ||
+          Branch.ElseRegion->contains(MBB))) {
+        ElseReg = Reg;
+        ElseSubReg = SubReg;
+        ElseMBB = MBB;
+      }
+
+      if (Branch.MI->getParent() == MBB || Branch.IfRegion->getExit() == MBB ||
+          (Branch.ElseRegion && Branch.ElseRegion->getExit() == MBB) ||
+          Branch.IfRegion->contains(MBB) ||
+          (Branch.ElseRegion && Branch.ElseRegion->contains(MBB))) {
         ToRemove.push_back(I);
         ToRemove.push_back(I + 1);
       }
+    }
+
+    Register PHIDef = MI.getOperand(0).getReg();
+    Register IfToElseReg = PHIDef;
+    
+    if (Branch.ElseRegion)
+      IfToElseReg = MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
+
+    if (HasEntryReg) {
+      Register EntryToIfReg = MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
+
+      BuildMI(*EntryMBB, findPHICopyInsertPoint(EntryMBB, &Exit, EntryReg), DebugLoc(),
+              TII->get(TargetOpcode::COPY), EntryToIfReg)
+          .addReg(EntryReg, 0, EntrySubReg);
+
+      BuildMI(*IfMBB, findPHICopyInsertPoint(IfMBB, &Exit, IfReg), DebugLoc(),
+              TII->get(TargetOpcode::MIM_COPY), IfToElseReg)
+          .addReg(IfReg, 0, IfSubReg)
+          .addReg(EntryToIfReg);
+    } else {
+      BuildMI(*IfMBB, findPHICopyInsertPoint(IfMBB, &Exit, IfReg), DebugLoc(),
+              TII->get(TargetOpcode::COPY), IfToElseReg)
+          .addReg(IfReg, 0, IfSubReg);
+    }
+
+    if (Branch.ElseRegion) {
+      BuildMI(*ElseMBB, findPHICopyInsertPoint(ElseMBB, &Exit, ElseReg), DebugLoc(),
+              TII->get(TargetOpcode::MIM_COPY), MI.getOperand(0).getReg())
+          .addReg(ElseReg, 0, ElseSubReg)
+          .addReg(IfToElseReg);
     }
 
     while (!ToRemove.empty()) {

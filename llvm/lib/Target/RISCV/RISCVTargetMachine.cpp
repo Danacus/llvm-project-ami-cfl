@@ -352,28 +352,19 @@ void RISCVPassConfig::addPreEmitPass2() {
 
 void RISCVPassConfig::addMachineSSAOptimization() {
   TargetPassConfig::addMachineSSAOptimization();
-<<<<<<< HEAD
-<<<<<<< HEAD
   if (EnableMachineCombiner)
-=======
-  if (EnableAMiLinearization == cl::BOU_TRUE)
-    addPass(createAMiLinearizeBranchPass());
-=======
->>>>>>> a90b6bd60bae (Pre-regalloc linearization)
-
-  if (TM->getOptLevel() == CodeGenOpt::Aggressive && EnableMachineCombiner)
->>>>>>> 870ee5f45533 (Identify activating regions)
     addPass(&MachineCombinerID);
 
   if (TM->getTargetTriple().getArch() == Triple::riscv64) {
     addPass(createRISCVSExtWRemovalPass());
     addPass(createRISCVStripWSuffixPass());
   }
+
+  if (EnableAMiLinearization == cl::BOU_TRUE)
+    addPass(createAMiLinearizeBranchPass());
 }
 
 void RISCVPassConfig::addPreSSADestruction() {
-  if (EnableAMiLinearization == cl::BOU_TRUE)
-    addPass(createAMiLinearizeBranchPass());
 }
 
 void RISCVPassConfig::addPostSSADestruction() {

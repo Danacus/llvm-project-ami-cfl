@@ -1261,6 +1261,15 @@ def COPY : StandardPseudoInstruction {
   let isAsCheapAsAMove = true;
   let hasNoSchedulingInfo = false;
 }
+def MIM_COPY : StandardPseudoInstruction {
+  let OutOperandList = (outs unknown:$dst);
+  let InOperandList = (ins unknown:$src, unknown:$src2);
+  let Constraints = "$src2 = $dst";
+  let AsmString = "";
+  let hasSideEffects = false;
+  let isAsCheapAsAMove = true;
+  let hasNoSchedulingInfo = false;
+}
 def SECRET : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins unknown:$src, i32imm:$info);

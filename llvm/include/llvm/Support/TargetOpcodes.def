@@ -108,6 +108,7 @@ HANDLE_TARGET_OPCODE(DBG_LABEL)
 /// COPY - Target-independent register copy. This instruction can also be
 /// used to copy between subregisters of virtual registers.
   HANDLE_TARGET_OPCODE(COPY)
+  HANDLE_TARGET_OPCODE(MIM_COPY)
 
 HANDLE_TARGET_OPCODE(SECRET)
 HANDLE_TARGET_OPCODE(EXTEND)

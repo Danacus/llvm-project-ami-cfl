@@ -26,7 +26,11 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+<<<<<<< HEAD
 #include "llvm/IR/DebugInfoMetadata.h"
+=======
+#include "llvm/CodeGen/TargetOpcodes.h"
+>>>>>>> 09d334fe1a95 (Mimicable copy)
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -1343,7 +1347,7 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
 
 std::optional<DestSourcePair>
 RISCVInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
-  if (MI.isMoveReg())
+  if (MI.isMoveReg() || MI.getOpcode() == TargetOpcode::MIM_COPY)
     return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
   switch (MI.getOpcode()) {
   default:
