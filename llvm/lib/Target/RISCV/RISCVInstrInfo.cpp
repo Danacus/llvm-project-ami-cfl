@@ -178,6 +178,51 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand &MO, 
   }
 }
 
+void RISCVInstrInfo::constantTimeLeakage(const MachineInstr &MI, 
+                                         SmallVector<MachineOperand, 4> &Operands) const { 
+  switch (MI.getOpcode()) {
+  case RISCV::LB:
+  case RISCV::LBU:
+  case RISCV::LH:
+  case RISCV::LHU:
+  case RISCV::FLH:
+  case RISCV::LW:
+  case RISCV::FLW:
+  case RISCV::LWU:
+  case RISCV::LD: {
+    // TODO
+    break;    
+  }
+  case RISCV::FLD:
+  case RISCV::SB:
+  case RISCV::SH:
+  case RISCV::SW:
+  case RISCV::FSH:
+  case RISCV::FSW:
+  case RISCV::SD:
+  case RISCV::FSD: {      
+    // Store instructions leak their address through memory cache
+    Operands.push_back(MI.getOperand(1));
+    break;   
+  }
+
+  case RISCV::BEQ:
+  case RISCV::BNE:
+  case RISCV::BLT:
+  case RISCV::BGE:
+  case RISCV::BLTU:
+  case RISCV::BGEU: {
+    // Branch instructions leak their condition operands through control flow
+    Operands.push_back(MI.getOperand(0));
+    Operands.push_back(MI.getOperand(1));
+    break;
+  }
+
+  default:
+    break;
+  }
+}
+
 unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
   switch (MI.getOpcode()) {

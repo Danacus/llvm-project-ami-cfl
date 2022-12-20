@@ -19,6 +19,7 @@ tablegen(LLVM RISCVGenSubtargetInfo.inc -gen-subtarget)
 add_public_tablegen_target(RISCVCommonTableGen)
 
 add_llvm_target(RISCVCodeGen
+  RISCVAMiInsertPersistentDefs.cpp
   RISCVAMiLinearizeRegion.cpp
   RISCVAMiLinearizeBranch.cpp
   RISCVAsmPrinter.cpp

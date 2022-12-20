@@ -359,12 +359,12 @@ TrackSecretsAnalysisPhysReg::TrackSecretsAnalysisPhysReg()
 }
 
 INITIALIZE_PASS_BEGIN(TrackSecretsAnalysisPhysReg, "track-secrets-phys-reg",
-                      "Track Secrets", false, false)
+                      "Track Secrets", true, true)
 INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
 INITIALIZE_PASS_END(TrackSecretsAnalysisPhysReg, "track-secrets-phys-reg",
-                    "Track Secrets", false, false)
+                    "Track Secrets", true, true)
 
 INITIALIZE_PASS_BEGIN(TrackSecretsAnalysisVirtReg, "track-secrets-virt-reg",
-                      "Track Secrets", false, false)
+                      "Track Secrets", true, true)
 INITIALIZE_PASS_END(TrackSecretsAnalysisVirtReg, "track-secrets-virt-reg",
-                    "Track Secrets", false, false)
+                    "Track Secrets", true, true)

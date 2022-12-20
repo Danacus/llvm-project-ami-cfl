@@ -1,0 +1,133 @@
+
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/PersistencyAnalysis.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/Pass.h"
+#include "llvm/PassRegistry.h"
+
+using namespace llvm;
+
+#define DEBUG_TYPE "persistency-analysis"
+
+void PersistencyAnalysisPass::propagatePersistency(const MachineFunction &MF, const MachineInstr &MI,
+                          const MachineOperand &MO, const MachineRegion &MR,
+                          SmallPtrSet<const MachineInstr *, 16> &PersistentDefs) {
+  if (!MO.isReg())
+    return;
+  
+  SmallVector<const MachineInstr *> WorkSet;
+  for (auto &DI : MF.getRegInfo().def_instructions(MO.getReg())) {
+    if (MR.contains(&DI))
+      WorkSet.push_back(&DI);
+  }
+
+  while (!WorkSet.empty()) {
+    auto *I = WorkSet.pop_back_val();
+    I->dump();
+
+    PersistentDefs.insert(I);
+
+    for (auto &Op : I->operands()) {
+      if (!Op.isReg() || !Op.isUse())
+        continue;
+
+      Register Reg = Op.getReg();
+
+      // SmallPtrSet<MachineInstr *, 16> Defs;
+      // RDA.getGlobalReachingDefs(I, Reg, Defs);
+
+      for (auto &DI : MF.getRegInfo().def_instructions(Reg)) {
+        if (MR.contains(&DI))
+          WorkSet.push_back(&DI);
+      }
+    }
+  }
+}
+
+void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF, const MachineRegion &MR) {
+  SmallPtrSet<const MachineInstr *, 16> LocalPersistentDefs;
+
+  /*
+  for (const auto *Node : MR.elements()) {
+    if (Node->isSubRegion()) {
+      // TODO: handle subregion
+    } else {
+      MachineBasicBlock *MBB = Node->getEntry();
+      SmallVector<MachineOperand, 4> LeakedOperands;
+      for (const MachineInstr &MI : *MBB) {
+        LeakedOperands.clear();
+        TII->constantTimeLeakage(MI, LeakedOperands);
+
+        for (auto &MO : LeakedOperands) {
+          propagatePersistency(MF, MI, MO, MR, LocalPersistentDefs);
+        }
+      }
+    }
+  }
+  */
+  for (const auto *MBB : MR.blocks()) {
+    SmallVector<MachineOperand, 4> LeakedOperands;
+    for (const MachineInstr &MI : *MBB) {
+      LeakedOperands.clear();
+      TII->constantTimeLeakage(MI, LeakedOperands);
+
+      for (auto &MO : LeakedOperands) {
+        propagatePersistency(MF, MI, MO, MR, LocalPersistentDefs);
+      }
+    }
+  }
+
+  PersistentInstructions[&MR] = LocalPersistentDefs;
+}
+
+bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
+  const auto &ST = MF.getSubtarget();
+  TII = ST.getInstrInfo();
+  TRI = ST.getRegisterInfo();
+
+  auto SensitiveBranches =
+      getAnalysis<SensitiveRegionAnalysisPass>().getSensitiveBranches();
+  std::sort(SensitiveBranches.begin(), SensitiveBranches.end());
+
+  for (const auto &Branch : SensitiveBranches) {
+    analyzeRegion(MF, *Branch.IfRegion);
+    analyzeRegion(MF, *Branch.ElseRegion);
+  }
+
+  errs() << "Persistent instructions: \n";
+
+  for (const auto &Pair : PersistentInstructions) {
+    Pair.first->dump();
+
+    for (const auto *MI : Pair.second) {
+      MI->dump();
+    }
+  }
+
+  return false;
+}
+
+char PersistencyAnalysisPass::ID = 0;
+char &llvm::PersistencyAnalysisPassID = PersistencyAnalysisPass::ID;
+
+PersistencyAnalysisPass::PersistencyAnalysisPass() : MachineFunctionPass(ID) {
+  initializePersistencyAnalysisPassPass(*PassRegistry::getPassRegistry());
+}
+
+INITIALIZE_PASS_BEGIN(PersistencyAnalysisPass, DEBUG_TYPE,
+                      "Persistency Analysis", true, true)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPass)
+INITIALIZE_PASS_END(PersistencyAnalysisPass, DEBUG_TYPE, "Persistency Analysis",
+                    true, true)
+
+namespace llvm {
+
+FunctionPass *createPersistencyAnalysisPass() {
+  return new PersistencyAnalysisPass();
+}
+
+} // namespace llvm

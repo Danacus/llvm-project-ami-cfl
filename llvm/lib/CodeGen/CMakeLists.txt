@@ -64,6 +64,8 @@ add_llvm_component_library(LLVMCodeGen
   FEntryInserter.cpp
   FinalizeISel.cpp
   FindSecrets.cpp
+  SensitiveRegion.cpp
+  PersistencyAnalysis.cpp
   FixupStatepointCallerSaved.cpp
   FuncletLayout.cpp
   GCMetadata.cpp
