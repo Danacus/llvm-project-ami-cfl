@@ -1,12 +1,15 @@
-#include "RISCVAMiInsertPersistentDefs.h"
 #include "RISCV.h"
+#include "RISCVAMiInsertPersistentDefs.h"
+#include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/PHIEliminationUtils.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/Pass.h"
 #include "llvm/PassRegistry.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
 
 using namespace llvm;
 
@@ -14,14 +17,46 @@ using namespace llvm;
 
 char AMiInsertPersistentDefs::ID = 0;
 
-void AMiInsertPersistentDefs::insertImplicitDef(MachineFunction &MF, MachineRegion &MR, Register Reg) {
+void AMiInsertPersistentDefs::insertImplicitDef(MachineFunction &MF,
+                                                MachineRegion &MR,
+                                                Register Reg) {
+  auto &LV = getAnalysis<LiveVariables>();
   SmallVector<MachineBasicBlock *> Exitings;
   MR.getExitingBlocks(Exitings);
 
   for (auto &Exiting : Exitings) {
     auto InsertPoint = findPHICopyInsertPoint(Exiting, MR.getExit(), Reg);
-    BuildMI(*Exiting, InsertPoint, DebugLoc(), TII->get(TargetOpcode::IMPLICIT_DEF), Reg);
-    BuildMI(*Exiting, InsertPoint, DebugLoc(), TII->get(TargetOpcode::EXTEND)).addReg(Reg);
+    auto DefBuilder = BuildMI(*Exiting, InsertPoint, DebugLoc(),
+            TII->get(TargetOpcode::PERSISTENT_DEF), Reg);
+
+    for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
+      Register OtherReg = Register::index2VirtReg(RegI);
+      LiveVariables::VarInfo Info = LV.getVarInfo(OtherReg);
+      
+      if (OtherReg.isVirtual() && Info.AliveBlocks.test(Exiting->getNumber())) {
+        DefBuilder.addReg(OtherReg);
+      }
+    }
+    
+    BuildMI(*Exiting, InsertPoint, DebugLoc(), TII->get(TargetOpcode::EXTEND))
+        .addReg(Reg);
+    /*
+    auto FindBuilder = DefBundles.find(Exiting);
+    if (FindBuilder == DefBundles.end()) {
+      auto InsertPoint = findPHICopyInsertPoint(Exiting, MR.getExit(), Reg);
+      auto Builder = MIBundleBuilder(*Exiting, InsertPoint);
+      auto BundleMI = BuildMI(MF, DebugLoc(), TII->get(TargetOpcode::BUNDLE));
+      Builder.append(BundleMI);
+      DefBundles.insert(std::pair(Exiting, Builder));
+    }
+
+    MIBundleBuilder &Builder = DefBundles.find(Exiting)->second;
+    // MachineBasicBlock::iterator InsertPoint = Builder.end();
+
+    auto Def = BuildMI(MF, DebugLoc(), TII->get(TargetOpcode::IMPLICIT_DEF),
+    Reg); Builder.append(Def); auto Use = BuildMI(MF, DebugLoc(),
+    TII->get(TargetOpcode::EXTEND)).addReg(Reg); Builder.append(Use);
+    */
   }
 }
 
@@ -32,9 +67,9 @@ bool AMiInsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
 
   auto &SRA = getAnalysis<SensitiveRegionAnalysisPass>();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
-  auto &SensitiveBranches = SRA.getSensitiveBranches();
+  // auto &SensitiveBranches = SRA.getSensitiveBranches();
 
-  for (auto &B : SensitiveBranches) {
+  for (auto &B : SRA.sensitive_branches()) {
     if (B.ElseRegion) {
       auto PersistentInstrs = PA.getPersistentInstructions(B.ElseRegion);
 
@@ -56,12 +91,13 @@ AMiInsertPersistentDefs::AMiInsertPersistentDefs() : MachineFunctionPass(ID) {
   initializeAMiInsertPersistentDefsPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(AMiInsertPersistentDefs, DEBUG_TYPE, "AMi Insert Persistent Defs",
-                      false, false)
+INITIALIZE_PASS_BEGIN(AMiInsertPersistentDefs, DEBUG_TYPE,
+                      "AMi Insert Persistent Defs", false, false)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPass)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
-INITIALIZE_PASS_END(AMiInsertPersistentDefs, DEBUG_TYPE, "AMi Insert Persistent Defs",
-                    false, false)
+INITIALIZE_PASS_DEPENDENCY(LiveVariables)
+INITIALIZE_PASS_END(AMiInsertPersistentDefs, DEBUG_TYPE,
+                    "AMi Insert Persistent Defs", false, false)
 
 namespace llvm {
 

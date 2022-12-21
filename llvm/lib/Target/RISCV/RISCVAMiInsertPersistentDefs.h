@@ -2,7 +2,9 @@
 #define LLVM_TARGET_RISCV_AMI_INSERT_PERSISTENT_DEFS
 
 #include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/PersistencyAnalysis.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
@@ -14,6 +16,9 @@ namespace {
 class AMiInsertPersistentDefs : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
+
+  DenseMap<MachineBasicBlock *, MIBundleBuilder> DefBundles;
+  
 public:
   static char ID;
 
@@ -28,6 +33,7 @@ public:
     // AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
     AU.addRequired<SensitiveRegionAnalysisPass>();
     AU.addRequired<PersistencyAnalysisPass>();
+    AU.addRequired<LiveVariables>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

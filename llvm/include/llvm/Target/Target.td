@@ -1198,6 +1198,15 @@ def IMPLICIT_DEF : StandardPseudoInstruction {
   let isAsCheapAsAMove = true;
   let isMeta = true;
 }
+def PERSISTENT_DEF : StandardPseudoInstruction {
+  let OutOperandList = (outs unknown:$dst);
+  let InOperandList = (ins variable_ops);
+  let AsmString = "";
+  let hasSideEffects = false;
+  let isReMaterializable = true;
+  let isAsCheapAsAMove = true;
+  let isMeta = true;
+}
 def SUBREG_TO_REG : StandardPseudoInstruction {
   let OutOperandList = (outs unknown:$dst);
   let InOperandList = (ins unknown:$implsrc, unknown:$subsrc, i32imm:$subidx);

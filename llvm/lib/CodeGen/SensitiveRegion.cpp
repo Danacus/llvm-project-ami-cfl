@@ -55,7 +55,7 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
       // Get largest region that starts at BB. (See
       // RegionInfoBase::getMaxRegionExit)
       MachineRegion *FR = MRI.getRegionFor(FBB);
-      if (auto *Expanded = FR->getExpandedRegion()) {
+      while (auto *Expanded = FR->getExpandedRegion()) {
         // I like large regions, expanded sounds good
         FR = Expanded;
       }
@@ -78,7 +78,7 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
       MachineRegion *TR = nullptr;
       if (HasElseRegion) {
         TR = MRI.getRegionFor(TBB);
-        if (auto *Expanded = TR->getExpandedRegion()) {
+        while (auto *Expanded = TR->getExpandedRegion()) {
           // I like large regions, expanded sounds good
           TR = Expanded;
         }
@@ -95,7 +95,20 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
       }
 
       HandledBranches.insert(User);
+      SensitiveRegions.insert(TR);
+      SensitiveRegions.insert(FR);
       SensitiveBranches.push_back(SensitiveBranch(User, Cond, TR, FR));
+    }
+  }
+
+  for (auto &B : SensitiveBranches) {
+    errs() << "Sensitive branch: " << *B.MI;
+    errs() << "if region:\n";
+    B.IfRegion->dump();
+
+    if (B.ElseRegion) {
+      errs() << "else region:\n";
+      B.ElseRegion->dump();
     }
   }
   
@@ -106,7 +119,6 @@ char SensitiveRegionAnalysisPass::ID = 0;
 char &llvm::SensitiveRegionAnalysisPassID = SensitiveRegionAnalysisPass::ID;
 
 SensitiveRegionAnalysisPass::SensitiveRegionAnalysisPass() : MachineFunctionPass(ID) {
-  errs() << "created pass \n";
   initializeSensitiveRegionAnalysisPassPass(*PassRegistry::getPassRegistry());
 }
 

@@ -13,12 +13,19 @@ using namespace llvm;
 
 #define DEBUG_TYPE "persistency-analysis"
 
-void PersistencyAnalysisPass::propagatePersistency(const MachineFunction &MF, const MachineInstr &MI,
-                          const MachineOperand &MO, const MachineRegion &MR,
-                          SmallPtrSet<const MachineInstr *, 16> &PersistentDefs) {
+void PersistencyAnalysisPass::propagatePersistency(
+    const MachineFunction &MF, const MachineInstr &MI, const MachineOperand &MO,
+    const MachineRegion &MR,
+    SmallPtrSet<const MachineInstr *, 16> &PersistentDefs) {
+  errs() << "propagatePersistency\n";
+  MI.dump();
+  MO.dump();
+  MR.dump();
+  errs() << "\n";
+
   if (!MO.isReg())
     return;
-  
+
   SmallVector<const MachineInstr *> WorkSet;
   for (auto &DI : MF.getRegInfo().def_instructions(MO.getReg())) {
     if (MR.contains(&DI))
@@ -43,45 +50,56 @@ void PersistencyAnalysisPass::propagatePersistency(const MachineFunction &MF, co
       for (auto &DI : MF.getRegInfo().def_instructions(Reg)) {
         if (MR.contains(&DI))
           WorkSet.push_back(&DI);
+        else
+          PersistentRegionInputMap[&MR].insert(&DI);
       }
     }
   }
 }
 
-void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF, const MachineRegion &MR) {
-  SmallPtrSet<const MachineInstr *, 16> LocalPersistentDefs;
+void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
+                                            const MachineRegion &MR,
+                                            const MachineRegion &Scope) {
+  errs() << "Analyze region: \n";
+  MR.dump();
+  errs() << "in scope\n";
+  Scope.dump();
+  errs() << "\n";
 
-  /*
+  SmallPtrSet<const MachineInstr *, 16> *LocalPersistentDefs =
+      &PersistentInstructions[&Scope];
+
   for (const auto *Node : MR.elements()) {
     if (Node->isSubRegion()) {
-      // TODO: handle subregion
+      analyzeRegion(MF, *Node->getNodeAs<MachineRegion>(), Scope);
     } else {
-      MachineBasicBlock *MBB = Node->getEntry();
+      MachineBasicBlock *MBB = Node->getNodeAs<MachineBasicBlock>();
       SmallVector<MachineOperand, 4> LeakedOperands;
       for (const MachineInstr &MI : *MBB) {
         LeakedOperands.clear();
         TII->constantTimeLeakage(MI, LeakedOperands);
 
         for (auto &MO : LeakedOperands) {
-          propagatePersistency(MF, MI, MO, MR, LocalPersistentDefs);
+          propagatePersistency(MF, MI, MO, Scope, *LocalPersistentDefs);
         }
       }
     }
   }
-  */
+  /*
   for (const auto *MBB : MR.blocks()) {
     SmallVector<MachineOperand, 4> LeakedOperands;
     for (const MachineInstr &MI : *MBB) {
+      errs() << "analyze block: " << MBB->getNumber() << "\n";
+      MBB->dump();
       LeakedOperands.clear();
       TII->constantTimeLeakage(MI, LeakedOperands);
 
       for (auto &MO : LeakedOperands) {
-        propagatePersistency(MF, MI, MO, MR, LocalPersistentDefs);
+        propagatePersistency(MF, MI, MO, Scope, *LocalPersistentDefs);
       }
     }
   }
-
-  PersistentInstructions[&MR] = LocalPersistentDefs;
+  */
 }
 
 bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
@@ -89,11 +107,10 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  auto SensitiveBranches =
-      getAnalysis<SensitiveRegionAnalysisPass>().getSensitiveBranches();
-  std::sort(SensitiveBranches.begin(), SensitiveBranches.end());
+  SRA = &getAnalysis<SensitiveRegionAnalysisPass>();
+  std::sort(SRA->sensitive_branches().begin(), SRA->sensitive_branches().end());
 
-  for (const auto &Branch : SensitiveBranches) {
+  for (auto &Branch : SRA->sensitive_branches()) {
     analyzeRegion(MF, *Branch.IfRegion);
     analyzeRegion(MF, *Branch.ElseRegion);
   }

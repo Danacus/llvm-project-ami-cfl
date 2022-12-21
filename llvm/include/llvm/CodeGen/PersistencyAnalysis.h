@@ -17,22 +17,30 @@ public:
 private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
+  SensitiveRegionAnalysisPass *SRA;
 
   RegionInstrMap PersistentInstructions;
+  RegionInstrMap PersistentRegionInputMap;
 
 public:
   static char ID;
 
   PersistencyAnalysisPass();
 
-  SmallPtrSet<const MachineInstr *, 16> getPersistentInstructions(const MachineRegion *MR) {
+  SmallPtrSet<const MachineInstr *, 16>
+  getPersistentInstructions(const MachineRegion *MR) {
     return PersistentInstructions[MR];
   }
 
-  void propagatePersistency(const MachineFunction &MF, const MachineInstr &MI,
-                            const MachineOperand &MO, const MachineRegion &MR,
-                            SmallPtrSet<const MachineInstr *, 16> &PersistentDefs);
-  void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR);
+  void
+  propagatePersistency(const MachineFunction &MF, const MachineInstr &MI,
+                       const MachineOperand &MO, const MachineRegion &MR,
+                       SmallPtrSet<const MachineInstr *, 16> &PersistentDefs);
+  void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR,
+                     const MachineRegion &Scope);
+  void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR) {
+    analyzeRegion(MF, MR, MR);
+  }
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 

@@ -165,7 +165,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
   EndBlock->addSuccessor(MR->getExit());
   MR->replaceExitRecursive(EndBlock);
-  MF.insert(std::prev(OldExit->getIterator()), EndBlock);
+  // MF.insert(std::prev(OldExit->getIterator()), EndBlock);
+  MF.insert(MF.end(), EndBlock);
 
   rewritePHIForRegion(MF, MR);
 
@@ -442,7 +443,7 @@ void AMiLinearizeBranch::findActivatingBranches() {
       // Get largest region that starts at BB. (See
       // RegionInfoBase::getMaxRegionExit)
       MachineRegion *FR = MRI.getRegionFor(FBB);
-      if (auto *Expanded = FR->getExpandedRegion()) {
+      while (auto *Expanded = FR->getExpandedRegion()) {
         // I like large regions, expanded sounds good
         FR = Expanded;
       }
@@ -465,7 +466,7 @@ void AMiLinearizeBranch::findActivatingBranches() {
       MachineRegion *TR = nullptr;
       if (HasElseRegion) {
         TR = MRI.getRegionFor(TBB);
-        if (auto *Expanded = TR->getExpandedRegion()) {
+        while (auto *Expanded = TR->getExpandedRegion()) {
           // I like large regions, expanded sounds good
           TR = Expanded;
         }

@@ -29,14 +29,35 @@ struct SensitiveBranch {
 };
 
 class SensitiveRegionAnalysisPass : public MachineFunctionPass {
+public:
+  using BranchVec = SmallVector<SensitiveBranch>;
+  using RegionSet = SmallPtrSet<MachineRegion *, 16>;
+  
 private:
-  SmallVector<SensitiveBranch> SensitiveBranches;
+  RegionSet SensitiveRegions;
+  BranchVec SensitiveBranches;
 
 public:
   static char ID;
 
-  const SmallVector<SensitiveBranch> &getSensitiveBranches() const {
-    return SensitiveBranches;
+  // iterator_range<BranchVec::const_iterator> sensitive_branches() const {
+  //   return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
+  // }
+
+  iterator_range<BranchVec::iterator> sensitive_branches() {
+    return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
+  }
+
+  // iterator_range<RegionSet::const_iterator> sensitive_regions() const {
+  //   return make_range(SensitiveRegions.begin(), SensitiveRegions.end());
+  // }
+
+  iterator_range<RegionSet::iterator> sensitive_regions() {
+    return make_range(SensitiveRegions.begin(), SensitiveRegions.end());
+  }
+
+  bool isSensitive(const MachineRegion *MR) const {
+    return SensitiveRegions.contains(MR);
   }
 
   SensitiveRegionAnalysisPass();

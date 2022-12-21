@@ -125,11 +125,12 @@ def XLenRI : RegInfoByHwMode<
 // The order of registers represents the preferred allocation sequence.
 // Registers are listed in the order caller-save, callee-save, specials.
 def GPR : RegisterClass<"RISCV", [XLenVT], 32, (add
-    (sequence "X%u", 10, 17),
+    // (sequence "X%u", 10, 17),
+    (sequence "X%u", 10, 11),
     (sequence "X%u", 5, 7),
-    (sequence "X%u", 28, 31),
+    // (sequence "X%u", 28, 31),
     (sequence "X%u", 8, 9),
-    (sequence "X%u", 18, 27),
+    // (sequence "X%u", 18, 27),
     (sequence "X%u", 0, 4)
   )> {
   let RegInfos = XLenRI;
@@ -156,7 +157,8 @@ def GPRJALR : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, (sequence "X%u", 0,
 }
 
 def GPRC : RegisterClass<"RISCV", [XLenVT], 32, (add
-    (sequence "X%u", 10, 15),
+    // (sequence "X%u", 10, 15),
+    (sequence "X%u", 10, 11),
     (sequence "X%u", 8, 9)
   )> {
   let RegInfos = XLenRI;
@@ -167,9 +169,10 @@ def GPRC : RegisterClass<"RISCV", [XLenVT], 32, (add
 // address. We shouldn't use x5 since that is a hint for to pop the return
 // address stack on some microarchitectures.
 def GPRTC : RegisterClass<"RISCV", [XLenVT], 32, (add
-    (sequence "X%u", 6, 7),
-    (sequence "X%u", 10, 17),
-    (sequence "X%u", 28, 31)
+    // (sequence "X%u", 6, 7),
+    // (sequence "X%u", 10, 17),
+    (sequence "X%u", 10, 11)
+    // (sequence "X%u", 28, 31)
   )> {
   let RegInfos = XLenRI;
 }

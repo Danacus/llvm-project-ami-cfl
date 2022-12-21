@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSchedule.h"
 #include "llvm/IR/DataLayout.h"
@@ -1161,6 +1162,9 @@ bool TargetInstrInfo::isSchedulingBoundary(const MachineInstr &MI,
 
   // INLINEASM_BR can jump to another block
   if (MI.getOpcode() == TargetOpcode::INLINEASM_BR)
+    return true;
+
+  if (MI.getOpcode() == TargetOpcode::PERSISTENT_DEF || MI.getOpcode() == TargetOpcode::AMI_BR_TARGET)
     return true;
 
   // Don't attempt to schedule around any instruction that defines
