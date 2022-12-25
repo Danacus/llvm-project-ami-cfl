@@ -796,9 +796,10 @@ bool LiveVariables::VarInfo::isLiveIn(const MachineBasicBlock &MBB,
     return true;
 
   // Registers defined in MBB cannot be live in.
-  const MachineInstr *Def = MRI.getVRegDef(Reg);
-  if (Def && Def->getParent() == &MBB)
-    return false;
+  // const MachineInstr *Def = MRI.getVRegDef(Reg);
+  for (MachineInstr &Def : MRI.def_instructions(Reg))
+    if (Def.getParent() == &MBB)
+      return false;
 
  // Reg was not defined in MBB, was it killed here?
   return findKill(&MBB);

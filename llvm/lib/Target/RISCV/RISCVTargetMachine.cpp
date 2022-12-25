@@ -361,8 +361,8 @@ void RISCVPassConfig::addMachineSSAOptimization() {
     addPass(createRISCVStripWSuffixPass());
   }
 
-  if (EnableAMiLinearization == cl::BOU_TRUE)
-    addPass(createAMiLinearizeBranchPass());
+  // if (EnableAMiLinearization == cl::BOU_TRUE)
+  //   addPass(createAMiLinearizeBranchPass());
 }
 
 void RISCVPassConfig::addPreSSADestruction() {
@@ -370,8 +370,8 @@ void RISCVPassConfig::addPreSSADestruction() {
 
 void RISCVPassConfig::addPostSSADestruction() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
-    // addPass(&SensitiveRegionAnalysisPassID);
-    // addPass(createAMiInsertPersistentDefsPass());
+    addPass(&SensitiveRegionAnalysisPassID);
+    addPass(createAMiInsertPersistentDefsPass());
   }
 }
 

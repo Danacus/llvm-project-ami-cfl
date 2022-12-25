@@ -31,10 +31,21 @@ void AMiInsertPersistentDefs::insertImplicitDef(MachineFunction &MF,
 
     for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
       Register OtherReg = Register::index2VirtReg(RegI);
-      LiveVariables::VarInfo Info = LV.getVarInfo(OtherReg);
+      // LiveVariables::VarInfo Info = LV.getVarInfo(OtherReg);
+
+      // errs() << "Exiting: " << Exiting->getNumber() << "\n";
+
+      // errs() << "VReg:\n";
+      // errs() << OtherReg.virtRegIndex() << "\n";
+
+      // errs() << "AliveBlocks\n";
+      // for (auto AliveBlock : Info.AliveBlocks) {
+      //   errs() << AliveBlock << "\n";
+      // }
       
-      if (OtherReg.isVirtual() && Info.AliveBlocks.test(Exiting->getNumber())) {
-        DefBuilder.addReg(OtherReg);
+      if (OtherReg.isVirtual() && LV.isLiveOut(OtherReg, *Exiting)) {
+        if (LV.isLiveIn(OtherReg, *Exiting->getSingleSuccessor()))
+          DefBuilder.addReg(OtherReg);
       }
     }
     
@@ -68,6 +79,8 @@ bool AMiInsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
   auto &SRA = getAnalysis<SensitiveRegionAnalysisPass>();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
   // auto &SensitiveBranches = SRA.getSensitiveBranches();
+
+  MF.dump();
 
   for (auto &B : SRA.sensitive_branches()) {
     if (B.ElseRegion) {
