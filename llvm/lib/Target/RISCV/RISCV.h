@@ -77,9 +77,6 @@ void initializeAMiLinearizeRegionPass(PassRegistry &);
 FunctionPass *createAMiLinearizeBranchPass();
 void initializeAMiLinearizeBranchPass(PassRegistry &);
 
-FunctionPass *createAMiInsertPersistentDefsPass();
-void initializeAMiInsertPersistentDefsPass(PassRegistry &);
-
 InstructionSelector *createRISCVInstructionSelector(const RISCVTargetMachine &,
                                                     RISCVSubtarget &,
                                                     RISCVRegisterBankInfo &);

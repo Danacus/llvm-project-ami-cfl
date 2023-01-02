@@ -18,33 +18,6 @@ using namespace llvm;
 char InsertPersistentDefs::ID = 0;
 char &llvm::InsertPersistentDefsPassID = InsertPersistentDefs::ID;
 
-void InsertPersistentDefs::insertRegionOuts(MachineFunction &MF,
-                                            MachineRegion &MR) {
-  auto &LV = getAnalysis<LiveVariables>();
-  auto *LIS = getAnalysisIfAvailable<LiveIntervals>();
-  SmallVector<MachineBasicBlock *> Exitings;
-  MR.getExitingBlocks(Exitings);
-
-  for (auto &Exiting : Exitings) {
-    auto InsertPoint = Exiting->getFirstTerminator();
-
-    auto Builder = BuildMI(*Exiting, InsertPoint, DebugLoc(),
-                           TII->get(TargetOpcode::REGION_OUTS));
-
-    for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
-      Register OtherReg = Register::index2VirtReg(RegI);
-      if (OtherReg.isVirtual() && LV.isLiveOut(OtherReg, *Exiting)) {
-        if (LV.isLiveIn(OtherReg, *Exiting->getSingleSuccessor()))
-          Builder.addReg(OtherReg);
-      }
-    }
-
-    if (LIS) {
-      LIS->InsertMachineInstrInMaps(*Builder);
-    }
-  }
-}
-
 void InsertPersistentDefs::insertPersistentDef(MachineFunction &MF,
                                                MachineRegion &MR,
                                                Register Reg) {
@@ -54,16 +27,6 @@ void InsertPersistentDefs::insertPersistentDef(MachineFunction &MF,
   MR.getExitingBlocks(Exitings);
 
   for (auto &Exiting : Exitings) {
-    // MachineInstr *OutsInstr = nullptr;
-
-    // for (auto &MI : *Exiting) {
-    //   if (MI.getOpcode() == TargetOpcode::REGION_OUTS) {
-    //     OutsInstr = &MI;
-    //   }
-    // }
-
-    // auto InsertPoint = findPHICopyInsertPoint(Exiting, MR.getExit(), Reg);
-    // auto InsertPoint = OutsInstr->getIterator();
     auto InsertPoint = Exiting->getFirstTerminator();
     auto DefBuilder = BuildMI(*Exiting, InsertPoint, DebugLoc(),
                               TII->get(TargetOpcode::PERSISTENT_DEF), Reg);
@@ -71,9 +34,6 @@ void InsertPersistentDefs::insertPersistentDef(MachineFunction &MF,
                                  TII->get(TargetOpcode::EXTEND))
                              .addReg(Reg);
 
-    // for (MachineOperand &MO : OutsInstr->operands()) {
-    //   ExtendBuilder.add(MO);
-    // }
     for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
       Register OtherReg = Register::index2VirtReg(RegI);
       if (LIS) {
@@ -150,7 +110,6 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
     }
 
     if (B.ElseRegion) {
-      // insertRegionOuts(MF, *B.IfRegion);
       auto PersistentInstrs = PA.getPersistentInstructions(B.ElseRegion);
 
       for (auto *MI : PersistentInstrs) {

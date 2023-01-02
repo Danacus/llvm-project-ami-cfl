@@ -89,7 +89,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVDAGToDAGISelPass(*PR);
   initializeAMiLinearizeBranchPass(*PR);
   initializeAMiLinearizeRegionPass(*PR);
-  initializeAMiInsertPersistentDefsPass(*PR);
 }
 
 static StringRef computeDataLayout(const Triple &TT) {
@@ -372,8 +371,6 @@ void RISCVPassConfig::addPostSSADestruction() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(&SensitiveRegionAnalysisPassID);
     addPass(&InsertPersistentDefsPassID);
-    // addPass(createAMiInsertPersistentDefsPass());
-    // addPass(&SensitiveRegionAnalysisPassID);
   }
 }
 

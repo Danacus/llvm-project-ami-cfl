@@ -89,21 +89,6 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
       }
     }
   }
-  /*
-  for (const auto *MBB : MR.blocks()) {
-    SmallVector<MachineOperand, 4> LeakedOperands;
-    for (const MachineInstr &MI : *MBB) {
-      errs() << "analyze block: " << MBB->getNumber() << "\n";
-      MBB->dump();
-      LeakedOperands.clear();
-      TII->constantTimeLeakage(MI, LeakedOperands);
-
-      for (auto &MO : LeakedOperands) {
-        propagatePersistency(MF, MI, MO, Scope, *LocalPersistentDefs);
-      }
-    }
-  }
-  */
 }
 
 bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {

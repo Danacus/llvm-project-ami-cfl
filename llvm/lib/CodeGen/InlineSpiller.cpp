@@ -1079,7 +1079,6 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
 
   if (SRA && SRA->isSensitive(&MBB)) {    
     MachineBasicBlock::iterator GhostMI = MI;
-    GhostMI->dump();
     MachineInstrSpan GhostMIS(GhostMI, &MBB);
     LIS.InsertMachineInstrRangeInMaps(GhostMI, GhostMIS.end());
     for (const MachineInstr &MI : make_range(GhostMI, GhostMIS.end()))
@@ -1096,7 +1095,6 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   // We disable the merge for this case.
   if (IsRealSpill && std::distance(Spill, MIS.end()) <= 1)
     HSpiller.addToMergeableSpills(*Spill, StackSlot, Original);
-  MBB.dump();
 }
 
 /// spillAroundUses - insert spill code around each use of Reg.

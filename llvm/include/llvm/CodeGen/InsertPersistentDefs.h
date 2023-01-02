@@ -17,14 +17,11 @@ class InsertPersistentDefs : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
-  DenseMap<MachineBasicBlock *, MIBundleBuilder> DefBundles;
-  
 public:
   static char ID;
 
   InsertPersistentDefs();
   
-  void insertRegionOuts(MachineFunction &MF, MachineRegion &MR);
   void insertGhostLoad(MachineInstr *StoreMI);
   void insertPersistentDef(MachineFunction &MF, MachineRegion &MR, Register Reg);
   void insertPersistentDef(MachineInstr *MI);
@@ -32,8 +29,6 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    // AU.addRequired<MachineRegionInfoPass>();
-    // AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
     AU.addRequired<SensitiveRegionAnalysisPass>();
     AU.addPreserved<SensitiveRegionAnalysisPass>();
     AU.addRequired<PersistencyAnalysisPass>();
