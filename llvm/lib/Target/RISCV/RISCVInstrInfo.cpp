@@ -223,6 +223,22 @@ void RISCVInstrInfo::constantTimeLeakage(const MachineInstr &MI,
   }
 }
 
+bool RISCVInstrInfo::isPersistentStore(const MachineInstr &MI) const {
+  switch (MI.getOpcode()) {
+  case RISCV::FLD:
+  case RISCV::SB:
+  case RISCV::SH:
+  case RISCV::SW:
+  case RISCV::FSH:
+  case RISCV::FSW:
+  case RISCV::SD:
+  case RISCV::FSD:
+    return RISCV::AMi::getClass(MI.getOpcode()) == RISCV::AMi::AlwaysPersistent;
+  default:
+    return false;
+  }
+}
+
 unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
   switch (MI.getOpcode()) {

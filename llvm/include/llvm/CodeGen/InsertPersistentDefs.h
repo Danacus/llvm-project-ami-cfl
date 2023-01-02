@@ -25,6 +25,7 @@ public:
   InsertPersistentDefs();
   
   void insertRegionOuts(MachineFunction &MF, MachineRegion &MR);
+  void insertGhostLoad(MachineInstr *StoreMI);
   void insertPersistentDef(MachineFunction &MF, MachineRegion &MR, Register Reg);
   void insertPersistentDef(MachineInstr *MI);
   

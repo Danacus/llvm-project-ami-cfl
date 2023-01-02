@@ -123,6 +123,19 @@ void InsertPersistentDefs::insertPersistentDef(MachineInstr *MI) {
   }
 }
 
+void InsertPersistentDefs::insertGhostLoad(MachineInstr *StoreMI) {
+  auto *MBB = StoreMI->getParent();
+  auto *MF = MBB->getParent();
+  auto &MRI = MF->getRegInfo();
+
+  // TODO: Should be moved to target-specific code
+  Register Reg = StoreMI->getOperand(0).getReg();
+  Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
+  auto GhostMI = BuildMI(*MBB, StoreMI->getIterator(), DebugLoc(), TII->get(TargetOpcode::GHOST_LOAD), NewReg).addReg(Reg);
+  StoreMI->getOperand(0).setReg(NewReg);
+  insertPersistentDef(&*GhostMI);
+}
+
 bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
@@ -132,6 +145,10 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
 
   for (auto &B : SRA.sensitive_branches()) {
+    for (auto *MI : PA.getPersistentStores(B.IfRegion)) {
+      insertGhostLoad(MI);
+    }
+
     if (B.ElseRegion) {
       // insertRegionOuts(MF, *B.IfRegion);
       auto PersistentInstrs = PA.getPersistentInstructions(B.ElseRegion);
@@ -141,6 +158,10 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
           if (Def.isReg())
             insertPersistentDef(MF, *B.IfRegion, Def.getReg());
         }
+      }
+
+      for (auto *MI : PA.getPersistentStores(B.ElseRegion)) {
+        insertGhostLoad(MI);
       }
     }
   }

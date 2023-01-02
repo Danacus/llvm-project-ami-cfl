@@ -16,7 +16,7 @@ using namespace llvm;
 void PersistencyAnalysisPass::propagatePersistency(
     const MachineFunction &MF, const MachineInstr &MI, const MachineOperand &MO,
     const MachineRegion &MR,
-    SmallPtrSet<const MachineInstr *, 16> &PersistentDefs) {
+    SmallPtrSet<MachineInstr *, 16> &PersistentDefs) {
   errs() << "propagatePersistency\n";
   MI.dump();
   MO.dump();
@@ -26,7 +26,7 @@ void PersistencyAnalysisPass::propagatePersistency(
   if (!MO.isReg())
     return;
 
-  SmallVector<const MachineInstr *> WorkSet;
+  SmallVector<MachineInstr *> WorkSet;
   for (auto &DI : MF.getRegInfo().def_instructions(MO.getReg())) {
     if (MR.contains(&DI))
       WorkSet.push_back(&DI);
@@ -66,7 +66,7 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
   Scope.dump();
   errs() << "\n";
 
-  SmallPtrSet<const MachineInstr *, 16> *LocalPersistentDefs =
+  SmallPtrSet<MachineInstr *, 16> *LocalPersistentDefs =
       &PersistentInstructions[&Scope];
 
   for (const auto *Node : MR.elements()) {
@@ -75,9 +75,13 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
     } else {
       MachineBasicBlock *MBB = Node->getNodeAs<MachineBasicBlock>();
       SmallVector<MachineOperand, 4> LeakedOperands;
-      for (const MachineInstr &MI : *MBB) {
+      for (MachineInstr &MI : *MBB) {
         LeakedOperands.clear();
         TII->constantTimeLeakage(MI, LeakedOperands);
+
+        if (TII->isPersistentStore(MI)) {
+          PersistentStores[&Scope].insert(&MI);
+        }
 
         for (auto &MO : LeakedOperands) {
           propagatePersistency(MF, MI, MO, Scope, *LocalPersistentDefs);

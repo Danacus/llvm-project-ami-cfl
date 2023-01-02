@@ -54,6 +54,7 @@ public:
                       SmallSet<std::pair<Register, uint64_t>, 8> &NewDefs) const override;
 
   void constantTimeLeakage(const MachineInstr &MI, SmallVector<MachineOperand, 4> &Operands) const override;
+  bool isPersistentStore(const MachineInstr &MI) const override;
 
   unsigned isLoadFromStackSlot(const MachineInstr &MI,
                                int &FrameIndex) const override;

@@ -12,13 +12,14 @@ namespace llvm {
 class PersistencyAnalysisPass : public MachineFunctionPass {
 public:
   using RegionInstrMap =
-      DenseMap<const MachineRegion *, SmallPtrSet<const MachineInstr *, 16>>;
+      DenseMap<const MachineRegion *, SmallPtrSet<MachineInstr *, 16>>;
 
 private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SensitiveRegionAnalysisPass *SRA;
 
+  RegionInstrMap PersistentStores;
   RegionInstrMap PersistentInstructions;
   RegionInstrMap PersistentRegionInputMap;
 
@@ -27,15 +28,20 @@ public:
 
   PersistencyAnalysisPass();
 
-  SmallPtrSet<const MachineInstr *, 16>
+  SmallPtrSet<MachineInstr *, 16>
   getPersistentInstructions(const MachineRegion *MR) {
     return PersistentInstructions[MR];
+  }
+
+  SmallPtrSet<MachineInstr *, 16>
+  getPersistentStores(const MachineRegion *MR) {
+    return PersistentStores[MR];
   }
 
   void
   propagatePersistency(const MachineFunction &MF, const MachineInstr &MI,
                        const MachineOperand &MO, const MachineRegion &MR,
-                       SmallPtrSet<const MachineInstr *, 16> &PersistentDefs);
+                       SmallPtrSet<MachineInstr *, 16> &PersistentDefs);
   void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR,
                      const MachineRegion &Scope);
   void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR) {
