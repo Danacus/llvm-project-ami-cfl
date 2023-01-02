@@ -32,8 +32,11 @@ public:
     // AU.addRequired<MachineRegionInfoPass>();
     // AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
     AU.addRequired<SensitiveRegionAnalysisPass>();
+    AU.addPreserved<SensitiveRegionAnalysisPass>();
     AU.addRequired<PersistencyAnalysisPass>();
+    AU.addPreserved<PersistencyAnalysisPass>();
     AU.addRequired<LiveVariables>();
+    AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

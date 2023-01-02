@@ -31,18 +31,6 @@ void AMiInsertPersistentDefs::insertImplicitDef(MachineFunction &MF,
 
     for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
       Register OtherReg = Register::index2VirtReg(RegI);
-      // LiveVariables::VarInfo Info = LV.getVarInfo(OtherReg);
-
-      // errs() << "Exiting: " << Exiting->getNumber() << "\n";
-
-      // errs() << "VReg:\n";
-      // errs() << OtherReg.virtRegIndex() << "\n";
-
-      // errs() << "AliveBlocks\n";
-      // for (auto AliveBlock : Info.AliveBlocks) {
-      //   errs() << AliveBlock << "\n";
-      // }
-      
       if (OtherReg.isVirtual() && LV.isLiveOut(OtherReg, *Exiting)) {
         if (LV.isLiveIn(OtherReg, *Exiting->getSingleSuccessor()))
           DefBuilder.addReg(OtherReg);
@@ -51,23 +39,6 @@ void AMiInsertPersistentDefs::insertImplicitDef(MachineFunction &MF,
     
     BuildMI(*Exiting, InsertPoint, DebugLoc(), TII->get(TargetOpcode::EXTEND))
         .addReg(Reg);
-    /*
-    auto FindBuilder = DefBundles.find(Exiting);
-    if (FindBuilder == DefBundles.end()) {
-      auto InsertPoint = findPHICopyInsertPoint(Exiting, MR.getExit(), Reg);
-      auto Builder = MIBundleBuilder(*Exiting, InsertPoint);
-      auto BundleMI = BuildMI(MF, DebugLoc(), TII->get(TargetOpcode::BUNDLE));
-      Builder.append(BundleMI);
-      DefBundles.insert(std::pair(Exiting, Builder));
-    }
-
-    MIBundleBuilder &Builder = DefBundles.find(Exiting)->second;
-    // MachineBasicBlock::iterator InsertPoint = Builder.end();
-
-    auto Def = BuildMI(MF, DebugLoc(), TII->get(TargetOpcode::IMPLICIT_DEF),
-    Reg); Builder.append(Def); auto Use = BuildMI(MF, DebugLoc(),
-    TII->get(TargetOpcode::EXTEND)).addReg(Reg); Builder.append(Use);
-    */
   }
 }
 
@@ -78,9 +49,6 @@ bool AMiInsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
 
   auto &SRA = getAnalysis<SensitiveRegionAnalysisPass>();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
-  // auto &SensitiveBranches = SRA.getSensitiveBranches();
-
-  MF.dump();
 
   for (auto &B : SRA.sensitive_branches()) {
     if (B.ElseRegion) {

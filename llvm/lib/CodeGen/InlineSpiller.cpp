@@ -36,6 +36,7 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/SlotIndexes.h"
 #include "llvm/CodeGen/Spiller.h"
 #include "llvm/CodeGen/StackMaps.h"
@@ -160,6 +161,7 @@ class InlineSpiller : public Spiller {
   MachineLoopInfo &Loops;
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
+  SensitiveRegionAnalysisPass *SRA;
   const TargetInstrInfo &TII;
   const TargetRegisterInfo &TRI;
   const MachineBlockFrequencyInfo &MBFI;
@@ -198,7 +200,8 @@ public:
         LSS(Pass.getAnalysis<LiveStacks>()),
         MDT(Pass.getAnalysis<MachineDominatorTree>()),
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
-        MRI(MF.getRegInfo()), TII(*MF.getSubtarget().getInstrInfo()),
+        MRI(MF.getRegInfo()), SRA(Pass.getAnalysisIfAvailable<SensitiveRegionAnalysisPass>()),
+        TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
         MBFI(Pass.getAnalysis<MachineBlockFrequencyInfo>()),
         HSpiller(Pass, MF, VRM), VRAI(VRAI) {}
@@ -1041,6 +1044,22 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   assert(!MI->isTerminator() && "Inserting a spill after a terminator");
   MachineBasicBlock &MBB = *MI->getParent();
 
+  if (!SRA)
+    errs() << "SRA not available\n";
+
+  if (SRA && SRA->isSensitive(&MBB)) {
+    errs() << "Sensitive:\n";
+    Register GhostReg = Edit->createFrom(Original);
+
+    BuildMI(MBB, std::next(MI), DebugLoc(),
+            TII.get(TargetOpcode::PERSISTENT_DEF), GhostReg).addReg(NewVReg);
+
+    MI = std::next(MI);
+    NewVReg = GhostReg;
+  } else {
+    errs() << "Not sensitive:\n";
+  }
+
   MachineInstrSpan MIS(MI, &MBB);
   MachineBasicBlock::iterator SpillBefore = std::next(MI);
   bool IsRealSpill = isRealSpill(*MI);
@@ -1061,6 +1080,15 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   for (const MachineInstr &MI : make_range(Spill, MIS.end()))
     getVDefInterval(MI, LIS);
 
+  if (SRA && SRA->isSensitive(&MBB)) {    
+    MachineBasicBlock::iterator GhostMI = MI;
+    GhostMI->dump();
+    MachineInstrSpan GhostMIS(GhostMI, &MBB);
+    LIS.InsertMachineInstrRangeInMaps(GhostMI, GhostMIS.end());
+    for (const MachineInstr &MI : make_range(GhostMI, GhostMIS.end()))
+      getVDefInterval(MI, LIS);
+  }
+
   LLVM_DEBUG(
       dumpMachineInstrRangeWithSlotIndex(Spill, MIS.end(), LIS, "spill"));
   ++NumSpills;
@@ -1069,6 +1097,7 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   // We disable the merge for this case.
   if (IsRealSpill && std::distance(Spill, MIS.end()) <= 1)
     HSpiller.addToMergeableSpills(*Spill, StackSlot, Original);
+  MBB.dump();
 }
 
 /// spillAroundUses - insert spill code around each use of Reg.

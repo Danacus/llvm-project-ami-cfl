@@ -51,6 +51,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/CodeGen/RegisterClassInfo.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/SlotIndexes.h"
 #include "llvm/CodeGen/Spiller.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
@@ -216,6 +217,8 @@ void RAGreedy::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<VirtRegMap>();
   AU.addRequired<LiveRegMatrix>();
   AU.addPreserved<LiveRegMatrix>();
+  AU.addRequired<SensitiveRegionAnalysisPass>();
+  AU.addPreserved<SensitiveRegionAnalysisPass>();
   AU.addRequired<EdgeBundles>();
   AU.addRequired<SpillPlacement>();
   AU.addRequired<MachineOptimizationRemarkEmitterPass>();

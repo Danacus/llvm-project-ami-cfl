@@ -12,7 +12,7 @@ using namespace llvm;
 #define DEBUG_TYPE "sensitive-region"
 
 bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().TSA.SecretUses;
 
   const auto &ST = MF.getSubtarget();
@@ -52,19 +52,7 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
       if (!FBB)
         FBB = User->getParent()->getFallThrough();
 
-      // Get largest region that starts at BB. (See
-      // RegionInfoBase::getMaxRegionExit)
-      MachineRegion *FR = MRI.getRegionFor(FBB);
-      while (auto *Expanded = FR->getExpandedRegion()) {
-        // I like large regions, expanded sounds good
-        FR = Expanded;
-      }
-      if (FR->getEntry() != FBB || !FR->getExit())
-        llvm_unreachable("AMi error: unable to find activating region for "
-                         "secret-dependent branch");
-      while (FR && FR->getParent() && FR->getParent()->getEntry() == FBB &&
-             FR->getExit())
-        FR = FR->getParent();
+      MachineRegion *FR = getMaxRegionFor(FBB);
 
       FR->dump();
       FR->getExit()->dump();
@@ -77,18 +65,7 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 
       MachineRegion *TR = nullptr;
       if (HasElseRegion) {
-        TR = MRI.getRegionFor(TBB);
-        while (auto *Expanded = TR->getExpandedRegion()) {
-          // I like large regions, expanded sounds good
-          TR = Expanded;
-        }
-        if (TR->getEntry() == TBB) {
-          while (TR && TR->getParent() && TR->getParent()->getEntry() == TBB)
-            TR = TR->getParent();
-        } else {
-          llvm_unreachable("AMi error: unable to find activating region for "
-                           "secret-dependent branch");
-        }
+        TR = getMaxRegionFor(TBB);
       } else {
         assert(FR->getExit() == TBB && "AMi error: if branch without else "
                                        "region must exit to branch target");
@@ -97,7 +74,18 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
       HandledBranches.insert(User);
       SensitiveRegions.insert(TR);
       SensitiveRegions.insert(FR);
-      SensitiveBranches.push_back(SensitiveBranch(User, Cond, TR, FR));
+      auto Branch = SensitiveBranch(User, Cond, TR, FR);
+      SensitiveBranches.insert(Branch);
+
+      for (auto *MBB : TR->blocks()) {
+        SensitiveBlocks.set(MBB->getNumber());
+        ElseBranchMap[MBB].insert(Branch);
+      }
+
+      for (auto *MBB : FR->blocks()) {
+        SensitiveBlocks.set(MBB->getNumber());
+        IfBranchMap[MBB].insert(Branch);
+      }
     }
   }
 

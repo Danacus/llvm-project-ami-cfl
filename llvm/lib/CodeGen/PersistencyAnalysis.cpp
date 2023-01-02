@@ -108,9 +108,10 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   SRA = &getAnalysis<SensitiveRegionAnalysisPass>();
-  std::sort(SRA->sensitive_branches().begin(), SRA->sensitive_branches().end());
+  auto Branches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
+  std::sort(Branches.begin(), Branches.end());
 
-  for (auto &Branch : SRA->sensitive_branches()) {
+  for (auto &Branch : Branches) {
     analyzeRegion(MF, *Branch.IfRegion);
     analyzeRegion(MF, *Branch.ElseRegion);
   }

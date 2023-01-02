@@ -31,6 +31,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/SlotIndexes.h"
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
@@ -91,6 +92,7 @@ void LiveIntervals::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreservedID(MachineDominatorsID);
   AU.addPreserved<SlotIndexes>();
   AU.addRequiredTransitive<SlotIndexes>();
+  AU.addPreserved<SensitiveRegionAnalysisPass>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 

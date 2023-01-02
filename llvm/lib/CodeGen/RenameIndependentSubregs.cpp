@@ -33,6 +33,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
@@ -58,6 +59,7 @@ public:
     AU.addPreserved<LiveIntervals>();
     AU.addRequired<SlotIndexes>();
     AU.addPreserved<SlotIndexes>();
+    AU.addPreserved<SensitiveRegionAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
