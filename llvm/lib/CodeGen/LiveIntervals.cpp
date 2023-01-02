@@ -19,6 +19,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervalCalc.h"
 #include "llvm/CodeGen/LiveVariables.h"
@@ -93,6 +94,7 @@ void LiveIntervals::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<SlotIndexes>();
   AU.addRequiredTransitive<SlotIndexes>();
   AU.addPreserved<SensitiveRegionAnalysisPass>();
+  AU.addPreserved<InsertPersistentDefs>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 

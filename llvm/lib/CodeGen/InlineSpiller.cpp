@@ -21,6 +21,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveRangeEdit.h"
@@ -162,6 +163,7 @@ class InlineSpiller : public Spiller {
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
   SensitiveRegionAnalysisPass *SRA;
+  InsertPersistentDefs *IPD;
   const TargetInstrInfo &TII;
   const TargetRegisterInfo &TRI;
   const MachineBlockFrequencyInfo &MBFI;
@@ -201,6 +203,7 @@ public:
         MDT(Pass.getAnalysis<MachineDominatorTree>()),
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
         MRI(MF.getRegInfo()), SRA(Pass.getAnalysisIfAvailable<SensitiveRegionAnalysisPass>()),
+        IPD(Pass.getAnalysisIfAvailable<InsertPersistentDefs>()),
         TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
         MBFI(Pass.getAnalysis<MachineBlockFrequencyInfo>()),
@@ -1044,20 +1047,14 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   assert(!MI->isTerminator() && "Inserting a spill after a terminator");
   MachineBasicBlock &MBB = *MI->getParent();
 
-  if (!SRA)
-    errs() << "SRA not available\n";
-
   if (SRA && SRA->isSensitive(&MBB)) {
-    errs() << "Sensitive:\n";
     Register GhostReg = Edit->createFrom(Original);
 
     BuildMI(MBB, std::next(MI), DebugLoc(),
-            TII.get(TargetOpcode::PERSISTENT_DEF), GhostReg).addReg(NewVReg);
+            TII.get(TargetOpcode::GHOST_LOAD), GhostReg).addReg(NewVReg);
 
     MI = std::next(MI);
     NewVReg = GhostReg;
-  } else {
-    errs() << "Not sensitive:\n";
   }
 
   MachineInstrSpan MIS(MI, &MBB);
@@ -1087,6 +1084,8 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
     LIS.InsertMachineInstrRangeInMaps(GhostMI, GhostMIS.end());
     for (const MachineInstr &MI : make_range(GhostMI, GhostMIS.end()))
       getVDefInterval(MI, LIS);
+
+    IPD->insertPersistentDef(&*GhostMI);
   }
 
   LLVM_DEBUG(

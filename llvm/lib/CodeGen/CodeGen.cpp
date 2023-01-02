@@ -49,6 +49,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeTrackSecretsAnalysisPhysRegPass(Registry);
   initializeSensitiveRegionAnalysisPassPass(Registry);
   initializePersistencyAnalysisPassPass(Registry);
+  initializeInsertPersistentDefsPass(Registry);
   //initializeTrackSecretsPrinterPass(Registry);
   initializeFixupStatepointCallerSavedPass(Registry);
   initializeFuncletLayoutPass(Registry);

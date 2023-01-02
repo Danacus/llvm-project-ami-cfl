@@ -57,6 +57,8 @@ HANDLE_TARGET_OPCODE(INSERT_SUBREG)
 HANDLE_TARGET_OPCODE(IMPLICIT_DEF)
 
 HANDLE_TARGET_OPCODE(PERSISTENT_DEF)
+HANDLE_TARGET_OPCODE(REGION_OUTS)
+HANDLE_TARGET_OPCODE(GHOST_LOAD)
 
 /// SUBREG_TO_REG - Assert the value of bits in a super register.
 /// The result of this instruction is the value of the second operand inserted
