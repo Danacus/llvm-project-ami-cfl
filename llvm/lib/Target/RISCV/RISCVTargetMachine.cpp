@@ -387,6 +387,9 @@ void RISCVPassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
     addPass(createRISCVRedundantCopyEliminationPass());
 
+  if (EnableAMiLinearization == cl::BOU_TRUE) {
+    addPass(&RemovePersistentDefsPassID);
+  }
   // addPass(createAMiLinearizeRegionPass());
 }
 

@@ -144,6 +144,7 @@ void initializeFindSecretsPrinterPass(PassRegistry &);
 void initializeSensitiveRegionAnalysisPassPass(PassRegistry &);
 void initializePersistencyAnalysisPassPass(PassRegistry &);
 void initializeInsertPersistentDefsPass(PassRegistry &);
+void initializeRemovePersistentDefsPass(PassRegistry &);
 void initializeFixIrreduciblePass(PassRegistry &);
 void initializeFixupStatepointCallerSavedPass(PassRegistry&);
 void initializeFlattenCFGLegacyPassPass(PassRegistry &);

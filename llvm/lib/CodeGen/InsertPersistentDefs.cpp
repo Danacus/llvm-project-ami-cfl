@@ -43,7 +43,7 @@ void InsertPersistentDefs::insertPersistentDefEnd(MachineFunction &MF,
         }
       } else {
         if (OtherReg.isVirtual() && LV.isLiveOut(OtherReg, *Exiting)) {
-          if (LV.isLiveIn(OtherReg, *Exiting->getSingleSuccessor()))
+          if (LV.isLiveIn(OtherReg, *MR.getExit()))
             ExtendBuilder.addReg(OtherReg);
         }
       }

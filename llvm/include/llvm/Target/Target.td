@@ -1315,16 +1315,26 @@ def EXTEND : StandardPseudoInstruction {
   let hasNoSchedulingInfo = false;
   let isMeta = true;
 }
-def AMI_BR_TARGET : StandardPseudoInstruction {
+def BRANCH_TARGET : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins unknown:$src);
-  let AsmString = "AMI_BR_TARGET";
+  let AsmString = "BRANCH_TARGET";
   let hasSideEffects = false;
   let isAsCheapAsAMove = true;
   let hasNoSchedulingInfo = false;
   let isMeta = true;
   let isConvergent = true;
   let isNotDuplicable = true;
+}
+def SECRET_DEP_BR : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins);
+  let AsmString = "SECRET_DEP_BR";
+  let hasSideEffects = false;
+  let isAsCheapAsAMove = true;
+  let hasNoSchedulingInfo = false;
+  let isMeta = true;
+  let isTerminator = true;
 }
 def BUNDLE : StandardPseudoInstruction {
   let OutOperandList = (outs);

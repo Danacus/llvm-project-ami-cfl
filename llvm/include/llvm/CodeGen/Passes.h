@@ -186,6 +186,7 @@ namespace llvm {
   extern char &TrackSecretsPhysRegPassID;
   extern char &SensitiveRegionAnalysisPassID;
   extern char &InsertPersistentDefsPassID;
+  extern char &RemovePersistentDefsPassID;
   extern char &PersistencyAnalysisPassID;
   //extern char &TrackSecretsPrinterID;
   extern char &PrintSecretsPassID;

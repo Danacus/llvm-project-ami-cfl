@@ -994,6 +994,8 @@ bool RISCVInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   for (auto J = I.getReverse(); J != MBB.rend() && isUnpredicatedTerminator(*J);
        J++) {
     NumTerminators++;
+    // if (J->getDesc().getOpcode() == TargetOpcode::SECRET_DEP_BR)
+    //   return true;
     if (J->getDesc().isUnconditionalBranch() ||
         J->getDesc().isIndirectBranch()) {
       FirstUncondOrIndirectBr = J.getReverse();

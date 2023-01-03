@@ -51,7 +51,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeSensitiveRegionAnalysisPassPass(Registry);
   initializePersistencyAnalysisPassPass(Registry);
   initializeInsertPersistentDefsPass(Registry);
-  //initializeTrackSecretsPrinterPass(Registry);
+  initializeRemovePersistentDefsPass(Registry);
   initializeFixupStatepointCallerSavedPass(Registry);
   initializeFuncletLayoutPass(Registry);
   initializeGCMachineCodeAnalysisPass(Registry);

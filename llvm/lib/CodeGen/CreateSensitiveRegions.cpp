@@ -25,12 +25,13 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
   SmallVector<MachineBasicBlock *> ToUpdate;
 
   for (auto &Branch : SRA->sensitive_branches()) {
+    auto *Exit = Branch.IfRegion->getExit();
+
     if (!Branch.ElseRegion) {
       errs() << "Creating else region for \n";
       Branch.IfRegion->dump();
 
       auto *ElseMBB = MF.CreateMachineBasicBlock();
-      auto *Exit = Branch.IfRegion->getExit();
       TII->removeBranch(*Branch.MBB);
       TII->insertBranch(*Branch.MBB, ElseMBB, Branch.IfRegion->getEntry(), Branch.Cond, DebugLoc());
       Branch.MBB->removeSuccessor(Exit);
@@ -48,10 +49,16 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
       MRI->updateStatistics(MR);
       Branch.IfRegion->getParent()->addSubRegion(MR);
     }
+
+    BuildMI(*Exit, Exit->begin(), DebugLoc(), TII->get(TargetOpcode::BRANCH_TARGET)).addMBB(Branch.MBB);
   }
 
   for (auto *MBB : ToUpdate) {
     SRA->handleBranch(MBB);
+  }
+
+  for (auto &Branch : SRA->sensitive_branches()) {
+    BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(), TII->get(TargetOpcode::SECRET_DEP_BR));
   }
 
   MF.dump();

@@ -1164,7 +1164,7 @@ bool TargetInstrInfo::isSchedulingBoundary(const MachineInstr &MI,
   if (MI.getOpcode() == TargetOpcode::INLINEASM_BR)
     return true;
 
-  if (MI.getOpcode() == TargetOpcode::PERSISTENT_DEF || MI.getOpcode() == TargetOpcode::AMI_BR_TARGET)
+  if (MI.getOpcode() == TargetOpcode::PERSISTENT_DEF || MI.getOpcode() == TargetOpcode::BRANCH_TARGET)
     return true;
 
   // Don't attempt to schedule around any instruction that defines

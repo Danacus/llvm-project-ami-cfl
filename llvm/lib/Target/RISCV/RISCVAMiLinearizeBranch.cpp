@@ -158,7 +158,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     Exiting->addSuccessor(EndBlock);
   }
 
-  BuildMI(*EndBlock, EndBlock->end(), DL, TII->get(TargetOpcode::AMI_BR_TARGET))
+  BuildMI(*EndBlock, EndBlock->end(), DL, TII->get(TargetOpcode::BRANCH_TARGET))
       .addMBB(EndBlock);
 
   auto *OldExit = MR->getExit();

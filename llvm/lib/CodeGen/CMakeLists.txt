@@ -68,6 +68,7 @@ add_llvm_component_library(LLVMCodeGen
   SensitiveRegion.cpp
   PersistencyAnalysis.cpp
   InsertPersistentDefs.cpp
+  RemovePersistentDefs.cpp
   FixupStatepointCallerSaved.cpp
   FuncletLayout.cpp
   GCMetadata.cpp
