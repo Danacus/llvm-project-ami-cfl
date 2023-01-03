@@ -45,6 +45,7 @@ add_llvm_component_library(LLVMCodeGen
   CodeGenPrepare.cpp
   CommandFlags.cpp
   ComplexDeinterleavingPass.cpp
+  CreateSensitiveRegions.cpp
   CriticalAntiDepBreaker.cpp
   DeadMachineInstructionElim.cpp
   DetectDeadLanes.cpp

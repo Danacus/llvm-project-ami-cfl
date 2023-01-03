@@ -12,14 +12,17 @@ using namespace llvm;
 namespace llvm {
 
 struct SensitiveBranch {
-  MachineInstr *MI;
+  MachineBasicBlock *MBB;
   SmallVector<MachineOperand> Cond;
-  MachineRegion *ElseRegion;
-  MachineRegion *IfRegion;
+  MachineRegion *ElseRegion = nullptr;
+  MachineRegion *IfRegion = nullptr;
 
-  SensitiveBranch(MachineInstr *MI, SmallVector<MachineOperand> Cond,
+  SensitiveBranch(MachineBasicBlock *MBB)
+      : MBB(MBB) {}
+
+  SensitiveBranch(MachineBasicBlock *MBB, SmallVector<MachineOperand> Cond,
                   MachineRegion *TR, MachineRegion *FR)
-      : MI(MI), Cond(Cond), ElseRegion(TR), IfRegion(FR) {}
+      : MBB(MBB), Cond(Cond), ElseRegion(TR), IfRegion(FR) {}
 
   bool operator<(const SensitiveBranch &Other) const {
     return IfRegion->getDepth() < Other.IfRegion->getDepth();
@@ -30,32 +33,27 @@ struct SensitiveBranch {
   }
 
   bool operator==(const SensitiveBranch &Other) const {
-    return MI == Other.MI && ElseRegion == Other.ElseRegion && IfRegion == Other.IfRegion;
+    return MBB == Other.MBB;
   }
 };
 
 template <> struct DenseMapInfo<SensitiveBranch> {
-  using Tuple = std::tuple<MachineInstr *, MachineRegion *, MachineRegion *>;
-
   static inline SensitiveBranch getEmptyKey() {
-    return SensitiveBranch(DenseMapInfo<MachineInstr *>::getEmptyKey(),
+    return SensitiveBranch(DenseMapInfo<MachineBasicBlock *>::getEmptyKey(),
                            SmallVector<MachineOperand>(), nullptr, nullptr);
   }
 
   static inline SensitiveBranch getTombstoneKey() {
-    return SensitiveBranch(DenseMapInfo<MachineInstr *>::getTombstoneKey(),
+    return SensitiveBranch(DenseMapInfo<MachineBasicBlock *>::getTombstoneKey(),
                            SmallVector<MachineOperand>(), nullptr, nullptr);
   }
 
   static unsigned getHashValue(const SensitiveBranch &Key) {
-    return DenseMapInfo<Tuple>().getHashValue(
-        {Key.MI, Key.IfRegion, Key.ElseRegion});
+    return DenseMapInfo<MachineBasicBlock *>().getHashValue(Key.MBB);
   }
 
   static bool isEqual(const SensitiveBranch &LHS, const SensitiveBranch &RHS) {
-    return DenseMapInfo<Tuple>().isEqual(
-        {LHS.MI, LHS.IfRegion, LHS.ElseRegion},
-        {LHS.MI, LHS.IfRegion, LHS.ElseRegion});
+    return DenseMapInfo<MachineBasicBlock *>().isEqual(LHS.MBB, RHS.MBB);
   }
 };
 
@@ -75,30 +73,22 @@ private:
 public:
   static char ID;
 
-  // iterator_range<BranchVec::const_iterator> sensitive_branches() const {
-  //   return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
-  // }
-
   iterator_range<BranchSet::const_iterator> sensitive_branches() {
     return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
   }
 
   iterator_range<BranchSet::const_iterator>
   sensitive_branches(MachineBasicBlock *MBB, bool InElseRegion) {
-    BranchSet Branches;
+    BranchSet *Branches;
 
     if (InElseRegion) {
-      Branches = ElseBranchMap[MBB];
+      Branches = &ElseBranchMap[MBB];
     } else {
-      Branches = IfBranchMap[MBB];
+      Branches = &IfBranchMap[MBB];
     }
 
-    return make_range(Branches.begin(), Branches.end());
+    return make_range(Branches->begin(), Branches->end());
   }
-
-  // iterator_range<RegionSet::const_iterator> sensitive_regions() const {
-  //   return make_range(SensitiveRegions.begin(), SensitiveRegions.end());
-  // }
 
   iterator_range<RegionSet::iterator> sensitive_regions() {
     return make_range(SensitiveRegions.begin(), SensitiveRegions.end());
@@ -129,6 +119,9 @@ public:
       FR = FR->getParent();
     return FR;
   }
+
+  void removeBranch(MachineBasicBlock *MBB);
+  void handleBranch(MachineBasicBlock *MBB);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 

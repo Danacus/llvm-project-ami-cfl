@@ -52,6 +52,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<SensitiveRegionAnalysisPass>();
+    AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

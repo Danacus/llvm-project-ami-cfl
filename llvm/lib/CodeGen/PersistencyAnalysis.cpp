@@ -80,7 +80,8 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
         TII->constantTimeLeakage(MI, LeakedOperands);
 
         if (TII->isPersistentStore(MI)) {
-          PersistentStores[&Scope].insert(&MI);
+          if (&Scope == &MR)
+            PersistentStores[&Scope].insert(&MI);
         }
 
         for (auto &MO : LeakedOperands) {
@@ -97,6 +98,16 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   SRA = &getAnalysis<SensitiveRegionAnalysisPass>();
+  for (auto &B : SRA->sensitive_branches()) {
+    errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
+    errs() << "if region:\n";
+    B.IfRegion->dump();
+
+    if (B.ElseRegion) {
+      errs() << "else region:\n";
+      B.ElseRegion->dump();
+    }
+  }
   auto Branches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
   std::sort(Branches.begin(), Branches.end());
 

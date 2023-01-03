@@ -23,8 +23,17 @@ public:
   InsertPersistentDefs();
   
   void insertGhostLoad(MachineInstr *StoreMI);
-  void insertPersistentDef(MachineFunction &MF, MachineRegion &MR, Register Reg);
+  void insertPersistentDefEnd(MachineFunction &MF, MachineRegion &MR, Register Reg);
+  void insertPersistentDefEnd(MachineInstr *MI);
+
+  void insertPersistentDefStart(MachineFunction &MF, MachineRegion &MR, Register Reg);
+  void insertPersistentDefStart(MachineInstr *MI);
+
   void insertPersistentDef(MachineInstr *MI);
+
+  void insertPersistentDefs(MachineRegion *MR);
+
+  void updateLiveIntervals(MachineBasicBlock *MBB, MachineInstr &Def, MachineInstr &Extend, Register Reg);
   
   bool runOnMachineFunction(MachineFunction &MF) override;
 
