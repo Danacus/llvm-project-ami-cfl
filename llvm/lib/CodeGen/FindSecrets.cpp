@@ -44,36 +44,33 @@ void SecretDef::findOperands(MachineInstr *MI,
   };
 
   for (auto MO : MI->operands()) {
-    switch (this->getKind()) {
+    switch (getKind()) {
     case SDK_Argument: {
-      auto S = this->get<SecretArgument>();
-      HandleReg(MO, S.getReg());
+      HandleReg(MO, getReg());
       break;
     }
     case SDK_Global: {
-      auto S = this->get<SecretGlobal>();
       if (!MO.isGlobal())
         break;
       const GlobalValue *GV = MO.getGlobal();
       if (!GV)
         break;
-      if (GV->getName() == S.getGlobalVar()->getName())
+      if (GV->getName() == getGlobalVariable()->getName())
         Ops.push_back(MO);
       break;
     }
     case SDK_SecretRegisterDef: {
-      auto S = this->get<SecretRegisterDef>();
-      HandleReg(MO, S.getReg());
+      HandleReg(MO, getReg());
       break;
     }
+    default:
+      break;
     }
   }
 }
 
-template <class GraphDataT, GraphType GT>
-void FlowGraph<GraphDataT, GT>::getSources(
-    SmallSet<SecretDef, 8> &SecretDefs,
-    DenseMap<SecretDef, uint64_t> &Secrets) const {
+void FlowGraph::getSources(SmallSet<SecretDef, 8> &SecretDefs,
+                           DenseMap<SecretDef, uint64_t> &Secrets) const {
   Function &F = MF.getFunction();
   const Module *M = F.getParent();
 
@@ -111,7 +108,7 @@ void FlowGraph<GraphDataT, GT>::getSources(
         if (!AS.consume_front(")"))
           continue;
 
-        auto Def = SecretDef::global(GV);
+        auto Def = SecretDef::CreateGlobal(GV);
         Secrets[Def] = Mask;
         SecretDefs.insert(Def);
       }
@@ -125,15 +122,15 @@ void FlowGraph<GraphDataT, GT>::getSources(
         uint64_t SecretMask = MI.getOperand(1).getImm();
         Register Reg = MI.getOperand(0).getReg();
 
-        if constexpr (GT == GT_PhysReg) {
+        if (RDA) {
           SmallPtrSet<MachineInstr *, 16> Defs;
-          Data.RDA.getGlobalReachingDefs(&MI, Reg, Defs);
+          RDA->getGlobalReachingDefs(&MI, Reg, Defs);
 
           // If there are no reaching defs, we assume that the register is an
           // argument and we need to start tracking at the SECRET
           // pseudoinstruction
           if (Defs.empty()) {
-            auto Def = SecretDef::argument(Reg);
+            auto Def = SecretDef::CreateArgument(Reg);
             Secrets[Def] = SecretMask;
             SecretDefs.insert(Def);
           }
@@ -141,13 +138,13 @@ void FlowGraph<GraphDataT, GT>::getSources(
           // If there are reaching defs, then we need to make sure to start
           // tracking at the reaching def and not the SECRET pseudoinstruction
           for (MachineInstr *DefMI : Defs) {
-            auto Def = SecretDef::registerDef(Reg, DefMI);
+            auto Def = SecretDef::CreateRegisterDef(Reg, DefMI);
             Secrets[Def] = SecretMask;
             SecretDefs.insert(Def);
           }
         } else {
-          if (MachineOperand *MO = Data.MRI.getOneDef(Reg)) {
-            auto Def = SecretDef::registerDef(Reg, MO->getParent());
+          if (MachineOperand *MO = MRI.getOneDef(Reg)) {
+            auto Def = SecretDef::CreateRegisterDef(Reg, MO->getParent());
             Secrets[Def] = SecretMask;
             SecretDefs.insert(Def);
           } else {
@@ -159,41 +156,38 @@ void FlowGraph<GraphDataT, GT>::getSources(
   }
 }
 
-template <class GraphDataT, GraphType GT>
-void FlowGraph<GraphDataT, GT>::getUses(
-    SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses) const {
+void FlowGraph::getUses(SecretDef &SD,
+                        SmallPtrSet<MachineInstr *, 8> &Uses) const {
   switch (SD.getKind()) {
   case SecretDef::SDK_SecretRegisterDef: {
-    auto S = SD.get<SecretRegisterDef>();
-    if constexpr (GT == GT_PhysReg) {
+    if (RDA) {
       SmallPtrSet<MachineInstr *, 8> GlobalUses;
-      Data.RDA.getGlobalUses(S.getMI(), S.getReg().asMCReg(), GlobalUses);
+      RDA->getGlobalUses(SD.getMI(), SD.getReg().asMCReg(), GlobalUses);
       for (auto *Use : GlobalUses) {
         if (std::find_if(Use->uses().begin(), Use->uses().end(),
-                         [&S](MachineOperand &O) {
-                           return O.isReg() && O.getReg() == S.getReg();
+                         [&SD](MachineOperand &O) {
+                           return O.isReg() && O.getReg() == SD.getReg();
                          }) != Use->uses().end()) {
           Uses.insert(Use);
         }
       }
     } else {
-      for (MachineInstr &MI : Data.MRI.use_instructions(S.getReg())) {
+      for (MachineInstr &MI : MRI.use_instructions(SD.getReg())) {
         Uses.insert(&MI);
       }
     }
     break;
   }
   case SecretDef::SDK_Argument: {
-    auto S = SD.get<SecretArgument>();
-    if constexpr (GT == GT_PhysReg) {
+    if (RDA) {
       for (MachineBasicBlock &MB : MF) {
         for (MachineInstr &MI : MB) {
           if (std::find_if(MI.uses().begin(), MI.uses().end(),
-                           [&S](MachineOperand &O) {
-                             return O.isReg() && O.getReg() == S.getReg();
+                           [&SD](MachineOperand &O) {
+                             return O.isReg() && O.getReg() == SD.getReg();
                            }) != MI.uses().end()) {
             SmallPtrSet<MachineInstr *, 8> Defs;
-            Data.RDA.getGlobalReachingDefs(&MI, S.getReg().asMCReg(), Defs);
+            RDA->getGlobalReachingDefs(&MI, SD.getReg().asMCReg(), Defs);
 
             // If there is no closer reaching def, the argument is the reaching
             // def
@@ -210,13 +204,12 @@ void FlowGraph<GraphDataT, GT>::getUses(
     break;
   }
   case SecretDef::SDK_Global: {
-    auto S = SD.get<SecretGlobal>();
     for (MachineBasicBlock &MB : MF) {
       for (MachineInstr &MI : MB) {
         auto *OP = std::find_if(
-            MI.operands_begin(), MI.operands_end(), [&S](MachineOperand &O) {
+            MI.operands_begin(), MI.operands_end(), [&SD](MachineOperand &O) {
               return O.isGlobal() &&
-                     O.getGlobal()->getName() == S.getGlobalVar()->getName();
+                     O.getGlobal()->getName() == SD.getGlobalVariable()->getName();
             });
         if (OP != MI.operands_end()) {
           Uses.insert(&MI);
@@ -225,20 +218,20 @@ void FlowGraph<GraphDataT, GT>::getUses(
     }
     break;
   }
+  default:
+    break;
   }
 }
 
 // NOTE: Why does this function exist?
-template <class GraphDataT, GraphType GT>
-void FlowGraph<GraphDataT, GT>::getReachingDefs(
-    SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Defs) const {
+void FlowGraph::getReachingDefs(SecretDef &SD,
+                                SmallPtrSet<MachineInstr *, 8> &Defs) const {
   switch (SD.getKind()) {
   case SecretDef::SDK_SecretRegisterDef: {
-    auto S = SD.get<SecretRegisterDef>();
-    if (GT == GT_PhysReg) {
-      Data.RDA.getGlobalReachingDefs(S.getMI(), S.getReg().asMCReg(), Defs);
-    } else if (GT == GT_VirtReg) {
-      if (MachineOperand *MO = Data.MRI.getOneDef(S.getReg())) {
+    if (RDA) {
+      RDA->getGlobalReachingDefs(SD.getMI(), SD.getReg().asMCReg(), Defs);
+    } else {
+      if (MachineOperand *MO = MRI.getOneDef(SD.getReg())) {
         Defs.insert(MO->getParent());
       } else {
         llvm_unreachable("expected single def for vreg");
@@ -246,19 +239,14 @@ void FlowGraph<GraphDataT, GT>::getReachingDefs(
     }
     break;
   }
-  case SecretDef::SDK_Argument:
-  case SecretDef::SDK_Global:
-    // Arguments and globals don't have a reaching def within this function
+  default:
     break;
   }
 }
 
-template <class GraphTypeT, GraphType GT>
-void TrackSecretsAnalysis<GraphTypeT, GT>::handleUse(MachineInstr &UseInst,
-                                                     MachineOperand &MO,
-                                                     uint64_t SecretMask,
-                                                     SecretsSet &WorkSet,
-                                                     SecretsMap &SecretDefs) {
+void TrackSecretsAnalysisImpl::handleUse(MachineInstr &UseInst, MachineOperand &MO,
+                                     uint64_t SecretMask, SecretsSet &WorkSet,
+                                     SecretsMap &SecretDefs) {
   SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
   errs() << "handleUse " << MO << " in " << UseInst << "\n";
 
@@ -266,7 +254,7 @@ void TrackSecretsAnalysis<GraphTypeT, GT>::handleUse(MachineInstr &UseInst,
   TII->transferSecret(UseInst, MO, SecretMask, NewDefs);
 
   for (auto Def : NewDefs) {
-    SecretDef NewDef = SecretDef::registerDef(Def.first, &UseInst);
+    SecretDef NewDef = SecretDef::CreateRegisterDef(Def.first, &UseInst);
 
     uint64_t NewMask = Def.second | SecretDefs[NewDef];
 
@@ -280,9 +268,7 @@ void TrackSecretsAnalysis<GraphTypeT, GT>::handleUse(MachineInstr &UseInst,
   }
 }
 
-template <class GraphDataT, GraphType GT>
-bool TrackSecretsAnalysis<GraphDataT, GT>::run(
-    MachineFunction &MF, FlowGraph<GraphDataT, GT> Graph) {
+bool TrackSecretsAnalysisImpl::run(MachineFunction &MF, FlowGraph Graph) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
@@ -348,13 +334,11 @@ char TrackSecretsAnalysisPhysReg::ID = 0;
 char &llvm::TrackSecretsPhysRegPassID = TrackSecretsAnalysisPhysReg::ID;
 
 TrackSecretsAnalysisVirtReg::TrackSecretsAnalysisVirtReg()
-    : MachineFunctionPass(ID),
-      TSA(TrackSecretsAnalysis<GraphDataVirtReg, GT_VirtReg>()) {
+    : MachineFunctionPass(ID) {
   initializeTrackSecretsAnalysisVirtRegPass(*PassRegistry::getPassRegistry());
 }
 TrackSecretsAnalysisPhysReg::TrackSecretsAnalysisPhysReg()
-    : MachineFunctionPass(ID),
-      TSA(TrackSecretsAnalysis<GraphDataPhysReg, GT_PhysReg>()) {
+    : MachineFunctionPass(ID) {
   initializeTrackSecretsAnalysisPhysRegPass(*PassRegistry::getPassRegistry());
 }
 

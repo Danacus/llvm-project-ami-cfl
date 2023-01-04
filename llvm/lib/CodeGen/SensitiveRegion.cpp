@@ -83,7 +83,7 @@ void SensitiveRegionAnalysisPass::handleBranch(MachineBasicBlock *MBB) {
 
 bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().TSA.SecretUses;
+  auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().getSecrets().SecretUses;
 
   SmallPtrSet<MachineBasicBlock *, 16> HandledBranches;
 

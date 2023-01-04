@@ -158,8 +158,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     Exiting->addSuccessor(EndBlock);
   }
 
-  BuildMI(*EndBlock, EndBlock->end(), DL, TII->get(TargetOpcode::BRANCH_TARGET))
-      .addMBB(EndBlock);
+  // BuildMI(*EndBlock, EndBlock->end(), DL, TII->get(TargetOpcode::BRANCH_TARGET))
+  //     .addMBB(EndBlock);
 
   auto *OldExit = MR->getExit();
   TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
@@ -168,7 +168,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   // MF.insert(std::prev(OldExit->getIterator()), EndBlock);
   MF.insert(MF.end(), EndBlock);
 
-  rewritePHIForRegion(MF, MR);
+  // rewritePHIForRegion(MF, MR);
 
   ActivatingRegions.insert(MR);
   return EndBlock;
@@ -288,7 +288,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       ToActivate.insert(Branch.IfRegion->getExit());
     }
 
-    eliminatePHI(MF, Branch, *OldBranchExit);
+    // eliminatePHI(MF, Branch, *OldBranchExit);
   }
 
   for (auto *MBB : ToActivate) {
@@ -405,7 +405,7 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
 
 void AMiLinearizeBranch::findActivatingBranches() {
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().TSA.SecretUses;
+  auto &Secrets = getAnalysis<TrackSecretsAnalysisPhysReg>().getSecrets().SecretUses;
 
   for (auto &Secret : Secrets) {
     if (!(Secret.second.getSecretMask() & 1u))
