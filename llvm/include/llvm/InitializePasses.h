@@ -147,6 +147,7 @@ void initializeSensitiveRegionAnalysisPhysRegPass(PassRegistry &);
 void initializePersistencyAnalysisPassPass(PassRegistry &);
 void initializeInsertPersistentDefsPass(PassRegistry &);
 void initializeRemovePersistentDefsPass(PassRegistry &);
+void initializeRemoveBranchPseudosPass(PassRegistry &);
 void initializeFixIrreduciblePass(PassRegistry &);
 void initializeFixupStatepointCallerSavedPass(PassRegistry&);
 void initializeFlattenCFGLegacyPassPass(PassRegistry &);

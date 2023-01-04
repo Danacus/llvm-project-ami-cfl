@@ -190,6 +190,7 @@ namespace llvm {
   extern char &InsertPersistentDefsPassID;
   extern char &RemovePersistentDefsPassID;
   extern char &PersistencyAnalysisPassID;
+  extern char &RemoveBranchPseudosPassID;
   //extern char &TrackSecretsPrinterID;
   extern char &PrintSecretsPassID;
   extern char &CreateSensitiveRegionsID;

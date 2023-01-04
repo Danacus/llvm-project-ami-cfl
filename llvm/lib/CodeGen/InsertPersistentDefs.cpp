@@ -198,6 +198,36 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
+  for (auto &B : SRA.sensitive_branches()) {    
+    SmallSet<Register, 8> BranchRegs;
+
+    MachineBasicBlock::iterator I = B.MBB->getLastNonDebugInstr();
+    if (I != B.MBB->end()) {
+      for (auto J = I.getReverse(); J != B.MBB->rend() && J->isTerminator();
+           J++) {
+        if (J->getDesc().isConditionalBranch()) {
+          for (auto &MO : J->operands()) {
+            if (MO.isReg() && MO.isUse()) {
+              BranchRegs.insert(MO.getReg());
+            }
+          }
+        }
+      }
+    }
+    
+    SmallVector<MachineBasicBlock *> Exitings;
+    B.IfRegion->getExitingBlocks(Exitings);
+
+    for (auto &Exiting : Exitings) {
+      auto InsertPoint = Exiting->getFirstTerminator();
+      auto ExtendBuilder = BuildMI(*Exiting, InsertPoint, DebugLoc(),
+                                   TII->get(TargetOpcode::EXTEND));
+      for (auto &Reg : BranchRegs) {
+        ExtendBuilder.addReg(Reg);
+      }
+    }
+  }
+
   MF.dump();
 
   return true;

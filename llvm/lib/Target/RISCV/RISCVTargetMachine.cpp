@@ -347,6 +347,7 @@ void RISCVPassConfig::addPreEmitPass2() {
   addPass(createRISCVExpandAtomicPseudoPass());
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
+    addPass(&RemoveBranchPseudosPassID);
     addPass(createAMiLinearizeBranchPass());
     addPass(createAMiLinearizeRegionPass());
   }

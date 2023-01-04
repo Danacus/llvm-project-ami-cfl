@@ -127,7 +127,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     if (!ETBB)
       ETBB = Exiting->getFallThrough();
 
-    assert(ETBB == MR->getExit() &&
+    assert(ETBB == MR->getExit() || EFBB == MR->getExit() &&
            "AMi error: exiting block of activating region must jump to "
            "region exit");
 
@@ -141,6 +141,9 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
 
     Exiting->removeSuccessor(ETBB);
 
+    if (EFBB)
+      Exiting->removeSuccessor(EFBB);
+
     MachineBasicBlock *Target = EndBlock;
 
     if (EFBB == nullptr) {
@@ -150,19 +153,21 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
       // Conditional branch
       if (ETBB == MR->getExit()) {
         TII->insertBranch(*Exiting, Target, EFBB, ECond, DL);
+        Exiting->addSuccessor(EFBB);
       } else if (EFBB == MR->getExit()) {
         TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
+        Exiting->addSuccessor(ETBB);
       }
     }
 
-    Exiting->addSuccessor(EndBlock);
+    Exiting->addSuccessor(Target);
   }
 
   // BuildMI(*EndBlock, EndBlock->end(), DL,
   // TII->get(TargetOpcode::BRANCH_TARGET))
   //     .addMBB(EndBlock);
 
-  auto *OldExit = MR->getExit();
+  // auto *OldExit = MR->getExit();
   TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
   EndBlock->addSuccessor(MR->getExit());
   MR->replaceExitRecursive(EndBlock);
@@ -278,6 +283,12 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       assert(Branch.ElseRegion->getExit()->getSingleSuccessor() ==
                  OldBranchExit &&
              "if and else should exit to the same block");
+
+      for (auto OP : Branch.Cond) {
+        if (OP.isReg() && OP.isUse()) {
+          Branch.IfRegion->getExit()->addLiveIn(OP.getReg().asMCReg());
+        }
+      }
 
       Branch.IfRegion->getExit()->removeSuccessor(OldBranchExit);
       TII->removeBranch(*Branch.IfRegion->getExit());
@@ -437,7 +448,7 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   MF.dump();
 
   // findActivatingBranches();
-  auto &SRA = getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  auto &SRA = getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA.sensitive_branches());
 
   // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
@@ -456,7 +467,8 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   }
 
   simplifyBranchRegions(MF);
-  linearizeBranches(MF);
+  MF.dump();
+  // linearizeBranches(MF);
 
   MF.dump();
   return true;
