@@ -218,8 +218,8 @@ void RAGreedy::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<VirtRegMap>();
   AU.addRequired<LiveRegMatrix>();
   AU.addPreserved<LiveRegMatrix>();
-  AU.addUsedIfAvailable<SensitiveRegionAnalysisPass>();
-  AU.addPreserved<SensitiveRegionAnalysisPass>();
+  AU.addUsedIfAvailable<SensitiveRegionAnalysisVirtReg>();
+  AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
   AU.addUsedIfAvailable<InsertPersistentDefs>();
   AU.addPreserved<InsertPersistentDefs>();
   AU.addRequired<EdgeBundles>();

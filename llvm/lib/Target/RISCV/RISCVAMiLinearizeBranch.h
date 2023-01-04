@@ -8,6 +8,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/Argument.h"
@@ -20,27 +21,6 @@ using namespace llvm;
 
 namespace {
 
-struct ActivatingBranch {
-  MachineInstr *MI;
-  SmallVector<MachineOperand> Cond;
-  MachineRegion *ElseRegion;
-  // MachineBasicBlock *NewElseExit;
-  MachineRegion *IfRegion;
-  // MachineBasicBlock *NewIfExit;
-
-  ActivatingBranch(MachineInstr *MI, SmallVector<MachineOperand> Cond,
-                   MachineRegion *TR, MachineRegion *FR)
-      : MI(MI), Cond(Cond), ElseRegion(TR), IfRegion(FR) {}
-
-  bool operator<(const ActivatingBranch &Other) const {
-    return IfRegion->getDepth() < Other.IfRegion->getDepth();
-  }
-
-  bool operator>(const ActivatingBranch &Other) const {
-    return IfRegion->getDepth() > Other.IfRegion->getDepth();
-  }
-};
-
 class AMiLinearizeBranch : public MachineFunctionPass {
 public:
   static char ID;
@@ -48,7 +28,7 @@ public:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
-  SmallVector<ActivatingBranch, 16> ActivatingBranches;
+  SmallVector<SensitiveBranch, 16> ActivatingBranches;
 
   AMiLinearizeBranch();
 
@@ -57,17 +37,18 @@ public:
 
   MachineBasicBlock *simplifyRegion(MachineFunction &MF, MachineRegion *MR);
   void rewritePHIForRegion(MachineFunction &MF, MachineRegion *MR);
-  void eliminatePHI(MachineFunction &MF, ActivatingBranch &Branch, MachineBasicBlock &MBB);
+  void eliminatePHI(MachineFunction &MF, SensitiveBranch &Branch, MachineBasicBlock &MBB);
   void simplifyBranchRegions(MachineFunction &MF);
   void linearizeBranches(MachineFunction &MF);
   bool setBranchActivating(MachineBasicBlock &MBB);
-  void removePseudoSecret(MachineFunction &MF);
+  void removePseudos(MachineFunction &MF);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<MachineRegionInfoPass>();
-    AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
+    // AU.addRequired<MachineRegionInfoPass>();
+    // AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
+    AU.addRequired<SensitiveRegionAnalysisPhysReg>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

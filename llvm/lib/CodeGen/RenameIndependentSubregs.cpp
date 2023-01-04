@@ -60,7 +60,7 @@ public:
     AU.addPreserved<LiveIntervals>();
     AU.addRequired<SlotIndexes>();
     AU.addPreserved<SlotIndexes>();
-    AU.addPreserved<SensitiveRegionAnalysisPass>();
+    AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
     AU.addPreserved<InsertPersistentDefs>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

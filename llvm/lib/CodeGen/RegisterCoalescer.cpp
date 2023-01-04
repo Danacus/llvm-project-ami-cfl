@@ -595,7 +595,7 @@ void RegisterCoalescer::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<SlotIndexes>();
   AU.addRequired<MachineLoopInfo>();
   AU.addPreserved<MachineLoopInfo>();
-  AU.addPreserved<SensitiveRegionAnalysisPass>();
+  AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
   AU.addPreserved<InsertPersistentDefs>();
   AU.addPreservedID(MachineDominatorsID);
   MachineFunctionPass::getAnalysisUsage(AU);

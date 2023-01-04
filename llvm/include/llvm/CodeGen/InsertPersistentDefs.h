@@ -38,8 +38,8 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysisPass>();
-    AU.addPreserved<SensitiveRegionAnalysisPass>();
+    AU.addRequired<SensitiveRegionAnalysisVirtReg>();
+    AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     AU.addRequired<LiveVariables>();

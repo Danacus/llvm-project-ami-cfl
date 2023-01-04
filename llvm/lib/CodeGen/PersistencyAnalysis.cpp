@@ -97,7 +97,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  SRA = &getAnalysis<SensitiveRegionAnalysisPass>();
+  SRA = &getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
   for (auto &B : SRA->sensitive_branches()) {
     errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
     errs() << "if region:\n";
@@ -138,7 +138,7 @@ PersistencyAnalysisPass::PersistencyAnalysisPass() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(PersistencyAnalysisPass, DEBUG_TYPE,
                       "Persistency Analysis", true, true)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPass)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisVirtReg)
 INITIALIZE_PASS_END(PersistencyAnalysisPass, DEBUG_TYPE, "Persistency Analysis",
                     true, true)
 

@@ -11,7 +11,7 @@ using namespace llvm;
 
 #define DEBUG_TYPE "sensitive-region"
 
-void SensitiveRegionAnalysisPass::removeBranch(MachineBasicBlock *MBB) {
+void SensitiveRegionAnalysisImpl::removeBranch(MachineBasicBlock *MBB) {
   auto Key = SensitiveBranch(MBB);
   if (SensitiveBranches.contains(MBB)) {
     SensitiveBranches.erase(Key);
@@ -24,7 +24,7 @@ void SensitiveRegionAnalysisPass::removeBranch(MachineBasicBlock *MBB) {
   }
 }
 
-void SensitiveRegionAnalysisPass::handleBranch(MachineBasicBlock *MBB) {
+void SensitiveRegionAnalysisImpl::handleBranch(MachineBasicBlock *MBB) {
   const auto &ST = MBB->getParent()->getSubtarget();
   const auto *TII = ST.getInstrInfo();
 
@@ -35,8 +35,7 @@ void SensitiveRegionAnalysisPass::handleBranch(MachineBasicBlock *MBB) {
   SmallVector<MachineOperand> Cond;
 
   if (TII->analyzeBranch(*MBB, TBB, FBB, Cond))
-    llvm_unreachable(
-        "AMi error: failed to analyze secret-dependent branch");
+    llvm_unreachable("AMi error: failed to analyze secret-dependent branch");
 
   // When there is only a single conditional branch as terminator,
   // FBB will not be set. In this case it is probably safe to assume that
@@ -81,9 +80,15 @@ void SensitiveRegionAnalysisPass::handleBranch(MachineBasicBlock *MBB) {
   }
 }
 
-bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
-  MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  auto &Secrets = getAnalysis<TrackSecretsAnalysisVirtReg>().getSecrets().SecretUses;
+bool SensitiveRegionAnalysisImpl::run(MachineFunction &MF,
+                                      MachineRegionInfo *MRI,
+                                      TrackSecretsAnalysisImpl *TSA) {
+  // MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  // auto &Secrets =
+  // getAnalysis<TrackSecretsAnalysisVirtReg>().getSecrets().SecretUses;
+  this->MRI = MRI;
+  this->TSA = TSA;
+  auto &Secrets = TSA->SecretUses;
 
   SmallPtrSet<MachineBasicBlock *, 16> HandledBranches;
 
@@ -124,25 +129,44 @@ bool SensitiveRegionAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   return false;
 }
 
-char SensitiveRegionAnalysisPass::ID = 0;
-char &llvm::SensitiveRegionAnalysisPassID = SensitiveRegionAnalysisPass::ID;
+char SensitiveRegionAnalysisVirtReg::ID = 0;
+char &llvm::SensitiveRegionAnalysisVirtRegID = SensitiveRegionAnalysisVirtReg::ID;
 
-SensitiveRegionAnalysisPass::SensitiveRegionAnalysisPass()
+char SensitiveRegionAnalysisPhysReg::ID = 0;
+char &llvm::SensitiveRegionAnalysisPhysRegID = SensitiveRegionAnalysisPhysReg::ID;
+
+SensitiveRegionAnalysisVirtReg::SensitiveRegionAnalysisVirtReg()
     : MachineFunctionPass(ID) {
-  initializeSensitiveRegionAnalysisPassPass(*PassRegistry::getPassRegistry());
+  initializeSensitiveRegionAnalysisVirtRegPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisPass, DEBUG_TYPE,
+SensitiveRegionAnalysisPhysReg::SensitiveRegionAnalysisPhysReg()
+    : MachineFunctionPass(ID) {
+  initializeSensitiveRegionAnalysisPhysRegPass(*PassRegistry::getPassRegistry());
+}
+
+INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisVirtReg, DEBUG_TYPE,
                       "Sensitive Region Analysis", true, true)
 INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
-INITIALIZE_PASS_END(SensitiveRegionAnalysisPass, DEBUG_TYPE,
+INITIALIZE_PASS_END(SensitiveRegionAnalysisVirtReg, DEBUG_TYPE,
+                    "Sensitive Region Analysis", true, true)
+
+INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisPhysReg, DEBUG_TYPE,
+                      "Sensitive Region Analysis", true, true)
+INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
+INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisPhysReg)
+INITIALIZE_PASS_END(SensitiveRegionAnalysisPhysReg, DEBUG_TYPE,
                     "Sensitive Region Analysis", true, true)
 
 namespace llvm {
 
-FunctionPass *createSensitiveRegionPass() {
-  return new SensitiveRegionAnalysisPass();
+FunctionPass *createSensitiveRegionVirtRegPass() {
+  return new SensitiveRegionAnalysisVirtReg();
+}
+
+FunctionPass *createSensitiveRegionPhysRegPass() {
+  return new SensitiveRegionAnalysisPhysReg();
 }
 
 } // namespace llvm

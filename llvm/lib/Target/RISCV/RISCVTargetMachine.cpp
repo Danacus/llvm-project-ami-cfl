@@ -346,8 +346,10 @@ void RISCVPassConfig::addPreEmitPass2() {
   // progress in the LR/SC block.
   addPass(createRISCVExpandAtomicPseudoPass());
   
-  if (EnableAMiLinearization == cl::BOU_TRUE)
+  if (EnableAMiLinearization == cl::BOU_TRUE) {
+    addPass(createAMiLinearizeBranchPass());
     addPass(createAMiLinearizeRegionPass());
+  }
 }
 
 void RISCVPassConfig::addMachineSSAOptimization() {
@@ -369,7 +371,7 @@ void RISCVPassConfig::addPreSSADestruction() {
 
 void RISCVPassConfig::addPostSSADestruction() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
-    addPass(&SensitiveRegionAnalysisPassID);
+    addPass(&SensitiveRegionAnalysisVirtRegID);
     addPass(&CreateSensitiveRegionsID);
     addPass(&InsertPersistentDefsPassID);
   }

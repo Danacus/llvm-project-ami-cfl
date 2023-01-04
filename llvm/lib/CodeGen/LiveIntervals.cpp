@@ -93,7 +93,7 @@ void LiveIntervals::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreservedID(MachineDominatorsID);
   AU.addPreserved<SlotIndexes>();
   AU.addRequiredTransitive<SlotIndexes>();
-  AU.addPreserved<SensitiveRegionAnalysisPass>();
+  AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
   AU.addPreserved<InsertPersistentDefs>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }

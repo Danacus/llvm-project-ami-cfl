@@ -48,7 +48,9 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeFinalizeMachineBundlesPass(Registry);
   initializeTrackSecretsAnalysisVirtRegPass(Registry);
   initializeTrackSecretsAnalysisPhysRegPass(Registry);
-  initializeSensitiveRegionAnalysisPassPass(Registry);
+  // initializeSensitiveRegionAnalysisPassPass(Registry);
+  initializeSensitiveRegionAnalysisVirtRegPass(Registry);
+  initializeSensitiveRegionAnalysisPhysRegPass(Registry);
   initializePersistencyAnalysisPassPass(Registry);
   initializeInsertPersistentDefsPass(Registry);
   initializeRemovePersistentDefsPass(Registry);

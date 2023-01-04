@@ -17,7 +17,7 @@ public:
 private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  SensitiveRegionAnalysisPass *SRA;
+  SensitiveRegionAnalysisImpl *SRA;
 
   RegionInstrMap PersistentStores;
   RegionInstrMap PersistentInstructions;
@@ -51,7 +51,7 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysisPass>();
+    AU.addRequired<SensitiveRegionAnalysisVirtReg>();
     AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);

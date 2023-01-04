@@ -158,7 +158,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     Exiting->addSuccessor(EndBlock);
   }
 
-  // BuildMI(*EndBlock, EndBlock->end(), DL, TII->get(TargetOpcode::BRANCH_TARGET))
+  // BuildMI(*EndBlock, EndBlock->end(), DL,
+  // TII->get(TargetOpcode::BRANCH_TARGET))
   //     .addMBB(EndBlock);
 
   auto *OldExit = MR->getExit();
@@ -247,13 +248,13 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
   SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
 
   for (auto &Branch : ActivatingBranches) {
-    ToActivate.insert(Branch.MI->getParent());
+    ToActivate.insert(Branch.MBB);
 
     auto *OldBranchExit = Branch.IfRegion->getExit()->getSingleSuccessor();
 
     DebugLoc DL;
 
-    auto *BranchBlock = Branch.MI->getParent();
+    auto *BranchBlock = Branch.MBB;
 
     SmallVector<MachineOperand> NewCond;
 
@@ -297,7 +298,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
 }
 
 void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
-                                      ActivatingBranch &Branch,
+                                      SensitiveBranch &Branch,
                                       MachineBasicBlock &Exit) {
   auto &MRI = MF.getRegInfo();
 
@@ -332,7 +333,7 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
       unsigned SubReg = MI.getOperand(I).getSubReg();
       MachineBasicBlock *MBB = MI.getOperand(I + 1).getMBB();
 
-      if (Branch.MI->getParent() == MBB) {
+      if (Branch.MBB == MBB) {
         EntryReg = Reg;
         EntrySubReg = SubReg;
         EntryMBB = MBB;
@@ -346,13 +347,13 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
       }
 
       if (Branch.ElseRegion && (Branch.ElseRegion->getExit() == MBB ||
-          Branch.ElseRegion->contains(MBB))) {
+                                Branch.ElseRegion->contains(MBB))) {
         ElseReg = Reg;
         ElseSubReg = SubReg;
         ElseMBB = MBB;
       }
 
-      if (Branch.MI->getParent() == MBB || Branch.IfRegion->getExit() == MBB ||
+      if (Branch.MBB == MBB || Branch.IfRegion->getExit() == MBB ||
           (Branch.ElseRegion && Branch.ElseRegion->getExit() == MBB) ||
           Branch.IfRegion->contains(MBB) ||
           (Branch.ElseRegion && Branch.ElseRegion->contains(MBB))) {
@@ -363,15 +364,16 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
 
     Register PHIDef = MI.getOperand(0).getReg();
     Register IfToElseReg = PHIDef;
-    
+
     if (Branch.ElseRegion)
       IfToElseReg = MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
 
     if (HasEntryReg) {
-      Register EntryToIfReg = MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
+      Register EntryToIfReg =
+          MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
 
-      BuildMI(*EntryMBB, findPHICopyInsertPoint(EntryMBB, &Exit, EntryReg), DebugLoc(),
-              TII->get(TargetOpcode::COPY), EntryToIfReg)
+      BuildMI(*EntryMBB, findPHICopyInsertPoint(EntryMBB, &Exit, EntryReg),
+              DebugLoc(), TII->get(TargetOpcode::COPY), EntryToIfReg)
           .addReg(EntryReg, 0, EntrySubReg);
 
       BuildMI(*IfMBB, findPHICopyInsertPoint(IfMBB, &Exit, IfReg), DebugLoc(),
@@ -385,8 +387,9 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
     }
 
     if (Branch.ElseRegion) {
-      BuildMI(*ElseMBB, findPHICopyInsertPoint(ElseMBB, &Exit, ElseReg), DebugLoc(),
-              TII->get(TargetOpcode::MIM_COPY), MI.getOperand(0).getReg())
+      BuildMI(*ElseMBB, findPHICopyInsertPoint(ElseMBB, &Exit, ElseReg),
+              DebugLoc(), TII->get(TargetOpcode::MIM_COPY),
+              MI.getOperand(0).getReg())
           .addReg(ElseReg, 0, ElseSubReg)
           .addReg(IfToElseReg);
     }
@@ -403,96 +406,14 @@ void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
     PHIToRemove.pop_back_val()->eraseFromParent();
 }
 
-void AMiLinearizeBranch::findActivatingBranches() {
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  auto &Secrets = getAnalysis<TrackSecretsAnalysisPhysReg>().getSecrets().SecretUses;
-
-  for (auto &Secret : Secrets) {
-    if (!(Secret.second.getSecretMask() & 1u))
-      continue;
-
-    auto *User = Secret.second.getUser();
-
-    // We still need those registers
-    for (auto &MO : User->uses()) {
-      if (MO.isReg())
-        MO.setIsKill(false);
-    }
-
-    if (User->isConditionalBranch()) {
-      if (RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(
-              User->getOpcode())) {
-        // Already handled this branch
-        continue;
-      }
-
-      MachineBasicBlock *TBB;
-      MachineBasicBlock *FBB;
-      SmallVector<MachineOperand> Cond;
-
-      if (TII->analyzeBranch(*User->getParent(), TBB, FBB, Cond))
-        llvm_unreachable(
-            "AMi error: failed to analyze secret-dependent branch");
-
-      // When there is only a single conditional branch as terminator,
-      // FBB will not be set. In this case it is probably safe to assume that
-      // FBB is the fallthrough block (at least for RISC-V).
-      if (!FBB)
-        FBB = User->getParent()->getFallThrough();
-
-      // Get largest region that starts at BB. (See
-      // RegionInfoBase::getMaxRegionExit)
-      MachineRegion *FR = MRI.getRegionFor(FBB);
-      while (auto *Expanded = FR->getExpandedRegion()) {
-        // I like large regions, expanded sounds good
-        FR = Expanded;
-      }
-      if (FR->getEntry() != FBB || !FR->getExit())
-        llvm_unreachable("AMi error: unable to find activating region for "
-                         "secret-dependent branch");
-      while (FR && FR->getParent() && FR->getParent()->getEntry() == FBB &&
-             FR->getExit())
-        FR = FR->getParent();
-
-      FR->dump();
-      FR->getExit()->dump();
-
-      // Find the exiting blocks of this region
-      SmallVector<MachineBasicBlock *> Exitings;
-      FR->getExitingBlocks(Exitings);
-
-      bool HasElseRegion = FR->getExit() != TBB;
-
-      MachineRegion *TR = nullptr;
-      if (HasElseRegion) {
-        TR = MRI.getRegionFor(TBB);
-        while (auto *Expanded = TR->getExpandedRegion()) {
-          // I like large regions, expanded sounds good
-          TR = Expanded;
-        }
-        if (TR->getEntry() == TBB) {
-          while (TR && TR->getParent() && TR->getParent()->getEntry() == TBB)
-            TR = TR->getParent();
-        } else {
-          llvm_unreachable("AMi error: unable to find activating region for "
-                           "secret-dependent branch");
-        }
-      } else {
-        assert(FR->getExit() == TBB && "AMi error: if branch without else "
-                                       "region must exit to branch target");
-      }
-
-      ActivatingBranches.push_back(ActivatingBranch(User, Cond, TR, FR));
-    }
-  }
-}
-
-void AMiLinearizeBranch::removePseudoSecret(MachineFunction &MF) {
+void AMiLinearizeBranch::removePseudos(MachineFunction &MF) {
   SmallPtrSet<MachineInstr *, 8> ToRemove;
 
   for (MachineBasicBlock &MB : MF) {
     for (MachineInstr &MI : MB) {
-      if (MI.getOpcode() == TargetOpcode::SECRET)
+      if (MI.getOpcode() == TargetOpcode::SECRET ||
+          MI.getOpcode() == TargetOpcode::SECRET_DEP_BR ||
+          MI.getOpcode() == TargetOpcode::BRANCH_TARGET)
         ToRemove.insert(&MI);
     }
   }
@@ -505,22 +426,26 @@ void AMiLinearizeBranch::removePseudoSecret(MachineFunction &MF) {
 bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Branch Pass\n";
 
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  // auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
 
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  MRI.dump();
+  removePseudos(MF);
+  // MRI.dump();
+  MF.dump();
 
-  findActivatingBranches();
+  // findActivatingBranches();
+  auto &SRA = getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  ActivatingBranches = SmallVector<SensitiveBranch>(SRA.sensitive_branches());
 
   // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
   // std::greater<ActivatingBranch>());
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
   for (auto &B : ActivatingBranches) {
-    errs() << "Activating branch: " << *B.MI;
+    errs() << "Activating branch: " << B.MBB->getFullName();
     errs() << "if region:\n";
     B.IfRegion->dump();
 
@@ -533,8 +458,6 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   simplifyBranchRegions(MF);
   linearizeBranches(MF);
 
-  removePseudoSecret(MF);
-
   MF.dump();
   return true;
 }
@@ -545,8 +468,9 @@ AMiLinearizeBranch::AMiLinearizeBranch() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Region",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
+// INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
+// INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
 INITIALIZE_PASS_END(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)
 
