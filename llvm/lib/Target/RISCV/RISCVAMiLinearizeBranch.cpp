@@ -11,6 +11,7 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/MachineSSAUpdater.h"
 #include "llvm/CodeGen/PHIEliminationUtils.h"
@@ -108,6 +109,7 @@ bool AMiLinearizeBranch::setBranchActivating(MachineBasicBlock &MBB) {
 
 MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
                                                       MachineRegion *MR) {
+  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
   SmallVector<MachineBasicBlock *> Exitings;
   MR->getExitingBlocks(Exitings);
@@ -126,6 +128,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
 
     if (!ETBB)
       ETBB = Exiting->getFallThrough();
+    else if (!EFBB && Exiting->getFallThrough())
+      EFBB = Exiting->getFallThrough();
 
     assert(ETBB == MR->getExit() || EFBB == MR->getExit() &&
            "AMi error: exiting block of activating region must jump to "
@@ -139,104 +143,51 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
              "fallthrough");
     }
 
-    Exiting->removeSuccessor(ETBB);
+    if (Exiting->isSuccessor(ETBB))
+      Exiting->removeSuccessor(ETBB);
 
-    if (EFBB)
+    if (EFBB && Exiting->isSuccessor(EFBB))
       Exiting->removeSuccessor(EFBB);
-
-    MachineBasicBlock *Target = EndBlock;
 
     if (EFBB == nullptr) {
       // Unconditional branch
-      TII->insertUnconditionalBranch(*Exiting, Target, DL);
+      TII->insertUnconditionalBranch(*Exiting, EndBlock, DL);
     } else {
       // Conditional branch
       if (ETBB == MR->getExit()) {
-        TII->insertBranch(*Exiting, Target, EFBB, ECond, DL);
+        TII->insertBranch(*Exiting, EndBlock, EFBB, ECond, DL);
         Exiting->addSuccessor(EFBB);
       } else if (EFBB == MR->getExit()) {
-        TII->insertBranch(*Exiting, ETBB, Target, ECond, DL);
+        TII->insertBranch(*Exiting, ETBB, EndBlock, ECond, DL);
         Exiting->addSuccessor(ETBB);
       }
     }
 
-    Exiting->addSuccessor(Target);
+    Exiting->addSuccessor(EndBlock);
   }
 
   // BuildMI(*EndBlock, EndBlock->end(), DL,
   // TII->get(TargetOpcode::BRANCH_TARGET))
   //     .addMBB(EndBlock);
 
-  // auto *OldExit = MR->getExit();
+  auto *OldExit = MR->getExit();
   TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
   EndBlock->addSuccessor(MR->getExit());
   MR->replaceExitRecursive(EndBlock);
   // MF.insert(std::prev(OldExit->getIterator()), EndBlock);
   MF.insert(MF.end(), EndBlock);
 
-  // rewritePHIForRegion(MF, MR);
+  MDT->addNewBlock(EndBlock, MR->getEntry());
+  MPDT->getBase().addNewBlock(EndBlock, OldExit);
+  MDF->addBasicBlock(EndBlock, { OldExit });
+
+  if (!MR->isTopLevelRegion() && MR->getParent()) {
+    MRI.setRegionFor(EndBlock, MR->getParent());
+    // MRI.updateStatistics(MR->getParent());
+  }
 
   ActivatingRegions.insert(MR);
   return EndBlock;
-}
-
-void AMiLinearizeBranch::rewritePHIForRegion(MachineFunction &MF,
-                                             MachineRegion *MR) {
-  MachineBasicBlock *EndBlock = MR->getExit();
-  SmallVector<MachineInstr *> PHIToRemove;
-
-  for (auto &MI : *EndBlock->getSingleSuccessor()) {
-    if (!MI.isPHI())
-      break;
-
-    bool CreatedPHIDef = false;
-    auto NewPHI = BuildMI(*EndBlock, EndBlock->begin(), DebugLoc(),
-                          TII->get(TargetOpcode::PHI));
-
-    SmallVector<unsigned> ToRemove;
-    unsigned NumSources = 0;
-
-    for (unsigned I = 1, E = MI.getNumOperands(); I != E; I += 2) {
-      MachineBasicBlock *MBB = MI.getOperand(I + 1).getMBB();
-
-      if (MR->contains(MBB)) {
-        if (!CreatedPHIDef) {
-          NewPHI.addDef(MF.getRegInfo().createVirtualRegister(
-              MF.getRegInfo().getRegClass(MI.getOperand(0).getReg())));
-          CreatedPHIDef = true;
-        }
-        NewPHI.add(MI.getOperand(I));
-        NewPHI.add(MI.getOperand(I + 1));
-        ToRemove.push_back(I);
-        ToRemove.push_back(I + 1);
-        NumSources += 1;
-      }
-    }
-
-    Register SrcReg;
-    if (NumSources == 1) {
-      SrcReg = NewPHI->getOperand(1).getReg();
-    } else {
-      SrcReg = NewPHI->getOperand(0).getReg();
-    }
-
-    while (!ToRemove.empty()) {
-      MI.removeOperand(ToRemove.pop_back_val());
-    }
-
-    MI.addOperand(MachineOperand::CreateReg(SrcReg, false));
-    MI.addOperand(MachineOperand::CreateMBB(EndBlock));
-
-    if (NumSources == 1) {
-      NewPHI->eraseFromParent();
-    }
-
-    if (MI.getNumOperands() == 1)
-      PHIToRemove.push_back(&MI);
-  }
-
-  while (!PHIToRemove.empty())
-    PHIToRemove.pop_back_val()->eraseFromParent();
 }
 
 void AMiLinearizeBranch::simplifyBranchRegions(MachineFunction &MF) {
@@ -299,122 +250,11 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       Branch.IfRegion->getExit()->addSuccessor(Branch.ElseRegion->getEntry());
       ToActivate.insert(Branch.IfRegion->getExit());
     }
-
-    // eliminatePHI(MF, Branch, *OldBranchExit);
   }
 
   for (auto *MBB : ToActivate) {
     setBranchActivating(*MBB);
   }
-}
-
-void AMiLinearizeBranch::eliminatePHI(MachineFunction &MF,
-                                      SensitiveBranch &Branch,
-                                      MachineBasicBlock &Exit) {
-  auto &MRI = MF.getRegInfo();
-
-  SmallVector<MachineInstr *> PHIToRemove;
-
-  // PHI elimination
-  for (auto &MI : Exit) {
-    if (!MI.isPHI())
-      break;
-
-    SmallVector<unsigned> ToRemove;
-
-    errs() << "eliminating PHI\n";
-    MI.dump();
-
-    bool HasEntryReg = false;
-
-    Register EntryReg;
-    unsigned EntrySubReg;
-    MachineBasicBlock *EntryMBB;
-
-    Register IfReg;
-    unsigned IfSubReg;
-    MachineBasicBlock *IfMBB;
-
-    Register ElseReg;
-    unsigned ElseSubReg;
-    MachineBasicBlock *ElseMBB;
-
-    for (unsigned I = 1, E = MI.getNumOperands(); I != E; I += 2) {
-      Register Reg = MI.getOperand(I).getReg();
-      unsigned SubReg = MI.getOperand(I).getSubReg();
-      MachineBasicBlock *MBB = MI.getOperand(I + 1).getMBB();
-
-      if (Branch.MBB == MBB) {
-        EntryReg = Reg;
-        EntrySubReg = SubReg;
-        EntryMBB = MBB;
-        HasEntryReg = true;
-      }
-
-      if (Branch.IfRegion->getExit() == MBB || Branch.IfRegion->contains(MBB)) {
-        IfReg = Reg;
-        IfSubReg = SubReg;
-        IfMBB = MBB;
-      }
-
-      if (Branch.ElseRegion && (Branch.ElseRegion->getExit() == MBB ||
-                                Branch.ElseRegion->contains(MBB))) {
-        ElseReg = Reg;
-        ElseSubReg = SubReg;
-        ElseMBB = MBB;
-      }
-
-      if (Branch.MBB == MBB || Branch.IfRegion->getExit() == MBB ||
-          (Branch.ElseRegion && Branch.ElseRegion->getExit() == MBB) ||
-          Branch.IfRegion->contains(MBB) ||
-          (Branch.ElseRegion && Branch.ElseRegion->contains(MBB))) {
-        ToRemove.push_back(I);
-        ToRemove.push_back(I + 1);
-      }
-    }
-
-    Register PHIDef = MI.getOperand(0).getReg();
-    Register IfToElseReg = PHIDef;
-
-    if (Branch.ElseRegion)
-      IfToElseReg = MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
-
-    if (HasEntryReg) {
-      Register EntryToIfReg =
-          MRI.createVirtualRegister(MRI.getRegClass(PHIDef));
-
-      BuildMI(*EntryMBB, findPHICopyInsertPoint(EntryMBB, &Exit, EntryReg),
-              DebugLoc(), TII->get(TargetOpcode::COPY), EntryToIfReg)
-          .addReg(EntryReg, 0, EntrySubReg);
-
-      BuildMI(*IfMBB, findPHICopyInsertPoint(IfMBB, &Exit, IfReg), DebugLoc(),
-              TII->get(TargetOpcode::MIM_COPY), IfToElseReg)
-          .addReg(IfReg, 0, IfSubReg)
-          .addReg(EntryToIfReg);
-    } else {
-      BuildMI(*IfMBB, findPHICopyInsertPoint(IfMBB, &Exit, IfReg), DebugLoc(),
-              TII->get(TargetOpcode::COPY), IfToElseReg)
-          .addReg(IfReg, 0, IfSubReg);
-    }
-
-    if (Branch.ElseRegion) {
-      BuildMI(*ElseMBB, findPHICopyInsertPoint(ElseMBB, &Exit, ElseReg),
-              DebugLoc(), TII->get(TargetOpcode::MIM_COPY),
-              MI.getOperand(0).getReg())
-          .addReg(ElseReg, 0, ElseSubReg)
-          .addReg(IfToElseReg);
-    }
-
-    while (!ToRemove.empty()) {
-      MI.removeOperand(ToRemove.pop_back_val());
-    }
-
-    if (MI.getNumOperands() == 1)
-      PHIToRemove.push_back(&MI);
-  }
-
-  while (!PHIToRemove.empty())
-    PHIToRemove.pop_back_val()->eraseFromParent();
 }
 
 void AMiLinearizeBranch::removePseudos(MachineFunction &MF) {
@@ -448,12 +288,15 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   MF.dump();
 
   // findActivatingBranches();
-  auto &SRA = getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
-  ActivatingBranches = SmallVector<SensitiveBranch>(SRA.sensitive_branches());
+  MRI = &getAnalysisIfAvailable<MachineRegionInfoPass>()->getRegionInfo();
+  MDT = getAnalysisIfAvailable<MachineDominatorTree>();
+  MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
+  MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
+  SRA = &getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
+  ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-  // std::greater<ActivatingBranch>());
-  std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
+  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(), std::greater<SensitiveBranch>());
+  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
   for (auto &B : ActivatingBranches) {
     errs() << "Activating branch: " << B.MBB->getFullName();
@@ -468,7 +311,7 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
 
   simplifyBranchRegions(MF);
   MF.dump();
-  // linearizeBranches(MF);
+  linearizeBranches(MF);
 
   MF.dump();
   return true;

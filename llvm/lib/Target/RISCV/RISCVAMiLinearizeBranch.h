@@ -25,6 +25,11 @@ class AMiLinearizeBranch : public MachineFunctionPass {
 public:
   static char ID;
 
+  MachineRegionInfo *MRI;
+  MachineDominatorTree *MDT;
+  MachinePostDominatorTree *MPDT;
+  MachineDominanceFrontier *MDF;
+  SensitiveRegionAnalysisImpl *SRA;
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
@@ -36,8 +41,6 @@ public:
   void findActivatingBranches();
 
   MachineBasicBlock *simplifyRegion(MachineFunction &MF, MachineRegion *MR);
-  void rewritePHIForRegion(MachineFunction &MF, MachineRegion *MR);
-  void eliminatePHI(MachineFunction &MF, SensitiveBranch &Branch, MachineBasicBlock &MBB);
   void simplifyBranchRegions(MachineFunction &MF);
   void linearizeBranches(MachineFunction &MF);
   bool setBranchActivating(MachineBasicBlock &MBB);
@@ -46,9 +49,16 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    // AU.addRequired<MachineRegionInfoPass>();
-    // AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
     AU.addRequired<SensitiveRegionAnalysisPhysReg>();
+    AU.addPreserved<SensitiveRegionAnalysisPhysReg>();
+    AU.addRequiredTransitive<MachineRegionInfoPass>();
+    AU.addPreserved<MachineRegionInfoPass>();
+    AU.addUsedIfAvailable<MachineDominatorTree>();
+    AU.addPreserved<MachineDominatorTree>();
+    AU.addUsedIfAvailable<MachinePostDominatorTree>();
+    AU.addPreserved<MachinePostDominatorTree>();
+    AU.addUsedIfAvailable<MachineDominanceFrontier>();
+    AU.addPreserved<MachineDominanceFrontier>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
