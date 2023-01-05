@@ -20,6 +20,7 @@
 #include "TargetInfo/RISCVTargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
@@ -27,6 +28,7 @@
 #include "llvm/CodeGen/MIRParser/MIParser.h"
 #include "llvm/CodeGen/MIRYamlMapping.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -37,6 +39,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO.h"
 #include <optional>
+#include "llvm/Transforms/Scalar.h"
 using namespace llvm;
 
 static cl::opt<bool> EnableRedundantCopyElimination(
@@ -118,6 +121,8 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
   // RISC-V supports the MachineOutliner.
   setMachineOutliner(true);
   setSupportsDefaultOutlining(true);
+
+  setRequiresStructuredCFG(true);
 }
 
 const RISCVSubtarget *
@@ -290,6 +295,8 @@ void RISCVPassConfig::addIRPasses() {
 }
 
 bool RISCVPassConfig::addPreISel() {
+  // addPass(createStructurizeCFGPass());
+  
   if (TM->getOptLevel() != CodeGenOpt::None) {
     // Add a barrier before instruction selection so that we will not get
     // deleted block address after enabling default outlining. See D99707 for
@@ -348,6 +355,9 @@ void RISCVPassConfig::addPreEmitPass2() {
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(&RemoveBranchPseudosPassID);
+    addPass(&llvm::TrackSecretsPhysRegPassID);
+    addPass(&SensitiveRegionAnalysisPhysRegID);
+    addPass(createPersistencyAnalysisPass(false));
     addPass(createAMiLinearizeBranchPass());
     addPass(createAMiLinearizeRegionPass());
   }

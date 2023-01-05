@@ -7,6 +7,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
+#include "llvm/CodeGen/PersistencyAnalysis.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
@@ -51,6 +52,9 @@ public:
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<SensitiveRegionAnalysisPhysReg>();
     AU.addPreserved<SensitiveRegionAnalysisPhysReg>();
+    AU.addPreserved<TrackSecretsAnalysisPhysReg>();
+    AU.addRequired<PersistencyAnalysisPass>();
+    AU.addPreserved<PersistencyAnalysisPass>();
     AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.addPreserved<MachineRegionInfoPass>();
     AU.addUsedIfAvailable<MachineDominatorTree>();
@@ -59,6 +63,8 @@ public:
     AU.addPreserved<MachinePostDominatorTree>();
     AU.addUsedIfAvailable<MachineDominanceFrontier>();
     AU.addPreserved<MachineDominanceFrontier>();
+    AU.addPreserved<ReachingDefAnalysis>();
+    AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

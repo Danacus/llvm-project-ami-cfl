@@ -49,116 +49,50 @@ void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
   if (PersistentInstr != -1) {
     I->setDesc(TII->get(PersistentInstr));
   } else {
-    llvm_unreachable("AMi error: unsupported instruction cannot be qualified!");
-  }
-}
-
-void AMiLinearizeRegion::handlePersistentInstr(MachineInstr *I) {
-  errs() << "Handling always-persistent instruction " << *I << "\n";
-  auto &RDA = getAnalysis<ReachingDefAnalysis>();
-
-  SmallVector<MachineInstr *> WorkSet;
-  WorkSet.push_back(I);
-
-  while (!WorkSet.empty()) {
-    auto *I = WorkSet.pop_back_val();
-    setQualifier<RISCV::AMi::Persistent>(I);
-
-    for (auto &Op : I->operands()) {
-      if (!Op.isReg())
-        continue;
-
-      MCRegister Reg = Op.getReg().asMCReg();
-
-      SmallPtrSet<MachineInstr *, 16> Defs;
-      RDA.getGlobalReachingDefs(I, Reg, Defs);
-
-      for (auto *DI : Defs) {
-        WorkSet.push_back(DI);
-      }
-    }
-  }
-
-  DebugLoc DL;
-
-  if (I->getNumOperands() > 2 && I->getOperand(0).isReg()) {
-    BuildMI(*I->getParent(), I->getIterator(), DL, TII->get(RISCV::GLW),
-            I->getOperand(0).getReg().asMCReg())
-        .add(I->getOperand(1))
-        .add(I->getOperand(2));
-  } else {
-    llvm_unreachable(
-        "AMi error: unable to nullify unwanted side-effects in mimicry mode!");
+    // llvm_unreachable("AMi error: unsupported instruction cannot be
+    // qualified!");
+    I->dump();
+    errs() << "AMi error: unsupported instruction cannot be qualified!\n";
   }
 }
 
 void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   errs() << "Handling region " << *Region << "\n";
+  for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
+    setQualifier<RISCV::AMi::Persistent>(MI);
+  }
 
-  SmallVector<MachineInstr *> AlwaysPersistent;
+  for (MachineInstr *I : PA->getPersistentStores(Region)) {
+    MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
-  for (auto &MRNode : Region->elements()) {
-    // Skip nested activating regions, as we can assume they run in constant
-    // time regardless of mimicry mode
-    if (MRNode->isSubRegion() &&
-        ActivatingRegions.contains(MRNode->getNodeAs<MachineRegion>()))
+    if (GhostLoad.getOpcode() == RISCV::GLW) {
+      assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
+             "AMi error: invalid ghost load");
       continue;
-
-    for (MachineInstr &I : *MRNode->getEntry()) {
-      if (RISCV::AMi::getClass(I.getOpcode()) == RISCV::AMi::AlwaysPersistent) {
-        AlwaysPersistent.push_back(&I);
-      }
     }
-  }
 
-  for (auto *PI : AlwaysPersistent) {
-    handlePersistentInstr(PI);
-  }
-}
+    assert(GhostLoad.getOpcode() == TargetOpcode::GHOST_LOAD &&
+           "AMi error: expected GHOST_LOAD pseudo");
+    assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
+           "AMi error: invalid GHOST_LOAD");
 
-bool AMiLinearizeRegion::isActivatingBranch(MachineBasicBlock &MBB) {
-  // If the block has no terminators, it just falls into the block after it.
-  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
-  if (I == MBB.end() ||
-      !RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(I->getOpcode()))
-    return false;
+    BuildMI(*I->getParent(), GhostLoad.getIterator(), DebugLoc(),
+            TII->get(TargetOpcode::COPY),
+            GhostLoad.getOperand(0).getReg().asMCReg())
+        .add(GhostLoad.getOperand(1));
+    GhostLoad.eraseFromParent();
 
-  // Count the number of terminators and find the first activating branch
-  MachineBasicBlock::iterator FirstActBr = MBB.end();
-  int NumActivating = 0;
-  for (auto J = I.getReverse();
-       J != MBB.rend() &&
-       RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(J->getOpcode());
-       J++) {
-    NumActivating++;
-    if (RISCV::AMi::hasQualifier<llvm::RISCV::AMi::Activating>(
-            J->getOpcode())) {
-      FirstActBr = J.getReverse();
-    }
-  }
-
-  // We can't handle blocks with more than 2 terminators.
-  if (NumActivating > 2)
-    return false;
-
-  return true;
-}
-
-void AMiLinearizeRegion::findActivatingRegions() {
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  SmallVector<MachineRegion *, 8> ToScan;
-  ToScan.push_back(MRI.getTopLevelRegion());
-  
-  while (!ToScan.empty()) {
-    MachineRegion *Next = ToScan.pop_back_val();
-
-    auto *Entering = Next->getEnteringBlock();
-    if (Entering && isActivatingBranch(*Entering)) {
-      ActivatingRegions.insert(Next);
-    }
-    
-    for (std::unique_ptr<MachineRegion> &R : *Next) {
-      ToScan.push_back(&*R);
+    if (I->getNumOperands() > 2 && I->getOperand(0).isReg()) {
+      MachineOperand Op1 = I->getOperand(1);
+      Op1.setIsKill(false);
+      MachineOperand Op2 = I->getOperand(2);
+      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
+              TII->get(RISCV::GLW), I->getOperand(0).getReg().asMCReg())
+          .add(Op1)
+          .add(Op2);
+    } else {
+      llvm_unreachable("AMi error: unable to nullify unwanted side-effects in "
+                       "mimicry mode!");
     }
   }
 }
@@ -166,47 +100,43 @@ void AMiLinearizeRegion::findActivatingRegions() {
 bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Region Pass\n";
 
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-
-  const auto &ST = MF.getSubtarget();
+  const auto &ST = MF.getSubtarget<RISCVSubtarget>();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
+  PA = &getAnalysis<PersistencyAnalysisPass>();
 
-  findActivatingRegions();
+  SRA = &getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
+  ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
-  auto *TopRegion = MRI.getTopLevelRegion();
+  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
+            std::greater<SensitiveBranch>());
 
-  MRI.dump();
+  for (auto &Branch : ActivatingBranches) {
+    Branch.MBB->dump();
 
-  SmallVector<MachineRegion *> ToTransform;
-  SmallVector<MachineRegion *> WorkList;
+    if (Branch.IfRegion) {
+      handleRegion(Branch.IfRegion);
+    } else {
+      errs() << "No if region\n";
+    }
 
-  WorkList.push_back(TopRegion);
-  if (ActivatingRegions.contains(TopRegion))
-    ToTransform.push_back(TopRegion);
-
-  // Push all activating regions such that a child region
-  // we always be processed before it's parent (back of the vector)
-  while (!WorkList.empty()) {
-    MachineRegion *Region = WorkList.pop_back_val();
-
-    for (auto &MRNode : Region->elements()) {
-      if (MRNode->isSubRegion()) {
-        auto *ChildRegion = MRNode->getNodeAs<MachineRegion>();
-        WorkList.push_back(ChildRegion);
-
-        if (ActivatingRegions.contains(ChildRegion))
-          ToTransform.push_back(ChildRegion);
-      }
+    if (Branch.ElseRegion) {
+      handleRegion(Branch.ElseRegion);
     }
   }
 
-  // Lowest children are further in the vector, so pop them first
-  while (!ToTransform.empty()) {
-    MachineRegion *Region = ToTransform.pop_back_val();
-    handleRegion(Region);
+  SmallPtrSet<MachineInstr *, 8> ToRemove;
+
+  for (MachineBasicBlock &MB : MF) {
+    for (MachineInstr &MI : MB) {
+      if (MI.getOpcode() == TargetOpcode::SECRET)
+        ToRemove.insert(&MI);
+    }
   }
 
+  for (auto *MI : ToRemove) {
+    MI->eraseFromParent();
+  }
   MF.dump();
 
   return true;
@@ -218,8 +148,9 @@ AMiLinearizeRegion::AMiLinearizeRegion() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
+// INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
+INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_END(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)
 

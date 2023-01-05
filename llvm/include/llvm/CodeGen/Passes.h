@@ -195,6 +195,8 @@ namespace llvm {
   extern char &PrintSecretsPassID;
   extern char &CreateSensitiveRegionsID;
 
+  FunctionPass *createPersistencyAnalysisPass(bool IsSSA = true);
+
   /// FastRegisterAllocation Pass - This pass register allocates as fast as
   /// possible. It is best suited for debug code where live ranges are short.
   ///

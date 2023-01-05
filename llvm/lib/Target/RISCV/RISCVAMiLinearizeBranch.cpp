@@ -117,6 +117,9 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   DebugLoc DL;
 
   MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
+  MF.insert(MF.end(), EndBlock);
+
+  auto *OldExit = MR->getExit();
 
   for (auto *Exiting : Exitings) {
     errs() << "Exiting\n";
@@ -170,20 +173,17 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   // TII->get(TargetOpcode::BRANCH_TARGET))
   //     .addMBB(EndBlock);
 
-  auto *OldExit = MR->getExit();
   TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
   EndBlock->addSuccessor(MR->getExit());
-  MR->replaceExitRecursive(EndBlock);
-  // MF.insert(std::prev(OldExit->getIterator()), EndBlock);
-  MF.insert(MF.end(), EndBlock);
 
   MDT->addNewBlock(EndBlock, MR->getEntry());
   MPDT->getBase().addNewBlock(EndBlock, OldExit);
   MDF->addBasicBlock(EndBlock, { OldExit });
 
+  MR->replaceExitRecursive(EndBlock);
   if (!MR->isTopLevelRegion() && MR->getParent()) {
     MRI.setRegionFor(EndBlock, MR->getParent());
-    // MRI.updateStatistics(MR->getParent());
+    MRI.updateStatistics(MR->getParent());
   }
 
   ActivatingRegions.insert(MR);
@@ -258,20 +258,18 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
 }
 
 void AMiLinearizeBranch::removePseudos(MachineFunction &MF) {
-  SmallPtrSet<MachineInstr *, 8> ToRemove;
+  // SmallPtrSet<MachineInstr *, 8> ToRemove;
 
-  for (MachineBasicBlock &MB : MF) {
-    for (MachineInstr &MI : MB) {
-      if (MI.getOpcode() == TargetOpcode::SECRET ||
-          MI.getOpcode() == TargetOpcode::SECRET_DEP_BR ||
-          MI.getOpcode() == TargetOpcode::BRANCH_TARGET)
-        ToRemove.insert(&MI);
-    }
-  }
+  // for (MachineBasicBlock &MB : MF) {
+  //   for (MachineInstr &MI : MB) {
+  //     if (MI.getOpcode() == TargetOpcode::SECRET)
+  //       ToRemove.insert(&MI);
+  //   }
+  // }
 
-  for (auto *MI : ToRemove) {
-    MI->eraseFromParent();
-  }
+  // for (auto *MI : ToRemove) {
+  //   MI->eraseFromParent();
+  // }
 }
 
 bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
@@ -310,7 +308,6 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   }
 
   simplifyBranchRegions(MF);
-  MF.dump();
   linearizeBranches(MF);
 
   MF.dump();
@@ -321,12 +318,12 @@ AMiLinearizeBranch::AMiLinearizeBranch() : MachineFunctionPass(ID) {
   initializeAMiLinearizeBranchPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Region",
+INITIALIZE_PASS_BEGIN(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
                       false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 // INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
-INITIALIZE_PASS_END(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Region",
+INITIALIZE_PASS_END(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
                     false, false)
 
 namespace llvm {

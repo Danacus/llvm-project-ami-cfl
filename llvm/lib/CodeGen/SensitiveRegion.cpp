@@ -145,18 +145,18 @@ SensitiveRegionAnalysisPhysReg::SensitiveRegionAnalysisPhysReg()
   initializeSensitiveRegionAnalysisPhysRegPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisVirtReg, DEBUG_TYPE,
+INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisVirtReg, "sensitive-region-vreg",
                       "Sensitive Region Analysis", true, true)
 INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
-INITIALIZE_PASS_END(SensitiveRegionAnalysisVirtReg, DEBUG_TYPE,
+INITIALIZE_PASS_END(SensitiveRegionAnalysisVirtReg, "sensitive-region-vreg",
                     "Sensitive Region Analysis", true, true)
 
-INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisPhysReg, DEBUG_TYPE,
+INITIALIZE_PASS_BEGIN(SensitiveRegionAnalysisPhysReg, "sensitive-region-physreg",
                       "Sensitive Region Analysis", true, true)
 INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisPhysReg)
-INITIALIZE_PASS_END(SensitiveRegionAnalysisPhysReg, DEBUG_TYPE,
+INITIALIZE_PASS_END(SensitiveRegionAnalysisPhysReg, "sensitive-region-physreg",
                     "Sensitive Region Analysis", true, true)
 
 namespace llvm {

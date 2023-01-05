@@ -44,14 +44,21 @@ void PersistencyAnalysisPass::propagatePersistency(
 
       Register Reg = Op.getReg();
 
-      // SmallPtrSet<MachineInstr *, 16> Defs;
-      // RDA.getGlobalReachingDefs(I, Reg, Defs);
+      SmallPtrSet<MachineInstr *, 16> Defs;
 
-      for (auto &DI : MF.getRegInfo().def_instructions(Reg)) {
-        if (MR.contains(&DI))
-          WorkSet.push_back(&DI);
+      if (IsSSA) {
+        for (auto &DI : MF.getRegInfo().def_instructions(Reg)) {
+          Defs.insert(&DI);
+        }
+      } else {
+        RDA->getGlobalReachingDefs(I, Reg, Defs);
+      }
+
+      for (auto *DI : Defs) {
+        if (MR.contains(DI))
+          WorkSet.push_back(DI);
         else
-          PersistentRegionInputMap[&MR].insert(&DI);
+          PersistentRegionInputMap[&MR].insert(DI);
       }
     }
   }
@@ -80,8 +87,7 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
         TII->constantTimeLeakage(MI, LeakedOperands);
 
         if (TII->isPersistentStore(MI)) {
-          if (&Scope == &MR)
-            PersistentStores[&Scope].insert(&MI);
+          PersistentStores[&Scope].insert(&MI);
         }
 
         for (auto &MO : LeakedOperands) {
@@ -97,7 +103,13 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  SRA = &getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  if (IsSSA) {
+    SRA = &getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  } else {
+    SRA = &getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
+    RDA = &getAnalysis<ReachingDefAnalysis>();
+  }
+
   for (auto &B : SRA->sensitive_branches()) {
     errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
     errs() << "if region:\n";
@@ -113,7 +125,9 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto &Branch : Branches) {
     analyzeRegion(MF, *Branch.IfRegion);
-    analyzeRegion(MF, *Branch.ElseRegion);
+    if (Branch.ElseRegion) {
+      analyzeRegion(MF, *Branch.ElseRegion);
+    }
   }
 
   errs() << "Persistent instructions: \n";
@@ -132,20 +146,22 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 char PersistencyAnalysisPass::ID = 0;
 char &llvm::PersistencyAnalysisPassID = PersistencyAnalysisPass::ID;
 
-PersistencyAnalysisPass::PersistencyAnalysisPass() : MachineFunctionPass(ID) {
+PersistencyAnalysisPass::PersistencyAnalysisPass(bool IsSSA) : MachineFunctionPass(ID), IsSSA(IsSSA) {
   initializePersistencyAnalysisPassPass(*PassRegistry::getPassRegistry());
 }
 
 INITIALIZE_PASS_BEGIN(PersistencyAnalysisPass, DEBUG_TYPE,
                       "Persistency Analysis", true, true)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisVirtReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
+INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
 INITIALIZE_PASS_END(PersistencyAnalysisPass, DEBUG_TYPE, "Persistency Analysis",
                     true, true)
 
 namespace llvm {
 
-FunctionPass *createPersistencyAnalysisPass() {
-  return new PersistencyAnalysisPass();
+FunctionPass *createPersistencyAnalysisPass(bool IsSSA) {
+  return new PersistencyAnalysisPass(IsSSA);
 }
 
 } // namespace llvm

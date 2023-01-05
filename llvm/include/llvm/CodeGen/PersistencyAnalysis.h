@@ -18,15 +18,18 @@ private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SensitiveRegionAnalysisImpl *SRA;
+  ReachingDefAnalysis *RDA;
 
   RegionInstrMap PersistentStores;
   RegionInstrMap PersistentInstructions;
   RegionInstrMap PersistentRegionInputMap;
 
+  bool IsSSA = true;
+
 public:
   static char ID;
 
-  PersistencyAnalysisPass();
+  PersistencyAnalysisPass(bool IsSSA = true);
 
   SmallPtrSet<MachineInstr *, 16>
   getPersistentInstructions(const MachineRegion *MR) {
@@ -51,7 +54,12 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysisVirtReg>();
+    if (IsSSA) {
+      AU.addRequired<SensitiveRegionAnalysisVirtReg>();
+    } else {
+      AU.addRequired<ReachingDefAnalysis>();
+      AU.addRequired<SensitiveRegionAnalysisPhysReg>();
+    }
     AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);

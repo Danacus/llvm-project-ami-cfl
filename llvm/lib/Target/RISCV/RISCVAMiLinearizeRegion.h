@@ -4,10 +4,15 @@
 #include "RISCVInstrInfo.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineDominanceFrontier.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
+#include "llvm/CodeGen/PersistencyAnalysis.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/Argument.h"
@@ -24,9 +29,12 @@ class AMiLinearizeRegion : public MachineFunctionPass {
 public:
   static char ID;
 
-  const TargetInstrInfo *TII;
-  const TargetRegisterInfo *TRI;
+  const RISCVInstrInfo *TII;
+  const RISCVRegisterInfo *TRI;
+  SensitiveRegionAnalysisImpl *SRA;
+  PersistencyAnalysisPass *PA;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
+  SmallVector<SensitiveBranch, 16> ActivatingBranches;
 
   AMiLinearizeRegion();
 
@@ -41,8 +49,12 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
-    AU.addRequired<ReachingDefAnalysis>();
-    AU.addRequired<MachineRegionInfoPass>();
+    AU.addRequiredTransitive<MachineDominatorTree>();
+    AU.addRequiredTransitive<MachinePostDominatorTree>();
+    AU.addRequiredTransitive<MachineDominanceFrontier>();
+    AU.addRequiredTransitive<MachineRegionInfoPass>();
+    AU.addRequired<SensitiveRegionAnalysisPhysReg>();
+    AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
