@@ -31,7 +31,7 @@ public:
 
   const RISCVInstrInfo *TII;
   const RISCVRegisterInfo *TRI;
-  SensitiveRegionAnalysisImpl *SRA;
+  SensitiveRegionAnalysis *SRA;
   PersistencyAnalysisPass *PA;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
@@ -53,7 +53,7 @@ public:
     AU.addRequiredTransitive<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
     AU.addRequiredTransitive<MachineRegionInfoPass>();
-    AU.addRequired<SensitiveRegionAnalysisPhysReg>();
+    AU.addRequired<SensitiveRegionAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

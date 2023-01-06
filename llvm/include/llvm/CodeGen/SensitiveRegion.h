@@ -56,7 +56,7 @@ template <> struct DenseMapInfo<SensitiveBranch> {
   }
 };
 
-class SensitiveRegionAnalysisImpl {
+class SensitiveRegionAnalysis : public MachineFunctionPass {
 public:
   using BranchSet = SmallSet<SensitiveBranch, 16>;
   using RegionSet = SmallPtrSet<MachineRegion *, 16>;
@@ -68,7 +68,8 @@ private:
   DenseMap<MachineBasicBlock *, BranchSet> ElseBranchMap;
   BranchSet SensitiveBranches;
   MachineRegionInfo *MRI;
-  TrackSecretsAnalysisImpl *TSA;
+  TrackSecretsAnalysis *TSA;
+  bool IsSSA;
 
 public:
   static char ID;
@@ -102,7 +103,7 @@ public:
     return SensitiveBlocks.test(MBB->getNumber());
   }
 
-  SensitiveRegionAnalysisImpl() = default;
+  SensitiveRegionAnalysis(bool IsSSA = true);
 
   MachineRegion *getMaxRegionFor(MachineBasicBlock *MBB) const {
     // Get largest region that starts at BB. (See
@@ -123,56 +124,14 @@ public:
   void removeBranch(MachineBasicBlock *MBB);
   void handleBranch(MachineBasicBlock *MBB);
 
-  bool run(MachineFunction &MF, MachineRegionInfo *MRI,
-           TrackSecretsAnalysisImpl *TSA);
-};
-
-class SensitiveRegionAnalysisVirtReg : public MachineFunctionPass {
-public:
-  static char ID;
-
-  SensitiveRegionAnalysisVirtReg();
-
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    return SRA.run(MF, &getAnalysis<MachineRegionInfoPass>().getRegionInfo(),
-                   &getAnalysis<TrackSecretsAnalysisVirtReg>().getSecrets());
-  }
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<MachineRegionInfoPass>();
-    AU.addRequiredTransitive<TrackSecretsAnalysisVirtReg>();
+    AU.addRequired<TrackSecretsAnalysis>();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
-
-  SensitiveRegionAnalysisImpl &getSRA() { return SRA; }
-
-private:
-  SensitiveRegionAnalysisImpl SRA;
-};
-
-class SensitiveRegionAnalysisPhysReg : public MachineFunctionPass {
-public:
-  static char ID;
-
-  SensitiveRegionAnalysisPhysReg();
-
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    return SRA.run(MF, &getAnalysis<MachineRegionInfoPass>().getRegionInfo(),
-                   &getAnalysis<TrackSecretsAnalysisPhysReg>().getSecrets());
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<MachineRegionInfoPass>();
-    AU.addRequiredTransitive<TrackSecretsAnalysisPhysReg>();
-    AU.setPreservesAll();
-    MachineFunctionPass::getAnalysisUsage(AU);
-  }
-
-  SensitiveRegionAnalysisImpl &getSRA() { return SRA; }
-
-private:
-  SensitiveRegionAnalysisImpl SRA;
 };
 
 } // namespace llvm

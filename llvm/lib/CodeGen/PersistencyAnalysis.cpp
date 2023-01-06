@@ -103,10 +103,9 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  if (IsSSA) {
-    SRA = &getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
-  } else {
-    SRA = &getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
+  SRA = &getAnalysis<SensitiveRegionAnalysis>();
+
+  if (!IsSSA) {
     RDA = &getAnalysis<ReachingDefAnalysis>();
   }
 
@@ -152,8 +151,7 @@ PersistencyAnalysisPass::PersistencyAnalysisPass(bool IsSSA) : MachineFunctionPa
 
 INITIALIZE_PASS_BEGIN(PersistencyAnalysisPass, DEBUG_TYPE,
                       "Persistency Analysis", true, true)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisVirtReg)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
 INITIALIZE_PASS_END(PersistencyAnalysisPass, DEBUG_TYPE, "Persistency Analysis",
                     true, true)

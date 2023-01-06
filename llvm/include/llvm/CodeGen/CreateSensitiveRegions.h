@@ -18,7 +18,7 @@ class CreateSensitiveRegions : public MachineFunctionPass {
   MachineDominatorTree *MDT;
   MachinePostDominatorTree *MPDT;
   MachineDominanceFrontier *MDF;
-  SensitiveRegionAnalysisImpl *SRA;
+  SensitiveRegionAnalysis *SRA;
   const TargetInstrInfo *TII;
 
 public:
@@ -29,8 +29,8 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysisVirtReg>();
-    AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
+    AU.addRequired<SensitiveRegionAnalysis>();
+    AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addUsedIfAvailable<MachineRegionInfoPass>();
     AU.addPreserved<MachineRegionInfoPass>();
     AU.addUsedIfAvailable<MachineDominatorTree>();

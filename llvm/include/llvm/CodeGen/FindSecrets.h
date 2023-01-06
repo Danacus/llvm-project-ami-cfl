@@ -208,8 +208,10 @@ public:
   }
 };
 
-class TrackSecretsAnalysisImpl {
+class TrackSecretsAnalysis : public MachineFunctionPass {
 public:
+  static char ID;
+  
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
@@ -220,58 +222,23 @@ public:
 
   SecretsUseMap SecretUses;
 
-  TrackSecretsAnalysisImpl() = default;
+  TrackSecretsAnalysis(bool IsSSA = true);
 
   void handleUse(MachineInstr &UseInst, MachineOperand &MO, uint64_t SecretMask,
                  SecretsSet &WorkSet, SecretsMap &SecretDefs);
 
-  bool run(MachineFunction &MF, FlowGraph Graph);
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    if (!IsSSA)
+      AU.addRequired<ReachingDefAnalysis>();
+    AU.setPreservesAll();
+    MachineFunctionPass::getAnalysisUsage(AU);
+  }
 private:
+  FlowGraph *Graph;
   SecretsMap Secrets;
-};
-
-class TrackSecretsAnalysisVirtReg : public MachineFunctionPass {
-public:
-  static char ID;
-
-  TrackSecretsAnalysisVirtReg();
-
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    return TSA.run(MF, FlowGraph(MF));
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesAll();
-    MachineFunctionPass::getAnalysisUsage(AU);
-  }
-
-  TrackSecretsAnalysisImpl &getSecrets() { return TSA; }
-
-private:
-  TrackSecretsAnalysisImpl TSA;
-};
-
-class TrackSecretsAnalysisPhysReg : public MachineFunctionPass {
-public:
-  static char ID;
-
-  TrackSecretsAnalysisPhysReg();
-
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    return TSA.run(MF, FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>()));
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<ReachingDefAnalysis>();
-    AU.setPreservesAll();
-    MachineFunctionPass::getAnalysisUsage(AU);
-  }
-
-  TrackSecretsAnalysisImpl &getSecrets() { return TSA; }
-
-private:
-  TrackSecretsAnalysisImpl TSA;
+  bool IsSSA;
 };
 
 } // namespace llvm

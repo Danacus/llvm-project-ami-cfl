@@ -54,7 +54,7 @@ void InsertPersistentDefs::insertPersistentDefEnd(MachineFunction &MF,
 }
 
 void InsertPersistentDefs::insertPersistentDefEnd(MachineInstr *MI) {
-  auto &SRA = getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
   auto *MBB = MI->getParent();
 
   for (auto &Branch : SRA.sensitive_branches(MBB, true)) {
@@ -98,7 +98,7 @@ void InsertPersistentDefs::insertPersistentDefStart(MachineFunction &MF,
 }
 
 void InsertPersistentDefs::insertPersistentDefStart(MachineInstr *MI) {
-  auto &SRA = getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
   auto *MBB = MI->getParent();
 
   for (auto &Branch : SRA.sensitive_branches(MBB, false)) {
@@ -165,7 +165,7 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  auto &SRA = getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
 
   for (auto &B : SRA.sensitive_branches()) {
@@ -239,7 +239,7 @@ InsertPersistentDefs::InsertPersistentDefs() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(InsertPersistentDefs, DEBUG_TYPE,
                       "Insert Persistent Defs", false, false)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisVirtReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_DEPENDENCY(LiveVariables)
 INITIALIZE_PASS_END(InsertPersistentDefs, DEBUG_TYPE, "Insert Persistent Defs",

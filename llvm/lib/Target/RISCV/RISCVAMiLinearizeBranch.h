@@ -30,7 +30,7 @@ public:
   MachineDominatorTree *MDT;
   MachinePostDominatorTree *MPDT;
   MachineDominanceFrontier *MDF;
-  SensitiveRegionAnalysisImpl *SRA;
+  SensitiveRegionAnalysis *SRA;
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
@@ -50,9 +50,9 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysisPhysReg>();
-    AU.addPreserved<SensitiveRegionAnalysisPhysReg>();
-    AU.addPreserved<TrackSecretsAnalysisPhysReg>();
+    AU.addRequired<SensitiveRegionAnalysis>();
+    AU.addPreserved<SensitiveRegionAnalysis>();
+    AU.addPreserved<TrackSecretsAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     AU.addRequiredTransitive<MachineRegionInfoPass>();

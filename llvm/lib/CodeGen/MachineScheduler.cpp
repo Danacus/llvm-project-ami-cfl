@@ -243,7 +243,7 @@ void MachineScheduler::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<SlotIndexes>();
   AU.addRequired<LiveIntervals>();
   AU.addPreserved<LiveIntervals>();
-  AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
+  AU.addPreserved<SensitiveRegionAnalysis>();
   AU.addPreserved<InsertPersistentDefs>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }

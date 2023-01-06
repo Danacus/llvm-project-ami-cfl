@@ -290,7 +290,7 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   MDT = getAnalysisIfAvailable<MachineDominatorTree>();
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
-  SRA = &getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
+  SRA = &getAnalysis<SensitiveRegionAnalysis>();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end(), std::greater<SensitiveBranch>());
@@ -322,7 +322,7 @@ INITIALIZE_PASS_BEGIN(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
                       false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 // INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_END(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
                     false, false)
 

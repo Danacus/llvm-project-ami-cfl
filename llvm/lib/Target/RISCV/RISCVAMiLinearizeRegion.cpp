@@ -105,21 +105,16 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
   PA = &getAnalysis<PersistencyAnalysisPass>();
 
-  SRA = &getAnalysis<SensitiveRegionAnalysisPhysReg>().getSRA();
+  SRA = &getAnalysis<SensitiveRegionAnalysis>();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
             std::greater<SensitiveBranch>());
 
   for (auto &Branch : ActivatingBranches) {
-    Branch.MBB->dump();
-
     if (Branch.IfRegion) {
       handleRegion(Branch.IfRegion);
-    } else {
-      errs() << "No if region\n";
     }
-
     if (Branch.ElseRegion) {
       handleRegion(Branch.ElseRegion);
     }
@@ -149,7 +144,7 @@ AMiLinearizeRegion::AMiLinearizeRegion() : MachineFunctionPass(ID) {
 INITIALIZE_PASS_BEGIN(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                       false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisPhysReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_END(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)

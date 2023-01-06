@@ -179,7 +179,7 @@ public:
     AU.addPreserved<LiveVariables>();
     AU.addPreserved<SlotIndexes>();
     AU.addPreserved<LiveIntervals>();
-    AU.addPreserved<SensitiveRegionAnalysisVirtReg>();
+    AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addPreserved<InsertPersistentDefs>();
     AU.addPreservedID(MachineLoopInfoID);
     AU.addPreservedID(MachineDominatorsID);

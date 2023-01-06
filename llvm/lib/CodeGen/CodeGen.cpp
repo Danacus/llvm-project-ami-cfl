@@ -46,11 +46,12 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeFEntryInserterPass(Registry);
   initializeFinalizeISelPass(Registry);
   initializeFinalizeMachineBundlesPass(Registry);
-  initializeTrackSecretsAnalysisVirtRegPass(Registry);
-  initializeTrackSecretsAnalysisPhysRegPass(Registry);
-  // initializeSensitiveRegionAnalysisPassPass(Registry);
-  initializeSensitiveRegionAnalysisVirtRegPass(Registry);
-  initializeSensitiveRegionAnalysisPhysRegPass(Registry);
+  initializeTrackSecretsAnalysisPass(Registry);
+  // initializeTrackSecretsAnalysisVirtRegPass(Registry);
+  // initializeTrackSecretsAnalysisPhysRegPass(Registry);
+  initializeSensitiveRegionAnalysisPass(Registry);
+  // initializeSensitiveRegionAnalysisVirtRegPass(Registry);
+  // initializeSensitiveRegionAnalysisPhysRegPass(Registry);
   initializePersistencyAnalysisPassPass(Registry);
   initializeInsertPersistentDefsPass(Registry);
   initializeRemovePersistentDefsPass(Registry);

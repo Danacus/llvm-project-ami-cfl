@@ -182,11 +182,12 @@ namespace llvm {
   /// This pass reads flow sensitive profile.
   extern char &MIRProfileLoaderPassID;
 
-  extern char &TrackSecretsVirtRegPassID;
-  extern char &TrackSecretsPhysRegPassID;
-  // extern char &SensitiveRegionAnalysisPassID;
-  extern char &SensitiveRegionAnalysisVirtRegID;
-  extern char &SensitiveRegionAnalysisPhysRegID;
+  extern char &TrackSecretsAnalysisID;
+  // extern char &TrackSecretsVirtRegPassID;
+  // extern char &TrackSecretsPhysRegPassID;
+  extern char &SensitiveRegionAnalysisID;
+  // extern char &SensitiveRegionAnalysisVirtRegID;
+  // extern char &SensitiveRegionAnalysisPhysRegID;
   extern char &InsertPersistentDefsPassID;
   extern char &RemovePersistentDefsPassID;
   extern char &PersistencyAnalysisPassID;
@@ -195,6 +196,8 @@ namespace llvm {
   extern char &PrintSecretsPassID;
   extern char &CreateSensitiveRegionsID;
 
+  FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA = true);
+  FunctionPass *createSensitiveRegionAnalysisPass(bool IsSSA = true);
   FunctionPass *createPersistencyAnalysisPass(bool IsSSA = true);
 
   /// FastRegisterAllocation Pass - This pass register allocates as fast as

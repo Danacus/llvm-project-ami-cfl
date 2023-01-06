@@ -244,7 +244,7 @@ void FlowGraph::getReachingDefs(SecretDef &SD,
   }
 }
 
-void TrackSecretsAnalysisImpl::handleUse(MachineInstr &UseInst, MachineOperand &MO,
+void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, MachineOperand &MO,
                                      uint64_t SecretMask, SecretsSet &WorkSet,
                                      SecretsMap &SecretDefs) {
   SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
@@ -268,16 +268,22 @@ void TrackSecretsAnalysisImpl::handleUse(MachineInstr &UseInst, MachineOperand &
   }
 }
 
-bool TrackSecretsAnalysisImpl::run(MachineFunction &MF, FlowGraph Graph) {
+bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
+
+  if (IsSSA) {
+    Graph = new FlowGraph(MF);
+  } else {
+    Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>());
+  }
 
   MF.dump();
 
   // Step 1: find secret arguments and globals
   SecretsSet WorkSet;
-  Graph.getSources(WorkSet, Secrets);
+  Graph->getSources(WorkSet, Secrets);
 
   // Step 2: iteratively propagate secrets from def to uses
   while (!WorkSet.empty()) {
@@ -285,7 +291,7 @@ bool TrackSecretsAnalysisImpl::run(MachineFunction &MF, FlowGraph Graph) {
     WorkSet.erase(Current);
 
     SmallPtrSet<MachineInstr *, 8> Uses;
-    Graph.getUses(Current, Uses);
+    Graph->getUses(Current, Uses);
 
     for (auto *Use : Uses) {
       auto SU = SecretUse(Current, Use, Secrets[Current]);
@@ -327,28 +333,23 @@ bool TrackSecretsAnalysisImpl::run(MachineFunction &MF, FlowGraph Graph) {
   return false;
 }
 
-char TrackSecretsAnalysisVirtReg::ID = 0;
-char &llvm::TrackSecretsVirtRegPassID = TrackSecretsAnalysisVirtReg::ID;
+char TrackSecretsAnalysis::ID = 0;
+char &llvm::TrackSecretsAnalysisID = TrackSecretsAnalysis::ID;
 
-char TrackSecretsAnalysisPhysReg::ID = 0;
-char &llvm::TrackSecretsPhysRegPassID = TrackSecretsAnalysisPhysReg::ID;
-
-TrackSecretsAnalysisVirtReg::TrackSecretsAnalysisVirtReg()
-    : MachineFunctionPass(ID) {
-  initializeTrackSecretsAnalysisVirtRegPass(*PassRegistry::getPassRegistry());
-}
-TrackSecretsAnalysisPhysReg::TrackSecretsAnalysisPhysReg()
-    : MachineFunctionPass(ID) {
-  initializeTrackSecretsAnalysisPhysRegPass(*PassRegistry::getPassRegistry());
+TrackSecretsAnalysis::TrackSecretsAnalysis(bool IsSSA)
+    : MachineFunctionPass(ID), IsSSA(IsSSA) {
+  initializeTrackSecretsAnalysisPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(TrackSecretsAnalysisPhysReg, "track-secrets-phys-reg",
+INITIALIZE_PASS_BEGIN(TrackSecretsAnalysis, "track-secrets",
                       "Track Secrets", true, true)
-INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
-INITIALIZE_PASS_END(TrackSecretsAnalysisPhysReg, "track-secrets-phys-reg",
+INITIALIZE_PASS_END(TrackSecretsAnalysis, "track-secrets",
                     "Track Secrets", true, true)
 
-INITIALIZE_PASS_BEGIN(TrackSecretsAnalysisVirtReg, "track-secrets-virt-reg",
-                      "Track Secrets", true, true)
-INITIALIZE_PASS_END(TrackSecretsAnalysisVirtReg, "track-secrets-virt-reg",
-                    "Track Secrets", true, true)
+namespace llvm {
+
+FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA) {
+  return new TrackSecretsAnalysis(IsSSA);
+}
+
+} // namespace llvm

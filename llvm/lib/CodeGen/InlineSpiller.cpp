@@ -162,7 +162,7 @@ class InlineSpiller : public Spiller {
   MachineLoopInfo &Loops;
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
-  SensitiveRegionAnalysisVirtReg *SRA;
+  SensitiveRegionAnalysis *SRA;
   InsertPersistentDefs *IPD;
   const TargetInstrInfo &TII;
   const TargetRegisterInfo &TRI;
@@ -202,7 +202,7 @@ public:
         LSS(Pass.getAnalysis<LiveStacks>()),
         MDT(Pass.getAnalysis<MachineDominatorTree>()),
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
-        MRI(MF.getRegInfo()), SRA(Pass.getAnalysisIfAvailable<SensitiveRegionAnalysisVirtReg>()),
+        MRI(MF.getRegInfo()), SRA(Pass.getAnalysisIfAvailable<SensitiveRegionAnalysis>()),
         IPD(Pass.getAnalysisIfAvailable<InsertPersistentDefs>()),
         TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
@@ -1047,7 +1047,7 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   assert(!MI->isTerminator() && "Inserting a spill after a terminator");
   MachineBasicBlock &MBB = *MI->getParent();
 
-  if (SRA && SRA->getSRA().isSensitive(&MBB)) {
+  if (SRA && SRA->isSensitive(&MBB)) {
     Register GhostReg = Edit->createFrom(Original);
 
     BuildMI(MBB, std::next(MI), DebugLoc(),
@@ -1077,7 +1077,7 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   for (const MachineInstr &MI : make_range(Spill, MIS.end()))
     getVDefInterval(MI, LIS);
 
-  if (SRA && SRA->getSRA().isSensitive(&MBB)) {    
+  if (SRA && SRA->isSensitive(&MBB)) {    
     MachineBasicBlock::iterator GhostMI = MI;
     MachineInstrSpan GhostMIS(GhostMI, &MBB);
     LIS.InsertMachineInstrRangeInMaps(GhostMI, GhostMIS.end());

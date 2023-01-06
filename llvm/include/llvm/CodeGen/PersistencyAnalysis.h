@@ -17,7 +17,7 @@ public:
 private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  SensitiveRegionAnalysisImpl *SRA;
+  SensitiveRegionAnalysis *SRA;
   ReachingDefAnalysis *RDA;
 
   RegionInstrMap PersistentStores;
@@ -54,11 +54,9 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    if (IsSSA) {
-      AU.addRequired<SensitiveRegionAnalysisVirtReg>();
-    } else {
+    AU.addRequired<SensitiveRegionAnalysis>();
+    if (!IsSSA) {
       AU.addRequired<ReachingDefAnalysis>();
-      AU.addRequired<SensitiveRegionAnalysisPhysReg>();
     }
     AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.setPreservesAll();

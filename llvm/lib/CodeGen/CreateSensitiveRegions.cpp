@@ -17,7 +17,7 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
   MDT = getAnalysisIfAvailable<MachineDominatorTree>();
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
-  SRA = &getAnalysis<SensitiveRegionAnalysisVirtReg>().getSRA();
+  SRA = &getAnalysis<SensitiveRegionAnalysis>();
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   bool MadeChange = false;
@@ -83,7 +83,7 @@ CreateSensitiveRegions::CreateSensitiveRegions()
 INITIALIZE_PASS_BEGIN(CreateSensitiveRegions, DEBUG_TYPE,
                       "Create Sensitive Regions", true, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysisVirtReg)
+INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 // INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
 // INITIALIZE_PASS_DEPENDENCY(MachinePostDominatorTree)
 // INITIALIZE_PASS_DEPENDENCY(MachineDominanceFrontier)
