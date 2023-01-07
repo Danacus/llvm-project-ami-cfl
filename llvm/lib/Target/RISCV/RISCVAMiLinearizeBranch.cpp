@@ -231,6 +231,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
                       Branch.IfRegion->getEntry(), NewCond, DL);
 
     if (Branch.ElseRegion) {
+      Branch.ElseRegion->dump();
       assert(Branch.ElseRegion->getExit()->getSingleSuccessor() ==
                  OldBranchExit &&
              "if and else should exit to the same block");

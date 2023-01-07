@@ -1,7 +1,10 @@
 #ifndef LLVM_CODEGEN_PERSISTENCY_ANALYSIS_H
 #define LLVM_CODEGEN_PERSISTENCY_ANALYSIS_H
 
+#include "llvm/CodeGen/MachineDominanceFrontier.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
 
@@ -59,6 +62,9 @@ public:
       AU.addRequired<ReachingDefAnalysis>();
     }
     AU.addRequiredTransitive<MachineRegionInfoPass>();
+    AU.addRequiredTransitive<MachineDominatorTree>();
+    AU.addRequiredTransitive<MachinePostDominatorTree>();
+    AU.addRequiredTransitive<MachineDominanceFrontier>();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

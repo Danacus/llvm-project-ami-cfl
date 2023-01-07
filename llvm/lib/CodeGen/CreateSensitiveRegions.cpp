@@ -18,6 +18,7 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
+  auto *LV = getAnalysisIfAvailable<LiveVariables>();
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   bool MadeChange = false;
@@ -45,27 +46,38 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
       MadeChange = true;
       ToUpdate.push_back(Branch.MBB);
 
-      MDT->addNewBlock(ElseMBB, Branch.MBB);
-      MPDT->getBase().addNewBlock(ElseMBB, Exit);
-      MDF->addBasicBlock(ElseMBB, { Exit });
-      MachineRegion *MR = new MachineRegion(ElseMBB, Exit, MRI, MDT);
-      MRI->setRegionFor(ElseMBB, MR);
-      MRI->updateStatistics(MR);
-      // if (Branch.IfRegion->getParent())
-      // Branch.IfRegion->getParent()->addSubRegion(MR);
-      MRI->getRegionFor(Branch.MBB)->addSubRegion(MR);
+      if (MDT)
+        MDT->addNewBlock(ElseMBB, Branch.MBB);
+      if (MPDT)
+        MPDT->getBase().addNewBlock(ElseMBB, Exit);
+      if (MDF)
+        MDF->addBasicBlock(ElseMBB, { Exit });
+
+      if (MRI) {
+        MachineRegion *MR = new MachineRegion(ElseMBB, Exit, MRI, MDT);
+        MRI->setRegionFor(ElseMBB, MR);
+        MRI->updateStatistics(MR);
+        // if (Branch.IfRegion->getParent())
+        // Branch.IfRegion->getParent()->addSubRegion(MR);
+        MRI->getRegionFor(Branch.MBB)->addSubRegion(MR);
+      }
+
+      if (LV)
+        LV->addNewBlock(ElseMBB, Branch.MBB, Exit);
+
+      BuildMI(*ElseMBB, ElseMBB->begin(), DebugLoc(), TII->get(TargetOpcode::EXTEND));
     }
 
-    BuildMI(*Exit, Exit->begin(), DebugLoc(), TII->get(TargetOpcode::BRANCH_TARGET)).addMBB(Branch.MBB);
+    // BuildMI(*Exit, Exit->begin(), DebugLoc(), TII->get(TargetOpcode::BRANCH_TARGET)).addMBB(Branch.MBB);
   }
 
   for (auto *MBB : ToUpdate) {
     SRA->handleBranch(MBB);
   }
 
-  for (auto &Branch : SRA->sensitive_branches()) {
-    BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(), TII->get(TargetOpcode::SECRET_DEP_BR));
-  }
+  // for (auto &Branch : SRA->sensitive_branches()) {
+  //   BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(), TII->get(TargetOpcode::SECRET_DEP_BR));
+  // }
 
   MF.dump();
   

@@ -378,6 +378,11 @@ void RISCVPassConfig::addMachineSSAOptimization() {
 }
 
 void RISCVPassConfig::addPreSSADestruction() {
+  if (EnableAMiLinearization == cl::BOU_TRUE) {
+    // addPass(createTrackSecretsAnalysisPass(true));
+    // addPass(createSensitiveRegionAnalysisPass(true));
+    // addPass(&CreateSensitiveRegionsID);
+  }
 }
 
 void RISCVPassConfig::addPostSSADestruction() {

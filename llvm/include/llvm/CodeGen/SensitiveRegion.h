@@ -6,6 +6,7 @@
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
+#include "llvm/CodeGen/Passes.h"
 
 using namespace llvm;
 
@@ -128,7 +129,10 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<MachineRegionInfoPass>();
+    // AU.addPreserved<MachineRegionInfoPass>();
     AU.addRequired<TrackSecretsAnalysis>();
+    // AU.addPreserved<TrackSecretsAnalysis>();
+    // AU.setPreservesCFG();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

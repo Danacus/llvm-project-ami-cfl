@@ -25,7 +25,7 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
+    // AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

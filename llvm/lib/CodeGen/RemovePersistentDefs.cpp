@@ -19,6 +19,9 @@ char RemovePersistentDefs::ID = 0;
 char &llvm::RemovePersistentDefsPassID = RemovePersistentDefs::ID;
 
 bool RemovePersistentDefs::runOnMachineFunction(MachineFunction &MF) {
+  const auto &ST = MF.getSubtarget();
+  TII = ST.getInstrInfo();
+
   SmallPtrSet<MachineInstr *, 8> ToRemove;
 
   for (MachineBasicBlock &MB : MF) {
@@ -29,11 +32,42 @@ bool RemovePersistentDefs::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
+  SmallPtrSet<MachineBasicBlock *, 8> BlocksToRemove;
+
   for (auto *MI : ToRemove) {
+    auto *Parent = MI->getParent();
     MI->eraseFromParent();
+    if (Parent->empty() || Parent->getFirstTerminator() == Parent->begin()) {
+      BlocksToRemove.insert(Parent);
+    }
   }
 
-  LLVM_DEBUG(MF.dump());
+  for (auto *MBB : BlocksToRemove) {
+    assert(MBB->pred_size() == 1 && "Temporary block should have single predecessor");
+    assert(MBB->succ_size() == 1 && "Temporary block should have single successor");
+
+    MachineBasicBlock *Pred = *MBB->pred_begin();
+    MachineBasicBlock *Succ = MBB->getSingleSuccessor();
+
+    MachineBasicBlock *TBB;
+    MachineBasicBlock *FBB;
+    SmallVector<MachineOperand> Cond;
+    TII->analyzeBranch(*Pred, TBB, FBB, Cond, false);
+
+    assert(TBB == MBB && "TBB should be the temporary block");
+
+    TII->removeBranch(*Pred);
+    TII->insertBranch(*Pred, Succ, FBB, Cond, DebugLoc());
+    MBB->removeSuccessor(Succ);
+    Pred->removeSuccessor(MBB);
+    Pred->addSuccessor(Succ);
+  }
+
+  for (auto *MBB : BlocksToRemove) {    
+    MBB->eraseFromParent();
+  }
+
+  MF.dump();
   return true;
 }
 

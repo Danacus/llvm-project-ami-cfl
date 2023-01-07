@@ -39,7 +39,9 @@ public:
     AU.addPreserved<MachinePostDominatorTree>();
     AU.addUsedIfAvailable<MachineDominanceFrontier>();
     AU.addPreserved<MachineDominanceFrontier>();
+    AU.addUsedIfAvailable<LiveVariables>();
     AU.addPreserved<LiveVariables>();
+    AU.addPreservedID(UnreachableMachineBlockElimID);
     AU.setPreservesCFG();
     // AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);

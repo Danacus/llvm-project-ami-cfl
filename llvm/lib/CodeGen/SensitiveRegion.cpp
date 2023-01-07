@@ -27,6 +27,7 @@ void SensitiveRegionAnalysis::removeBranch(MachineBasicBlock *MBB) {
 void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
   const auto &ST = MBB->getParent()->getSubtarget();
   const auto *TII = ST.getInstrInfo();
+  MBB->dump();
 
   removeBranch(MBB);
 
@@ -43,10 +44,22 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
   if (!FBB)
     FBB = MBB->getFallThrough();
 
+  if (FBB->pred_size() > 1) {
+    // FBB cannot be a valid SESE region entry, if region must be missing
+    // Need to re-order the regions
+    TII->removeBranch(*MBB);
+    TII->reverseBranchCondition(Cond);
+    TII->insertBranch(*MBB, FBB, TBB, Cond, DebugLoc());
+    auto *Temp = TBB;
+    TBB = FBB;
+    FBB = Temp;
+  }
+
   MachineRegion *FR = getMaxRegionFor(FBB);
 
+  errs() << "FR\n";
   FR->dump();
-  FR->getExit()->dump();
+  // FR->getExit()->dump();
 
   // Find the exiting blocks of this region
   SmallVector<MachineBasicBlock *> Exitings;
@@ -68,6 +81,8 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
   SensitiveBranches.insert(Branch);
 
   if (TR) {
+    errs() << "TR\n";
+    TR->dump();
     for (auto *MBB : TR->blocks()) {
       SensitiveBlocks.set(MBB->getNumber());
       ElseBranchMap[MBB].insert(Branch);
@@ -87,6 +102,8 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   TSA = &getAnalysis<TrackSecretsAnalysis>();
 
+  MRI->dump();
+
   auto &Secrets = TSA->SecretUses;
 
   SmallPtrSet<MachineBasicBlock *, 16> HandledBranches;
@@ -98,10 +115,10 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
     auto *User = Secret.second.getUser();
 
     // We still need those registers
-    // for (auto &MO : User->uses()) {
-    //   if (MO.isReg())
-    //     MO.setIsKill(false);
-    // }
+    for (auto &MO : User->uses()) {
+      if (MO.isReg())
+        MO.setIsKill(false);
+    }
 
     if (User->isConditionalBranch()) {
       if (HandledBranches.contains(User->getParent())) {
