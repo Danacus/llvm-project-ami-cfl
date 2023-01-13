@@ -1451,8 +1451,9 @@ void TargetPassConfig::addOptimizedRegAlloc() {
   // Explicit addition of UnreachableMachineBlockElim allows stopping before or
   // after it with -stop-before/-stop-after.
   addPass(&UnreachableMachineBlockElimID);
-  addPreSSADestruction();
   addPass(&LiveVariablesID);
+
+  addPreSSADestruction();
 
   // Edge splitting is smarter with machine loop info.
   addPass(&MachineLoopInfoID);

@@ -71,9 +71,9 @@ configure-build:
 .PHONY: build
 build:
 ifneq ($(CMAKE_GENERATOR), Ninja)
-	$(NICE) $(CMAKE) --build $(BUILDDIR_LLVM) -- -j$(JOBS)
+	$(CMAKE) --build $(BUILDDIR_LLVM) -- -j$(JOBS)
 else
-	$(NICE) $(CMAKE) --build $(BUILDDIR_LLVM)
+	$(CMAKE) --build $(BUILDDIR_LLVM)
 endif
 
 .PHONY: install

@@ -89,7 +89,8 @@ void InsertPersistentDefs::insertPersistentDefStart(MachineFunction &MF,
       }
     } else {
       if (OtherReg.isVirtual() && LV.isLiveIn(OtherReg, *Entry)) {
-        ExtendBuilder.addReg(OtherReg);
+        if (LV.isLiveOut(OtherReg, **Entry->pred_begin()))
+          ExtendBuilder.addReg(OtherReg);
       }
     }
   }
@@ -122,6 +123,7 @@ void InsertPersistentDefs::updateLiveIntervals(MachineBasicBlock *MBB,
                                                MachineInstr &Def,
                                                MachineInstr &Extend,
                                                Register Reg) {
+  auto &LV = getAnalysis<LiveVariables>();
   auto *LIS = getAnalysisIfAvailable<LiveIntervals>();
 
   if (LIS) {
@@ -141,18 +143,31 @@ void InsertPersistentDefs::updateLiveIntervals(MachineBasicBlock *MBB,
 
       LiveInterval &IncomingLI = LIS->getInterval(MO.getReg());
       LIS->extendToIndices(IncomingLI, ExtendIndex);
+
+      // auto &Info = LV.getVarInfo(MO.getReg());
+      // LV.replaceKillInstruction(MO.getReg(), Info.Kills)
     }
   }
+
+  // for (MachineOperand &MO : Extend.operands()) {
+  //   auto &Info = LV.getVarInfo(MO.getReg());
+  //   // LV.HandleVirtRegUse(MO.getReg(), MBB, Extend);
+  //   for (MachineInstr &DefMI : MRI->def_instructions(MO.getReg())) {
+  //     if (DefMI.getParent() != MBB) {
+  //       LV.MarkVirtRegAliveInBlock(Info, DefMI.getParent(), MBB);
+  //     }
+  //   }
+  // }
 }
 
 void InsertPersistentDefs::insertGhostLoad(MachineInstr *StoreMI) {
   auto *MBB = StoreMI->getParent();
   auto *MF = MBB->getParent();
-  auto &MRI = MF->getRegInfo();
+  MRI = &MF->getRegInfo();
 
   // TODO: Should be moved to target-specific code
   Register Reg = StoreMI->getOperand(0).getReg();
-  Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
+  Register NewReg = MRI->createVirtualRegister(MRI->getRegClass(Reg));
   auto GhostMI = BuildMI(*MBB, StoreMI->getIterator(), DebugLoc(),
                          TII->get(TargetOpcode::GHOST_LOAD), NewReg)
                      .addReg(Reg);

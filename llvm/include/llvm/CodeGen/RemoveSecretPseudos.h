@@ -1,5 +1,5 @@
-#ifndef LLVM_CODEGEN_REMOVE_BRANCH_PSEUDOS
-#define LLVM_CODEGEN_REMOVE_BRANCH_PSEUDOS
+#ifndef LLVM_CODEGEN_REMOVE_SECRET_PSEUDOS
+#define LLVM_CODEGEN_REMOVE_SECRET_PSEUDOS
 
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
@@ -13,14 +13,14 @@ using namespace llvm;
 
 namespace llvm {
 
-class RemoveBranchPseudos : public MachineFunctionPass {
+class RemoveSecretPseudos : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
 public:
   static char ID;
 
-  RemoveBranchPseudos();
+  RemoveSecretPseudos();
     
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -32,5 +32,5 @@ public:
 
 } // namespace llvm
 
-#endif // LLVM_CODEGEN_REMOVE_BRANCH_PSEUDOS
+#endif // LLVM_CODEGEN_REMOVE_SECRET_PSEUDOS
 

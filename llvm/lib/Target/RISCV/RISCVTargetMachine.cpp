@@ -361,6 +361,8 @@ void RISCVPassConfig::addPreEmitPass2() {
     addPass(createAMiLinearizeBranchPass());
     addPass(createAMiLinearizeRegionPass());
   }
+
+  addPass(&RemoveSecretPseudosPassID);
 }
 
 void RISCVPassConfig::addMachineSSAOptimization() {

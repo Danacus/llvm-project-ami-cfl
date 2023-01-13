@@ -148,6 +148,7 @@ void initializePersistencyAnalysisPassPass(PassRegistry &);
 void initializeInsertPersistentDefsPass(PassRegistry &);
 void initializeRemovePersistentDefsPass(PassRegistry &);
 void initializeRemoveBranchPseudosPass(PassRegistry &);
+void initializeRemoveSecretPseudosPass(PassRegistry &);
 void initializeFixIrreduciblePass(PassRegistry &);
 void initializeFixupStatepointCallerSavedPass(PassRegistry&);
 void initializeFlattenCFGLegacyPassPass(PassRegistry &);

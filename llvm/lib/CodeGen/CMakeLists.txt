@@ -70,6 +70,7 @@ add_llvm_component_library(LLVMCodeGen
   InsertPersistentDefs.cpp
   RemovePersistentDefs.cpp
   RemoveBranchPseudos.cpp
+  RemoveSecretPseudos.cpp
   FixupStatepointCallerSaved.cpp
   FuncletLayout.cpp
   GCMetadata.cpp

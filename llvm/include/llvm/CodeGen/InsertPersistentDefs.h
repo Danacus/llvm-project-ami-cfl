@@ -16,6 +16,7 @@ namespace llvm {
 class InsertPersistentDefs : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
+  MachineRegisterInfo *MRI;
 
 public:
   static char ID;
