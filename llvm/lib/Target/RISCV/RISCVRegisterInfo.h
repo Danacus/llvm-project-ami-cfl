@@ -24,6 +24,9 @@ struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
 
   RISCVRegisterInfo(unsigned HwMode);
 
+  bool shouldRegionSplitForVirtReg(
+      const MachineFunction &MF, const LiveInterval &VirtReg) const override;
+
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID) const override;
 

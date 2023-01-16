@@ -3003,6 +3003,7 @@ void GenericScheduler::initPolicy(MachineBasicBlock::iterator Begin,
     RegionPolicy.ShouldTrackPressure = false;
     RegionPolicy.ShouldTrackLaneMasks = false;
   }
+  RegionPolicy.ShouldTrackPressure = true;
 
   // Check -misched-topdown/bottomup can force or unforce scheduling direction.
   // e.g. -misched-bottomup=false allows scheduling in both directions.

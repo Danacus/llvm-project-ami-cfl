@@ -165,6 +165,13 @@ void InsertPersistentDefs::insertGhostLoad(MachineInstr *StoreMI) {
   auto *MF = MBB->getParent();
   MRI = &MF->getRegInfo();
 
+  MachineBasicBlock::iterator Iter = std::prev(StoreMI->getIterator());
+
+  // Don't insert duplicate GHOST_LOAD
+  if (Iter.isValid() && Iter->getOpcode() == TargetOpcode::GHOST_LOAD &&
+      Iter->getOperand(0).getReg() == StoreMI->getOperand(0).getReg())
+    return;
+
   // TODO: Should be moved to target-specific code
   Register Reg = StoreMI->getOperand(0).getReg();
   Register NewReg = MRI->createVirtualRegister(MRI->getRegClass(Reg));
@@ -213,7 +220,7 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  for (auto &B : SRA.sensitive_branches()) {    
+  for (auto &B : SRA.sensitive_branches()) {
     SmallSet<Register, 8> BranchRegs;
 
     MachineBasicBlock::iterator I = B.MBB->getLastNonDebugInstr();
@@ -229,7 +236,7 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
         }
       }
     }
-    
+
     SmallVector<MachineBasicBlock *> Exitings;
     B.IfRegion->getExitingBlocks(Exitings);
 

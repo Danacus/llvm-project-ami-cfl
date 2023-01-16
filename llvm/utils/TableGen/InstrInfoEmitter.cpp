@@ -292,49 +292,28 @@ void InstrInfoEmitter::emitAMiQualifierMap(
     OS << "  return -1;\n";
   }
   OS << "}\n";
-
-  OS << "template <>\n";
-  OS << "bool " << "hasQualifier<" << Namespace << "::AMi::" << QualName << ">" << "(uint16_t Inst) {\n";
-  if (!Map.empty()) {
-    OS << "  switch(Inst) {\n";
-    for (const auto &Entry : Map) {
-      OS << "  case " << Namespace << "::" << Entry.second << ":\n";
-    }
-    OS << "    return true;\n";
-    OS << "  default: return false;\n";
-    OS << "  }\n";
-  } else {
-    OS << "  return false;\n";
-  }
-  OS << "}\n";
 }
 
 void InstrInfoEmitter::emitAMiQualifierMappings(
     raw_ostream &OS, const CodeGenTarget &Target,
     ArrayRef<const CodeGenInstruction *> NumberedInstructions) {
   auto Namespace = Target.getInstNamespace();
-  auto Defs = Records.getAllDerivedDefinitions("QualifiedInst");
+  auto Defs = Records.getAllDerivedDefinitions("AMiInstQualified");
 
   std::map<StringRef, StringRef> PMap;
   std::map<StringRef, StringRef> MMap;
   std::map<StringRef, StringRef> GMap;
   std::map<StringRef, StringRef> CTMap;
   std::map<StringRef, StringRef> AMap;
-  
-  std::map<StringRef, StringRef> ClassMap;
 
   for (auto *Def : Defs) {
     //CodeGenInstruction Inst = Target.getInstruction(Def->getValueAsDef("Inst"));
     //CodeGenInstruction QualInst =
         //Target.getInstruction(Def->getValueAsDef("QualInst"));
-    StringRef Inst = Def->getValueAsString("AMiFromInst");
-    StringRef QualInst = Def->getValueAsString("AMiQualInst");
-
-    StringRef AMiClass = Def->getValueAsDef("AMiClass")->getName();
-    ClassMap.insert({ Inst, AMiClass });
-
+    StringRef Inst = Def->getValueAsString("Inst");
+    StringRef QualInst = Def->getValueAsString("QualInst");
     std::pair<StringRef, StringRef> Tuple = {Inst, QualInst};
-    switch (std::tolower(Def->getValueAsString("AMiQualifier")[0])) {
+    switch (Def->getValueAsString("Qualifier")[0]) {
     case 'p':
       PMap.insert(Tuple);
       break;
@@ -350,7 +329,7 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
     case 'a':
       AMap.insert(Tuple);
       break;
-    }    
+    }
   }
 
   OS << "#ifdef GET_INSTRINFO_AMI_QUAL\n";
@@ -363,21 +342,6 @@ void InstrInfoEmitter::emitAMiQualifierMappings(
   emitAMiQualifierMap(OS, Target, "Ghost", GMap);
   emitAMiQualifierMap(OS, Target, "ConstantTime", CTMap);
   emitAMiQualifierMap(OS, Target, "Activating", AMap);
-
-  OS << "int16_t getClass" << "(uint16_t Inst) {\n";
-  if (!ClassMap.empty()) {
-    OS << "  switch(Inst) {\n";
-    for (const auto &Entry : ClassMap) {
-      OS << "  case " << Namespace << "::" << Entry.first << ":\n";
-        OS << "    return " << Namespace << "::AMi::" << Entry.second << ";\n";
-    }
-    OS << "  default: return -1;\n";
-    OS << "  }\n";
-  } else {
-    OS << "  return -1;\n";
-  }
-  OS << "}\n";
-
   OS << "} // end namespace AMi\n";
   OS << "} // end namespace " << Namespace << "\n";
   OS << "} // end namespace llvm\n";
@@ -1339,7 +1303,6 @@ void InstrInfoEmitter::emitRecord(
   OS.write_hex(Value);
   OS << "ULL, ";
 
-<<<<<<< HEAD
   // Emit the implicit use/def list...
   std::vector<Record *> ImplicitOps = Inst.ImplicitUses;
   llvm::append_range(ImplicitOps, Inst.ImplicitDefs);
@@ -1347,20 +1310,6 @@ void InstrInfoEmitter::emitRecord(
     OS << "nullptr, ";
   else
     OS << "ImplicitList" << EmittedLists[ImplicitOps] << ", ";
-=======
-  // Emit the implicit uses and defs lists...
-  std::vector<Record *> UseList = Inst.TheDef->getValueAsListOfDefs("Uses");
-  if (UseList.empty())
-    OS << "nullptr, ";
-  else
-    OS << "ImplicitList" << EmittedLists[UseList] << ", ";
-
-  std::vector<Record *> DefList = Inst.TheDef->getValueAsListOfDefs("Defs");
-  if (DefList.empty())
-    OS << "nullptr, ";
-  else
-    OS << "ImplicitList" << EmittedLists[DefList] << ", ";
->>>>>>> b7b37055796f (TableGen magic)
 
   // Emit the operand info.
   std::vector<std::string> OperandInfo = GetOperandInfo(Inst);

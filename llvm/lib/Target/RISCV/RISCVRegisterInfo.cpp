@@ -15,6 +15,7 @@
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -52,6 +53,15 @@ static_assert(RISCV::V31 == RISCV::V0 + 31, "Register list not consecutive");
 RISCVRegisterInfo::RISCVRegisterInfo(unsigned HwMode)
     : RISCVGenRegisterInfo(RISCV::X1, /*DwarfFlavour*/0, /*EHFlavor*/0,
                            /*PC*/0, HwMode) {}
+
+bool RISCVRegisterInfo::shouldRegionSplitForVirtReg(
+    const MachineFunction &MF, const LiveInterval &VirtReg) const {
+  const MachineRegisterInfo &MRI = MF.getRegInfo();
+  for (MachineInstr &MI : MRI.def_instructions(VirtReg.reg()))
+    if (MI.getOpcode() == TargetOpcode::PERSISTENT_DEF)
+      return false;
+  return TargetRegisterInfo::shouldRegionSplitForVirtReg(MF, VirtReg);
+}
 
 const MCPhysReg *
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
