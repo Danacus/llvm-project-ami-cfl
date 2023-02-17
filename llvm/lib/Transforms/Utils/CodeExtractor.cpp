@@ -989,6 +989,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
       case Attribute::ImmArg:
       case Attribute::ByRef:
       case Attribute::WriteOnly:
+      case Attribute::Secret:
       //  These are not really attributes.
       case Attribute::None:
       case Attribute::EndAttrKinds:
