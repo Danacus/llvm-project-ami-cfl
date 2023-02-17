@@ -44,7 +44,7 @@ struct SecretParams {
   SmallVector<Argument*> Args;
 };
 
-namespace {
+namespace llvm {
 
 class FindSecretsAnalysis : public MachineFunctionPass {
 public:
@@ -76,6 +76,6 @@ public:
   }
 };
 
-} // namespace
+} // namespace llvm
 
 #endif // LLVM_CODEGEN_FINDSECRETS_H

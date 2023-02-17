@@ -234,6 +234,7 @@ add_llvm_component_library(LLVMCodeGen
   TargetSubtargetInfo.cpp
   TwoAddressInstructionPass.cpp
   TypePromotion.cpp
+  TrackSecrets.cpp
   UnreachableBlockElim.cpp
   ValueTypes.cpp
   VLIWMachineScheduler.cpp
