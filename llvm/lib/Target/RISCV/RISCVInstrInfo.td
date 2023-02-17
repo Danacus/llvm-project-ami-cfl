@@ -506,9 +506,8 @@ class BranchCC_rri<bits<3> funct3, string opcodestr>
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
 class Load_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd), (ins GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">,
-    SecretTransfer<(outs (val GPR:$rd)), (ins (deref GPR:$rs1))>;
+    : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd), (ins GPRMem:$rs1, simm12:$imm12),
+              opcodestr, "$rd, ${imm12}(${rs1})">;
 
 class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
     : RVInstR<funct7, 0b100, OPC_SYSTEM, (outs GPR:$rd),
@@ -523,9 +522,8 @@ class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in {
 class Store_rri<bits<3> funct3, string opcodestr>
     : RVInstS<funct3, OPC_STORE, (outs),
-              (ins GPR:$rs2, GPR:$rs1, simm12:$imm12),
-              opcodestr, "$rs2, ${imm12}(${rs1})">,
-    SecretTransfer<(outs (deref GPR:$rs2)), (ins (val GPR:$rs1))>;
+              (ins GPR:$rs2, GPRMem:$rs1, simm12:$imm12),
+              opcodestr, "$rs2, ${imm12}(${rs1})">;
 
 class HStore_rr<bits<7> funct7, string opcodestr>
     : RVInstR<funct7, 0b100, OPC_SYSTEM, (outs),
@@ -1870,8 +1868,5 @@ include "RISCVInstrInfoXTHead.td"
 //===----------------------------------------------------------------------===//
 // Non-standard extensions
 //===----------------------------------------------------------------------===//
-
-def : InstAlias<"emm $offset",
-                (ABEQ X0, X0, simm13_lsb0:$offset)>;
 
 include "RISCVInstrInfoXAMi.td"

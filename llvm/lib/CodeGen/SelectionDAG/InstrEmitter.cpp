@@ -1241,16 +1241,34 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     break;
   }
   case ISD::Secret: {
-    for (SDNode::use_iterator UI = Node->use_begin(), UE = Node->use_end(); UI != UE; ++UI) {
-      SDNode *TargetNode = *UI;
-      switch (TargetNode->getOpcode()) {
-        case ISD::CopyFromReg:    
-          auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
-          BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
-          break;
-      }
-    }
+    auto *SecretNode = cast<SecretSDNode>(Node);
+    SDValue TargetNode = Node->getOperand(1);
+      
+    // VReg value passthrough (based on `EmitCopyFromReg`)
+    SDValue Op(Node, 0);
+    if (IsClone)
+      VRBaseMap.erase(Op);
+    auto SrcVReg = VRBaseMap.find(TargetNode)->getSecond();
+    bool isNew = VRBaseMap.insert(std::make_pair(Op, SrcVReg)).second;
+    (void)isNew; // Silence compiler warning.
+    assert(isNew && "Node emitted out of order - early");
+
+    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET))
+        .addReg(SrcVReg)
+        .addImm(SecretNode->getSecurityMask());
+
     break;    
+
+    // for (SDNode::use_iterator UI = Node->use_begin(), UE = Node->use_end(); UI != UE; ++UI) {
+    //   SDNode *TargetNode = *UI;
+    //   switch (TargetNode->getOpcode()) {
+    //     case ISD::CopyFromReg:    
+    //       auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
+    //       BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
+    //       break;
+    //   }
+    // }
+    // break;    
   }
   case ISD::EH_LABEL:
   case ISD::ANNOTATION_LABEL: {

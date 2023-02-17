@@ -69,8 +69,8 @@ add_llvm_component_library(LLVMCodeGen
   PersistencyAnalysis.cpp
   InsertPersistentDefs.cpp
   RemovePersistentDefs.cpp
-  RemoveBranchPseudos.cpp
   RemoveSecretPseudos.cpp
+  RemoveBranchPseudos.cpp
   FixupStatepointCallerSaved.cpp
   FuncletLayout.cpp
   GCMetadata.cpp
@@ -241,7 +241,6 @@ add_llvm_component_library(LLVMCodeGen
   TargetSubtargetInfo.cpp
   TwoAddressInstructionPass.cpp
   TypePromotion.cpp
-  TrackSecrets.cpp
   UnreachableBlockElim.cpp
   ValueTypes.cpp
   VLIWMachineScheduler.cpp

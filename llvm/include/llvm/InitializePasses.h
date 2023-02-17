@@ -419,6 +419,7 @@ void initializeTrackSecretsAnalysisPass(PassRegistry &);
 // void initializeTrackSecretsAnalysisVirtRegPass(PassRegistry &);
 // void initializeTrackSecretsAnalysisPhysRegPass(PassRegistry &);
 //void initializeTrackSecretsPrinterPass(PassRegistry &);
+void initializeUniformityInfoWrapperPassPass(PassRegistry &);
 void initializeUnifyFunctionExitNodesLegacyPassPass(PassRegistry &);
 void initializeUnifyLoopExitsLegacyPassPass(PassRegistry &);
 void initializeUnpackMachineBundlesPass(PassRegistry&);

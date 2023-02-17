@@ -30,7 +30,6 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeCFIInstrInserterPass(Registry);
   initializeCheckDebugMachineModulePass(Registry);
   initializeCodeGenPreparePass(Registry);
-  initializeCreateSensitiveRegionsPass(Registry);
   initializeDeadMachineInstructionElimPass(Registry);
   initializeDebugifyMachineModulePass(Registry);
   initializeDetectDeadLanesPass(Registry);
@@ -47,16 +46,6 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeFinalizeISelPass(Registry);
   initializeFinalizeMachineBundlesPass(Registry);
   initializeTrackSecretsAnalysisPass(Registry);
-  // initializeTrackSecretsAnalysisVirtRegPass(Registry);
-  // initializeTrackSecretsAnalysisPhysRegPass(Registry);
-  initializeSensitiveRegionAnalysisPass(Registry);
-  // initializeSensitiveRegionAnalysisVirtRegPass(Registry);
-  // initializeSensitiveRegionAnalysisPhysRegPass(Registry);
-  initializePersistencyAnalysisPassPass(Registry);
-  initializeInsertPersistentDefsPass(Registry);
-  initializeRemovePersistentDefsPass(Registry);
-  initializeRemoveBranchPseudosPass(Registry);
-  initializeRemoveSecretPseudosPass(Registry);
   initializeFixupStatepointCallerSavedPass(Registry);
   initializeFuncletLayoutPass(Registry);
   initializeGCMachineCodeAnalysisPass(Registry);
@@ -143,7 +132,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeTailDuplicatePass(Registry);
   initializeTargetPassConfigPass(Registry);
   initializeTwoAddressInstructionPassPass(Registry);
-  initializeTypePromotionPass(Registry);
+  initializeTypePromotionLegacyPass(Registry);
   initializeUnpackMachineBundlesPass(Registry);
   initializeUnreachableBlockElimLegacyPassPass(Registry);
   initializeUnreachableMachineBlockElimPass(Registry);
@@ -152,6 +141,15 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeWasmEHPreparePass(Registry);
   initializeWinEHPreparePass(Registry);
   initializeXRayInstrumentationPass(Registry);
+
+  initializeTrackSecretsAnalysisPass(Registry);
+  initializeSensitiveRegionAnalysisPass(Registry);
+  initializeCreateSensitiveRegionsPass(Registry);
+  initializePersistencyAnalysisPassPass(Registry);
+  initializeInsertPersistentDefsPass(Registry);
+  initializeRemovePersistentDefsPass(Registry);
+  initializeRemoveBranchPseudosPass(Registry);
+  initializeRemoveSecretPseudosPass(Registry);
 }
 
 void LLVMInitializeCodeGen(LLVMPassRegistryRef R) {
