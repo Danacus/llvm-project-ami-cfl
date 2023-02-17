@@ -43,6 +43,7 @@ public:
 
   MachineBasicBlock *simplifyRegion(MachineFunction &MF, MachineRegion *MR);
   void simplifyBranchRegions(MachineFunction &MF);
+  void removeEmptyBlocks(MachineFunction &MF);
   void linearizeBranches(MachineFunction &MF);
   bool setBranchActivating(MachineBasicBlock &MBB);
   void removePseudos(MachineFunction &MF);

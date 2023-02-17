@@ -1258,17 +1258,6 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
         .addImm(SecretNode->getSecurityMask());
 
     break;    
-
-    // for (SDNode::use_iterator UI = Node->use_begin(), UE = Node->use_end(); UI != UE; ++UI) {
-    //   SDNode *TargetNode = *UI;
-    //   switch (TargetNode->getOpcode()) {
-    //     case ISD::CopyFromReg:    
-    //       auto *RegNode = cast<RegisterSDNode>(TargetNode->getOperand(1));
-    //       BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::SECRET)).addReg(RegNode->getReg());
-    //       break;
-    //   }
-    // }
-    // break;    
   }
   case ISD::EH_LABEL:
   case ISD::ANNOTATION_LABEL: {

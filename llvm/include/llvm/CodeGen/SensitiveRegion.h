@@ -110,6 +110,7 @@ public:
     // Get largest region that starts at BB. (See
     // RegionInfoBase::getMaxRegionExit)
     MachineRegion *FR = MRI->getRegionFor(MBB);
+    assert(FR && "AMi error: no region for given block");
     while (auto *Expanded = FR->getExpandedRegion()) {
       FR = Expanded;
     }
