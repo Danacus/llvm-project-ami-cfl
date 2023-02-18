@@ -145,6 +145,7 @@ void initializeSensitiveRegionAnalysisPass(PassRegistry &);
 // void initializeSensitiveRegionAnalysisVirtRegPass(PassRegistry &);
 // void initializeSensitiveRegionAnalysisPhysRegPass(PassRegistry &);
 void initializePersistencyAnalysisPassPass(PassRegistry &);
+void initializeAddMimicryConstraintsPass(PassRegistry &);
 void initializeInsertPersistentDefsPass(PassRegistry &);
 void initializeRemovePersistentDefsPass(PassRegistry &);
 void initializeRemoveBranchPseudosPass(PassRegistry &);

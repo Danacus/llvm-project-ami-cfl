@@ -21,6 +21,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -163,7 +164,7 @@ class InlineSpiller : public Spiller {
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
   SensitiveRegionAnalysis *SRA;
-  InsertPersistentDefs *IPD;
+  AddMimicryConstraints *AMC;
   const TargetInstrInfo &TII;
   const TargetRegisterInfo &TRI;
   const MachineBlockFrequencyInfo &MBFI;
@@ -203,7 +204,7 @@ public:
         MDT(Pass.getAnalysis<MachineDominatorTree>()),
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
         MRI(MF.getRegInfo()), SRA(Pass.getAnalysisIfAvailable<SensitiveRegionAnalysis>()),
-        IPD(Pass.getAnalysisIfAvailable<InsertPersistentDefs>()),
+        AMC(Pass.getAnalysisIfAvailable<AddMimicryConstraints>()),
         TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
         MBFI(Pass.getAnalysis<MachineBlockFrequencyInfo>()),
@@ -1084,7 +1085,7 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
     for (const MachineInstr &MI : make_range(GhostMI, GhostMIS.end()))
       getVDefInterval(MI, LIS);
 
-    IPD->insertPersistentDef(&*GhostMI);
+    AMC->addConstraintsToRegions(&*GhostMI);
   }
 
   LLVM_DEBUG(

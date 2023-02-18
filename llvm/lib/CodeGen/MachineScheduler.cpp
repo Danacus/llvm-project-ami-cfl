@@ -21,6 +21,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -245,6 +246,7 @@ void MachineScheduler::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LiveIntervals>();
   AU.addPreserved<SensitiveRegionAnalysis>();
   AU.addPreserved<InsertPersistentDefs>();
+  AU.addPreserved<AddMimicryConstraints>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 
@@ -3003,7 +3005,7 @@ void GenericScheduler::initPolicy(MachineBasicBlock::iterator Begin,
     RegionPolicy.ShouldTrackPressure = false;
     RegionPolicy.ShouldTrackLaneMasks = false;
   }
-  RegionPolicy.ShouldTrackPressure = true;
+  RegionPolicy.ShouldTrackPressure = false;
 
   // Check -misched-topdown/bottomup can force or unforce scheduling direction.
   // e.g. -misched-bottomup=false allows scheduling in both directions.

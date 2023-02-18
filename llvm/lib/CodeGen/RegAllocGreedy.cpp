@@ -30,6 +30,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
+#include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
 #include "llvm/CodeGen/EdgeBundles.h"
 #include "llvm/CodeGen/InsertPersistentDefs.h"
@@ -220,8 +221,8 @@ void RAGreedy::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LiveRegMatrix>();
   AU.addUsedIfAvailable<SensitiveRegionAnalysis>();
   AU.addPreserved<SensitiveRegionAnalysis>();
-  AU.addUsedIfAvailable<InsertPersistentDefs>();
-  AU.addPreserved<InsertPersistentDefs>();
+  AU.addUsedIfAvailable<AddMimicryConstraints>();
+  AU.addPreserved<AddMimicryConstraints>();
   AU.addRequired<EdgeBundles>();
   AU.addRequired<SpillPlacement>();
   AU.addRequired<MachineOptimizationRemarkEmitterPass>();

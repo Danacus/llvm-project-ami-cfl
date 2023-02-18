@@ -32,6 +32,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -181,6 +182,7 @@ public:
     AU.addPreserved<LiveIntervals>();
     AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addPreserved<InsertPersistentDefs>();
+    AU.addPreserved<AddMimicryConstraints>();
     AU.addPreservedID(MachineLoopInfoID);
     AU.addPreservedID(MachineDominatorsID);
     MachineFunctionPass::getAnalysisUsage(AU);

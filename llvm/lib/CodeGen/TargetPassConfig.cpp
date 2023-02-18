@@ -1459,11 +1459,11 @@ void TargetPassConfig::addOptimizedRegAlloc() {
   addPass(&MachineLoopInfoID);
   addPass(&PHIEliminationID);
 
-  addPostSSADestruction();
-
   // Eventually, we want to run LiveIntervals before PHI elimination.
   if (EarlyLiveIntervals)
     addPass(&LiveIntervalsID);
+
+  addPostSSADestruction();
 
   addPass(&TwoAddressInstructionPassID);
   addPass(&RegisterCoalescerID);

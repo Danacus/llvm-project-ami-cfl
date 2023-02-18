@@ -21,6 +21,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -597,6 +598,7 @@ void RegisterCoalescer::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<MachineLoopInfo>();
   AU.addPreserved<SensitiveRegionAnalysis>();
   AU.addPreserved<InsertPersistentDefs>();
+  AU.addPreserved<AddMimicryConstraints>();
   AU.addPreservedID(MachineDominatorsID);
   MachineFunctionPass::getAnalysisUsage(AU);
 }

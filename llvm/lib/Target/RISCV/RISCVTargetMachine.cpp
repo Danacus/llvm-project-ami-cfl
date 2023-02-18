@@ -360,7 +360,6 @@ void RISCVPassConfig::addPreEmitPass2() {
     addPass(createPersistencyAnalysisPass(false));
     addPass(createAMiLinearizeBranchPass());
     addPass(createAMiLinearizeRegionPass());
-
   }
 }
 
@@ -385,8 +384,9 @@ void RISCVPassConfig::addPostSSADestruction() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(createTrackSecretsAnalysisPass(true));
     addPass(createSensitiveRegionAnalysisPass(true));
-    addPass(&CreateSensitiveRegionsID);
-    addPass(&InsertPersistentDefsPassID);
+    // addPass(&CreateSensitiveRegionsID);
+    // addPass(&InsertPersistentDefsPassID);
+    addPass(&AddMimicryConstraintsPassID);
   }
 }
 
@@ -402,9 +402,9 @@ void RISCVPassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
     addPass(createRISCVRedundantCopyEliminationPass());
 
-  if (EnableAMiLinearization == cl::BOU_TRUE) {
-    addPass(&RemovePersistentDefsPassID);
-  }
+  // if (EnableAMiLinearization == cl::BOU_TRUE) {
+  //   addPass(&RemovePersistentDefsPassID);
+  // }
   // addPass(createAMiLinearizeRegionPass());
 }
 
