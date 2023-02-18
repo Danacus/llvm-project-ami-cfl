@@ -77,9 +77,10 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
            "AMi error: invalid GHOST_LOAD");
 
     BuildMI(*I->getParent(), GhostLoad.getIterator(), DebugLoc(),
-            TII->get(TargetOpcode::COPY),
+            TII->get(RISCV::ADDI),
             GhostLoad.getOperand(0).getReg().asMCReg())
-        .add(GhostLoad.getOperand(1));
+        .add(GhostLoad.getOperand(1))
+        .addImm(0);
     GhostLoad.eraseFromParent();
 
     if (I->getNumOperands() > 2 && I->getOperand(0).isReg()) {

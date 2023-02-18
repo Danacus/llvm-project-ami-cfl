@@ -120,8 +120,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   int MaxNumber = 0;
 
   for (auto *Exiting : Exitings) {
-    TII->removeBranch(*Exiting);
-    TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
+    // TII->removeBranch(*Exiting);
+    // TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
     if (Exiting->getNumber() >= MaxNumber) {
       MaxNumber = Exiting->getNumber(); 
       InsertPoint = Exiting->getIterator();
@@ -130,7 +130,6 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
 
   MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
   // MF.insert(MR->getExit()->getIterator(), EndBlock);
-  MF.insert(++InsertPoint, EndBlock);
 
   MF.dump();
 
@@ -144,7 +143,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     SmallVector<MachineOperand> ECond;
     TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
 
-    MachineBasicBlock *FallThrough = Exiting->getFallThrough();
+    MachineBasicBlock *FallThrough = Exiting->getFallThrough(true);
     // if (FallThrough == EndBlock && EndBlock != nullptr)
     //   FallThrough = EndBlock->getFallThrough();
 
@@ -165,6 +164,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
              "fallthrough");
     }
 
+    FallThrough = Exiting->getFallThrough(true);
+
     if (Exiting->isSuccessor(ETBB))
       Exiting->removeSuccessor(ETBB);
 
@@ -173,7 +174,6 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
 
     MachineBasicBlock *FTarget = nullptr;
     Exiting->addSuccessor(EndBlock);
-    FallThrough = Exiting->getFallThrough(true);
     
     if (EFBB == nullptr) {
       // Unconditional branch
@@ -195,6 +195,8 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     }
   }
 
+  MF.insert(++InsertPoint, EndBlock);
+
   // BuildMI(*EndBlock, EndBlock->end(), DL,
   // TII->get(TargetOpcode::BRANCH_TARGET))
   //     .addMBB(EndBlock);
@@ -215,6 +217,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   }
 
   ActivatingRegions.insert(MR);
+  MF.dump();
   return EndBlock;
 }
 
@@ -236,7 +239,11 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
     ToActivate.insert(Branch.MBB);
 
-    auto *OldBranchExit = Branch.IfRegion->getExit()->getSingleSuccessor();
+    auto *OldBranchExit = Branch.IfRegion->getExit();
+    if (Branch.ElseRegion)
+      OldBranchExit = OldBranchExit->getSingleSuccessor();
+    errs() << "Old exit:\n";
+    OldBranchExit->dump();
 
     DebugLoc DL;
 
@@ -267,7 +274,8 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
 
     if (Branch.ElseRegion) {
       Branch.ElseRegion->dump();
-      assert(Branch.ElseRegion->getExit()->getSingleSuccessor() ==
+      Branch.ElseRegion->getExit()->dump();
+      assert(Branch.ElseRegion->getExit() ==
                  OldBranchExit &&
              "if and else should exit to the same block");
 
@@ -284,7 +292,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       Branch.IfRegion->getExit()->addSuccessor(Entry);
 
       MachineBasicBlock *Target = nullptr;
-      if (Entry != BranchBlock->getFallThrough(true))
+      if (Entry != Branch.IfRegion->getExit()->getFallThrough(true))
         Target = Entry;
       TII->insertBranch(*Branch.IfRegion->getExit(),
                         Branch.ElseRegion->getExit(),

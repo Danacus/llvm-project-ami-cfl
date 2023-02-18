@@ -146,13 +146,16 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
     SmallVector<MachineBasicBlock *> Exitings;
     B.IfRegion->getExitingBlocks(Exitings);
 
+    if (!B.ElseRegion)
+      continue;
+
     MachineBasicBlock::iterator I = B.MBB->getLastNonDebugInstr();
     if (I != B.MBB->end()) {
       for (auto J = I.getReverse(); J != B.MBB->rend() && J->isTerminator();
            J++) {
         if (J->getDesc().isConditionalBranch()) {
           for (auto &MO : J->operands()) {
-            if (MO.isReg() && MO.isUse()) {
+            if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual()) {
               for (auto &Exiting : Exitings) {
                 LiveInterval &IncomingLI = LIS->getInterval(MO.getReg());
                 SlotIndex End = LIS->getMBBEndIdx(Exiting)
