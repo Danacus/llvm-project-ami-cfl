@@ -102,6 +102,13 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   TSA = &getAnalysis<TrackSecretsAnalysis>();
 
+  SensitiveRegions.clear();
+  SensitiveBlocks.clear();
+  IfBranchMap.clear();
+  ElseBranchMap.clear();
+  SensitiveBranches.clear();
+
+  MF.dump();
   MRI->dump();
 
   auto &Secrets = TSA->SecretUses;
@@ -113,6 +120,7 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
       continue;
 
     auto *User = Secret.second.getUser();
+    User->dump();
 
     // We still need those registers
     for (auto &MO : User->uses()) {

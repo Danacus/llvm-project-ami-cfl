@@ -36,6 +36,8 @@ void PersistencyAnalysisPass::propagatePersistency(
     auto *I = WorkSet.pop_back_val();
     I->dump();
 
+    if (PersistentDefs.contains(I))
+      continue;
     PersistentDefs.insert(I);
 
     for (auto &Op : I->operands()) {
@@ -108,6 +110,10 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   if (!IsSSA) {
     RDA = &getAnalysis<ReachingDefAnalysis>();
   }
+
+  PersistentStores.clear();
+  PersistentInstructions.clear();
+  PersistentRegionInputMap.clear();
 
   for (auto &B : SRA->sensitive_branches()) {
     errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";

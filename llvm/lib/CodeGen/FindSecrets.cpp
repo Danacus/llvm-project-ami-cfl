@@ -273,6 +273,14 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
+  if (Graph) {
+    delete Graph;
+    Graph = nullptr;
+  }
+
+  Secrets.clear();
+  SecretUses.clear();
+
   if (IsSSA) {
     Graph = new FlowGraph(MF);
   } else {
@@ -321,14 +329,17 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
+  /*
   for (auto S : SecretUses) {
     for (auto MO : S.second.operands()) {
+      errs() << *S.second.getUser();
       errs() << "Secret: ";
       errs() << MO << " with mask ";
       errs() << std::bitset<4>(S.second.getSecretMask()).to_string() << " in ";
       errs() << *S.second.getUser();
     }
   }
+  */
 
   return false;
 }

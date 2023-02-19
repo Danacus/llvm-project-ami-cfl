@@ -236,7 +236,7 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 private:
-  FlowGraph *Graph;
+  FlowGraph *Graph = nullptr;
   SecretsMap Secrets;
   bool IsSSA;
 };
