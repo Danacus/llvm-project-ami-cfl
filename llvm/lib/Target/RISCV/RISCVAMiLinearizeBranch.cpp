@@ -271,6 +271,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       Target = Entry;
     TII->insertBranch(*BranchBlock, Branch.IfRegion->getExit(),
                       Target, NewCond, DL);
+    BranchBlock->addSuccessor(Branch.IfRegion->getExit());
 
     if (Branch.ElseRegion) {
       Branch.ElseRegion->dump();
@@ -297,6 +298,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       TII->insertBranch(*Branch.IfRegion->getExit(),
                         Branch.ElseRegion->getExit(),
                         Target, CondReversed, DL);
+      Branch.IfRegion->getExit()->addSuccessor(Branch.ElseRegion->getExit());
       ToActivate.insert(Branch.IfRegion->getExit());
     }
   }

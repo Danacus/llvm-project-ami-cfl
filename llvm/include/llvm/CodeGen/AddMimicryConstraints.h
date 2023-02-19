@@ -41,11 +41,12 @@ public:
     AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
-    // AU.addRequired<LiveIntervals>();
-    AU.addUsedIfAvailable<LiveVariables>();
-    AU.addPreserved<LiveVariables>();
+    // AU.addUsedIfAvailable<LiveVariables>();
+    AU.addRequired<SlotIndexes>();
     AU.addPreserved<SlotIndexes>();
+    AU.addRequired<LiveIntervals>();
     AU.addPreserved<LiveIntervals>();
+    // AU.addPreserved<LiveVariables>();
     AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

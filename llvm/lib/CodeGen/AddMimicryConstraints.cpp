@@ -125,6 +125,7 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
   auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
+  assert(LIS && "LIS must be available");
 
   for (auto &B : SRA.sensitive_branches()) {
     if (B.ElseRegion) {
