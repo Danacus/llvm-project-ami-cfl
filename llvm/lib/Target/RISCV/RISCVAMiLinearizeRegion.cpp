@@ -63,6 +63,11 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   }
 
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
+    // TODO: fix this to only allow writing to stack in mimicry mode
+    // if this instruction originates from calling convention lowering.
+    if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
+      continue;
+    
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
     if (GhostLoad.getOpcode() == RISCV::GLW) {
@@ -107,10 +112,13 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   PA = &getAnalysis<PersistencyAnalysisPass>();
 
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
+  const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
             std::greater<SensitiveBranch>());
+
+  handleRegion(MRI.getTopLevelRegion());
 
   for (auto &Branch : ActivatingBranches) {
     if (Branch.IfRegion) {

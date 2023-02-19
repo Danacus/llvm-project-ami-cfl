@@ -106,6 +106,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
+  const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
 
   if (!IsSSA) {
     RDA = &getAnalysis<ReachingDefAnalysis>();
@@ -127,6 +128,10 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   }
   auto Branches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
   std::sort(Branches.begin(), Branches.end());
+
+  // Entire function can be called in mimicry mode, so treat the top level
+  // region as an activating region.
+  analyzeRegion(MF, *MRI.getTopLevelRegion());
 
   for (auto &Branch : Branches) {
     analyzeRegion(MF, *Branch.IfRegion);

@@ -123,9 +123,13 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
+  const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
   assert(LIS && "LIS must be available");
+
+  for (auto *MI : PA.getPersistentStores(MRI.getTopLevelRegion()))
+    insertGhostLoad(MI);
 
   for (auto &B : SRA.sensitive_branches()) {
     if (B.ElseRegion) {
