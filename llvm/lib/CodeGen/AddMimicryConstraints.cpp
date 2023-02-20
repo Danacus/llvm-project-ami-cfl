@@ -161,8 +161,8 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
         if (J->getDesc().isConditionalBranch()) {
           for (auto &MO : J->operands()) {
             if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual()) {
+              LiveInterval &IncomingLI = LIS->getInterval(MO.getReg());
               for (auto &Exiting : Exitings) {
-                LiveInterval &IncomingLI = LIS->getInterval(MO.getReg());
                 SlotIndex End = LIS->getMBBEndIdx(Exiting)
                                     .getRegSlot()
                                     .getPrevIndex()

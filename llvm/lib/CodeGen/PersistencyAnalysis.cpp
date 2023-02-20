@@ -14,7 +14,7 @@ using namespace llvm;
 #define DEBUG_TYPE "persistency-analysis"
 
 void PersistencyAnalysisPass::propagatePersistency(
-    const MachineFunction &MF, const MachineInstr &MI, const MachineOperand &MO,
+    const MachineFunction &MF, MachineInstr &MI, const MachineOperand &MO,
     const MachineRegion &MR,
     SmallPtrSet<MachineInstr *, 16> &PersistentDefs) {
   errs() << "propagatePersistency\n";
@@ -27,9 +27,18 @@ void PersistencyAnalysisPass::propagatePersistency(
     return;
 
   SmallVector<MachineInstr *> WorkSet;
-  for (auto &DI : MF.getRegInfo().def_instructions(MO.getReg())) {
-    if (MR.contains(&DI))
-      WorkSet.push_back(&DI);
+  if (IsSSA) {
+    for (auto &DI : MF.getRegInfo().def_instructions(MO.getReg())) {
+      if (MR.contains(&DI))
+        WorkSet.push_back(&DI);
+    }
+  } else {
+    SmallPtrSet<MachineInstr *, 16> Defs;
+    RDA->getGlobalReachingDefs(&MI, MO.getReg(), Defs);
+    for (auto *DI : Defs) {
+      if (MR.contains(DI))
+        WorkSet.push_back(DI);
+    }
   }
 
   while (!WorkSet.empty()) {
@@ -64,6 +73,8 @@ void PersistencyAnalysisPass::propagatePersistency(
       }
     }
   }
+
+  errs() << "Done propagating\n";
 }
 
 void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,

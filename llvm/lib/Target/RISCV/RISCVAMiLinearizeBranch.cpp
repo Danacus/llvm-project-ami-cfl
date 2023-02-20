@@ -98,7 +98,7 @@ bool AMiLinearizeBranch::setBranchActivating(MachineBasicBlock &MBB) {
   // Handle a conditional branch followed by an unconditional branch.
   if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
       I->getDesc().isUnconditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    // setQualifier<llvm::RISCV::AMi::Activating>(&*I);
     setQualifier<llvm::RISCV::AMi::Activating>(&*std::prev(I));
     return false;
   }
