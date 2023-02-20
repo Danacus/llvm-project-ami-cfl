@@ -329,7 +329,6 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  /*
   for (auto S : SecretUses) {
     for (auto MO : S.second.operands()) {
       errs() << *S.second.getUser();
@@ -339,7 +338,6 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
       errs() << *S.second.getUser();
     }
   }
-  */
 
   return false;
 }

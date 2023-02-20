@@ -339,10 +339,18 @@ bool RISCVPassConfig::addGlobalInstructionSelect() {
   return false;
 }
 
-void RISCVPassConfig::addPreSched2() {}
+void RISCVPassConfig::addPreSched2() {
+  if (EnableAMiLinearization == cl::BOU_TRUE) {
+    addPass(createTrackSecretsAnalysisPass(false));
+    addPass(createSensitiveRegionAnalysisPass(false));
+    addPass(createPersistencyAnalysisPass(false));
+    addPass(createAMiLinearizeBranchPass());
+    addPass(createAMiLinearizeRegionPass());
+  }
+}
 
 void RISCVPassConfig::addPreEmitPass() {
-  addPass(&BranchRelaxationPassID);
+  // addPass(&BranchRelaxationPassID);
   addPass(createRISCVMakeCompressibleOptPass());
 }
 
@@ -355,11 +363,11 @@ void RISCVPassConfig::addPreEmitPass2() {
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(&RemoveBranchPseudosPassID);
-    addPass(createTrackSecretsAnalysisPass(false));
-    addPass(createSensitiveRegionAnalysisPass(false));
-    addPass(createPersistencyAnalysisPass(false));
-    addPass(createAMiLinearizeBranchPass());
-    addPass(createAMiLinearizeRegionPass());
+    // addPass(createTrackSecretsAnalysisPass(false));
+    // addPass(createSensitiveRegionAnalysisPass(false));
+    // addPass(createPersistencyAnalysisPass(false));
+    // addPass(createAMiLinearizeBranchPass());
+    // addPass(createAMiLinearizeRegionPass());
   }
 }
 
