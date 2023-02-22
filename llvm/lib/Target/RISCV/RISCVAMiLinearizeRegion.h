@@ -40,6 +40,7 @@ public:
 
   template <RISCV::AMi::Qualifier Q>
   void setQualifier(MachineInstr *I);
+  bool setBranchActivating(MachineBasicBlock &MBB);
   bool isActivatingBranch(MachineBasicBlock &MBB);
   void findActivatingRegions();
   void handlePersistentInstr(MachineInstr *I);

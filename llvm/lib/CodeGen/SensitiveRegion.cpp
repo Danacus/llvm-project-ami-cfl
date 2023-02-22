@@ -13,7 +13,7 @@ using namespace llvm;
 
 void SensitiveRegionAnalysis::removeBranch(MachineBasicBlock *MBB) {
   auto Key = SensitiveBranch(MBB);
-  if (SensitiveBranches.contains(MBB)) {
+  if (SensitiveBranches.contains(Key)) {
     SensitiveBranches.erase(Key);
     for (auto &Pair : IfBranchMap)
       if (Pair.getSecond().contains(Key))
@@ -21,6 +21,26 @@ void SensitiveRegionAnalysis::removeBranch(MachineBasicBlock *MBB) {
     for (auto &Pair : ElseBranchMap)
       if (Pair.getSecond().contains(Key))
         Pair.getSecond().erase(Key);
+  }
+}
+
+void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
+  SensitiveBranches.insert(Branch);
+  SensitiveRegions.insert(Branch.IfRegion);
+
+  if (Branch.ElseRegion)
+    SensitiveRegions.insert(Branch.ElseRegion);
+
+  if (Branch.ElseRegion) {
+    for (auto *MBB : Branch.ElseRegion->blocks()) {
+      SensitiveBlocks.set(MBB->getNumber());
+      ElseBranchMap[MBB].insert(Branch);
+    }
+  }
+
+  for (auto *MBB : Branch.IfRegion->blocks()) {
+    SensitiveBlocks.set(MBB->getNumber());
+    IfBranchMap[MBB].insert(Branch);
   }
 }
 
@@ -57,10 +77,6 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
 
   MachineRegion *FR = getMaxRegionFor(FBB);
 
-  errs() << "FR\n";
-  FR->dump();
-  // FR->getExit()->dump();
-
   // Find the exiting blocks of this region
   SmallVector<MachineBasicBlock *> Exitings;
   FR->getExitingBlocks(Exitings);
@@ -75,24 +91,7 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
                                    "region must exit to branch target");
   }
 
-  SensitiveRegions.insert(TR);
-  SensitiveRegions.insert(FR);
-  auto Branch = SensitiveBranch(MBB, Cond, TR, FR);
-  SensitiveBranches.insert(Branch);
-
-  if (TR) {
-    errs() << "TR\n";
-    TR->dump();
-    for (auto *MBB : TR->blocks()) {
-      SensitiveBlocks.set(MBB->getNumber());
-      ElseBranchMap[MBB].insert(Branch);
-    }
-  }
-
-  for (auto *MBB : FR->blocks()) {
-    SensitiveBlocks.set(MBB->getNumber());
-    IfBranchMap[MBB].insert(Branch);
-  }
+  addBranch(SensitiveBranch(MBB, Cond, TR, FR));
 }
 
 bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {

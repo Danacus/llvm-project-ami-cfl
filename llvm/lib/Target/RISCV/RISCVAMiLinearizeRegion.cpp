@@ -56,17 +56,71 @@ void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
   }
 }
 
+bool AMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
+  // If the block has no terminators, it just falls into the block after it.
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
+    return false;
+
+  // Count the number of terminators and find the first unconditional or
+  // indirect branch.
+  MachineBasicBlock::iterator FirstUncondOrIndirectBr = MBB.end();
+  int NumTerminators = 0;
+  for (auto J = I.getReverse();
+       J != MBB.rend() && TII->isUnpredicatedTerminator(*J); J++) {
+    NumTerminators++;
+    if (J->getDesc().isUnconditionalBranch() ||
+        J->getDesc().isIndirectBranch()) {
+      FirstUncondOrIndirectBr = J.getReverse();
+    }
+  }
+
+  // We can't handle blocks that end in an indirect branch.
+  if (I->getDesc().isIndirectBranch())
+    return true;
+
+  // We can't handle blocks with more than 2 terminators.
+  if (NumTerminators > 2)
+    return true;
+
+  // Handle a single unconditional branch.
+  if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
+    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    return false;
+  }
+
+  // Handle a single conditional branch.
+  if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
+    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    return false;
+  }
+
+  // Handle a conditional branch followed by an unconditional branch.
+  if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
+      I->getDesc().isUnconditionalBranch()) {
+    // setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    setQualifier<llvm::RISCV::AMi::Activating>(&*std::prev(I));
+    return false;
+  }
+
+  // Otherwise, we can't handle this.
+  return true;
+}
+
 void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   errs() << "Handling region " << *Region << "\n";
   for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
+    MI->dump();
     setQualifier<RISCV::AMi::Persistent>(MI);
   }
 
+  errs() << "Stores\n";
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
+    I->dump();
     // TODO: fix this to only allow writing to stack in mimicry mode
     // if this instruction originates from calling convention lowering.
-    if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
-      continue;
+    // if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
+    //   continue;
     
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
@@ -121,6 +175,8 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   handleRegion(MRI.getTopLevelRegion());
 
   for (auto &Branch : ActivatingBranches) {
+    setBranchActivating(*Branch.MBB);
+    
     if (Branch.IfRegion) {
       handleRegion(Branch.IfRegion);
     }

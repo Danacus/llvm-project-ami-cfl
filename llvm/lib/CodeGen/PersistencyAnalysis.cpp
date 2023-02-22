@@ -15,12 +15,12 @@ using namespace llvm;
 
 void PersistencyAnalysisPass::propagatePersistency(
     const MachineFunction &MF, MachineInstr &MI, const MachineOperand &MO,
-    const MachineRegion &MR,
+    const MachineRegion *MR,
     SmallPtrSet<MachineInstr *, 16> &PersistentDefs) {
   errs() << "propagatePersistency\n";
   MI.dump();
   MO.dump();
-  MR.dump();
+  MR->dump();
   errs() << "\n";
 
   if (!MO.isReg())
@@ -29,14 +29,14 @@ void PersistencyAnalysisPass::propagatePersistency(
   SmallVector<MachineInstr *> WorkSet;
   if (IsSSA) {
     for (auto &DI : MF.getRegInfo().def_instructions(MO.getReg())) {
-      if (MR.contains(&DI))
+      if (MR->contains(&DI))
         WorkSet.push_back(&DI);
     }
   } else {
     SmallPtrSet<MachineInstr *, 16> Defs;
     RDA->getGlobalReachingDefs(&MI, MO.getReg(), Defs);
     for (auto *DI : Defs) {
-      if (MR.contains(DI))
+      if (MR->contains(DI))
         WorkSet.push_back(DI);
     }
   }
@@ -66,10 +66,10 @@ void PersistencyAnalysisPass::propagatePersistency(
       }
 
       for (auto *DI : Defs) {
-        if (MR.contains(DI))
+        if (MR->contains(DI))
           WorkSet.push_back(DI);
         else
-          PersistentRegionInputMap[&MR].insert(DI);
+          PersistentRegionInputMap[MR].insert(DI);
       }
     }
   }
@@ -78,20 +78,20 @@ void PersistencyAnalysisPass::propagatePersistency(
 }
 
 void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
-                                            const MachineRegion &MR,
-                                            const MachineRegion &Scope) {
+                                            const MachineRegion *MR,
+                                            const MachineRegion *Scope) {
   errs() << "Analyze region: \n";
-  MR.dump();
+  MR->dump();
   errs() << "in scope\n";
-  Scope.dump();
+  Scope->dump();
   errs() << "\n";
 
   SmallPtrSet<MachineInstr *, 16> *LocalPersistentDefs =
-      &PersistentInstructions[&Scope];
+      &PersistentInstructions[Scope];
 
-  for (const auto *Node : MR.elements()) {
+  for (const auto *Node : MR->elements()) {
     if (Node->isSubRegion()) {
-      analyzeRegion(MF, *Node->getNodeAs<MachineRegion>(), Scope);
+      analyzeRegion(MF, Node->getNodeAs<MachineRegion>(), Scope);
     } else {
       MachineBasicBlock *MBB = Node->getNodeAs<MachineBasicBlock>();
       SmallVector<MachineOperand, 4> LeakedOperands;
@@ -100,7 +100,7 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
         TII->constantTimeLeakage(MI, LeakedOperands);
 
         if (TII->isPersistentStore(MI)) {
-          PersistentStores[&Scope].insert(&MI);
+          PersistentStores[Scope].insert(&MI);
         }
 
         for (auto &MO : LeakedOperands) {
@@ -130,10 +130,12 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   for (auto &B : SRA->sensitive_branches()) {
     errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
     errs() << "if region:\n";
+    errs() << B.IfRegion << "\n";
     B.IfRegion->dump();
 
     if (B.ElseRegion) {
       errs() << "else region:\n";
+      errs() << B.ElseRegion << "\n";
       B.ElseRegion->dump();
     }
   }
@@ -142,12 +144,12 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 
   // Entire function can be called in mimicry mode, so treat the top level
   // region as an activating region.
-  analyzeRegion(MF, *MRI.getTopLevelRegion());
+  analyzeRegion(MF, MRI.getTopLevelRegion());
 
   for (auto &Branch : Branches) {
-    analyzeRegion(MF, *Branch.IfRegion);
+    analyzeRegion(MF, Branch.IfRegion);
     if (Branch.ElseRegion) {
-      analyzeRegion(MF, *Branch.ElseRegion);
+      analyzeRegion(MF, Branch.ElseRegion);
     }
   }
 

@@ -123,6 +123,7 @@ public:
     return FR;
   }
 
+  void addBranch(SensitiveBranch Branch);
   void removeBranch(MachineBasicBlock *MBB);
   void handleBranch(MachineBasicBlock *MBB);
 

@@ -38,15 +38,10 @@ public:
 
   AMiLinearizeBranch();
 
-  template <RISCV::AMi::Qualifier Q> void setQualifier(MachineInstr *I);
   void findActivatingBranches();
-
-  MachineBasicBlock *simplifyRegion(MachineFunction &MF, MachineRegion *MR);
-  void simplifyBranchRegions(MachineFunction &MF);
-  void removeEmptyBlocks(MachineFunction &MF);
+  MachineBasicBlock *createFlowBlock(MachineFunction &MF, MachineRegion *MR);
+  void createFlowBlocks(MachineFunction &MF);
   void linearizeBranches(MachineFunction &MF);
-  bool setBranchActivating(MachineBasicBlock &MBB);
-  void removePseudos(MachineFunction &MF);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 

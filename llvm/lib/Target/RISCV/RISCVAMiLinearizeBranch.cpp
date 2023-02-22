@@ -42,72 +42,7 @@ using namespace llvm;
 
 char AMiLinearizeBranch::ID = 0;
 
-template <RISCV::AMi::Qualifier Q>
-void AMiLinearizeBranch::setQualifier(MachineInstr *I) {
-  if (RISCV::AMi::hasQualifier<Q>(I->getOpcode()))
-    return;
-
-  auto PersistentInstr = RISCV::AMi::getQualified<Q>(I->getOpcode());
-
-  if (PersistentInstr != -1) {
-    I->setDesc(TII->get(PersistentInstr));
-  } else {
-    llvm_unreachable("AMi error: unsupported instruction cannot be qualified!");
-  }
-}
-
-bool AMiLinearizeBranch::setBranchActivating(MachineBasicBlock &MBB) {
-  // If the block has no terminators, it just falls into the block after it.
-  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
-  if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
-    return false;
-
-  // Count the number of terminators and find the first unconditional or
-  // indirect branch.
-  MachineBasicBlock::iterator FirstUncondOrIndirectBr = MBB.end();
-  int NumTerminators = 0;
-  for (auto J = I.getReverse();
-       J != MBB.rend() && TII->isUnpredicatedTerminator(*J); J++) {
-    NumTerminators++;
-    if (J->getDesc().isUnconditionalBranch() ||
-        J->getDesc().isIndirectBranch()) {
-      FirstUncondOrIndirectBr = J.getReverse();
-    }
-  }
-
-  // We can't handle blocks that end in an indirect branch.
-  if (I->getDesc().isIndirectBranch())
-    return true;
-
-  // We can't handle blocks with more than 2 terminators.
-  if (NumTerminators > 2)
-    return true;
-
-  // Handle a single unconditional branch.
-  if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
-    return false;
-  }
-
-  // Handle a single conditional branch.
-  if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
-    return false;
-  }
-
-  // Handle a conditional branch followed by an unconditional branch.
-  if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
-      I->getDesc().isUnconditionalBranch()) {
-    // setQualifier<llvm::RISCV::AMi::Activating>(&*I);
-    setQualifier<llvm::RISCV::AMi::Activating>(&*std::prev(I));
-    return false;
-  }
-
-  // Otherwise, we can't handle this.
-  return true;
-}
-
-MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
+MachineBasicBlock *AMiLinearizeBranch::createFlowBlock(MachineFunction &MF,
                                                       MachineRegion *MR) {
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
@@ -123,7 +58,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     // TII->removeBranch(*Exiting);
     // TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
     if (Exiting->getNumber() >= MaxNumber) {
-      MaxNumber = Exiting->getNumber(); 
+      MaxNumber = Exiting->getNumber();
       InsertPoint = Exiting->getIterator();
     }
   }
@@ -152,9 +87,10 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
     else if (!EFBB && Exiting->getFallThrough())
       EFBB = FallThrough;
 
-    assert(ETBB == MR->getExit() || EFBB == MR->getExit() &&
-           "AMi error: exiting block of activating region must jump to "
-           "region exit");
+    assert(ETBB == MR->getExit() ||
+           EFBB == MR->getExit() &&
+               "AMi error: exiting block of activating region must jump to "
+               "region exit");
 
     DebugLoc DL;
 
@@ -174,7 +110,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
 
     MachineBasicBlock *FTarget = nullptr;
     Exiting->addSuccessor(EndBlock);
-    
+
     if (EFBB == nullptr) {
       // Unconditional branch
       if (FallThrough != EndBlock)
@@ -208,7 +144,7 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
 
   MDT->addNewBlock(EndBlock, MR->getEntry());
   MPDT->getBase().addNewBlock(EndBlock, OldExit);
-  MDF->addBasicBlock(EndBlock, { OldExit });
+  MDF->addBasicBlock(EndBlock, {OldExit});
 
   MR->replaceExitRecursive(EndBlock);
   if (!MR->isTopLevelRegion() && MR->getParent()) {
@@ -221,13 +157,10 @@ MachineBasicBlock *AMiLinearizeBranch::simplifyRegion(MachineFunction &MF,
   return EndBlock;
 }
 
-void AMiLinearizeBranch::simplifyBranchRegions(MachineFunction &MF) {
+void AMiLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
-    // simplifyRegion(MF, Branch.IfRegion);
-
     if (Branch.ElseRegion) {
-      simplifyRegion(MF, Branch.IfRegion);
-      // simplifyRegion(MF, Branch.ElseRegion);
+      createFlowBlock(MF, Branch.IfRegion);
     }
   }
 }
@@ -269,15 +202,14 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
     MachineBasicBlock *Target = nullptr;
     if (Entry != BranchBlock->getFallThrough(true))
       Target = Entry;
-    TII->insertBranch(*BranchBlock, Branch.IfRegion->getExit(),
-                      Target, NewCond, DL);
+    TII->insertBranch(*BranchBlock, Branch.IfRegion->getExit(), Target, NewCond,
+                      DL);
     BranchBlock->addSuccessor(Branch.IfRegion->getExit());
 
     if (Branch.ElseRegion) {
       Branch.ElseRegion->dump();
       Branch.ElseRegion->getExit()->dump();
-      assert(Branch.ElseRegion->getExit() ==
-                 OldBranchExit &&
+      assert(Branch.ElseRegion->getExit() == OldBranchExit &&
              "if and else should exit to the same block");
 
       for (auto OP : Branch.Cond) {
@@ -296,58 +228,22 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       if (Entry != Branch.IfRegion->getExit()->getFallThrough(true))
         Target = Entry;
       TII->insertBranch(*Branch.IfRegion->getExit(),
-                        Branch.ElseRegion->getExit(),
-                        Target, CondReversed, DL);
+                        Branch.ElseRegion->getExit(), Target, CondReversed, DL);
       Branch.IfRegion->getExit()->addSuccessor(Branch.ElseRegion->getExit());
       ToActivate.insert(Branch.IfRegion->getExit());
+    }
+
+    SRA->removeBranch(BranchBlock);
+    SRA->addBranch(
+        SensitiveBranch(BranchBlock, NewCond, nullptr, Branch.IfRegion));
+
+    if (Branch.ElseRegion) {
+      SRA->addBranch(SensitiveBranch(Branch.IfRegion->getExit(), CondReversed,
+                                     nullptr, Branch.ElseRegion));
     }
   }
 
   MF.dump();
-  // removeEmptyBlocks(MF);
-  // MF.dump();
-
-  for (auto *MBB : ToActivate) {
-    setBranchActivating(*MBB);
-  }
-}
-
-void AMiLinearizeBranch::removeEmptyBlocks(MachineFunction &MF) {
-  SmallPtrSet<MachineBasicBlock *, 16> ToProcess;
-  
-  for (auto &MBB : MF) {
-    if (MBB.pred_size() == 1 && MBB.succ_size() == 1 && MBB.empty()) {
-      ToProcess.insert(&MBB);
-    }
-  }
-
-  for (auto *MBB : ToProcess) {
-    MachineBasicBlock *Pred = *MBB->pred_begin();
-    MachineBasicBlock *Succ = MBB->getSingleSuccessor();
-    Pred->removeSuccessor(MBB);
-    MBB->removeSuccessor(Succ);
-    MF.erase(MBB);
-    TII->removeBranch(*Pred);
-
-    MachineBasicBlock *Target = nullptr;
-    if (Target != Pred->getFallThrough(true))
-      TII->insertUnconditionalBranch(*Pred, Target, DebugLoc());
-  }
-}
-
-void AMiLinearizeBranch::removePseudos(MachineFunction &MF) {
-  // SmallPtrSet<MachineInstr *, 8> ToRemove;
-
-  // for (MachineBasicBlock &MB : MF) {
-  //   for (MachineInstr &MI : MB) {
-  //     if (MI.getOpcode() == TargetOpcode::SECRET)
-  //       ToRemove.insert(&MI);
-  //   }
-  // }
-
-  // for (auto *MI : ToRemove) {
-  //   MI->eraseFromParent();
-  // }
 }
 
 bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
@@ -359,7 +255,6 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  removePseudos(MF);
   // MRI.dump();
   MF.dump();
 
@@ -371,7 +266,8 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
-  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(), std::greater<SensitiveBranch>());
+  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
+            std::greater<SensitiveBranch>());
   // std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
   for (auto &B : ActivatingBranches) {
@@ -385,7 +281,7 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  simplifyBranchRegions(MF);
+  createFlowBlocks(MF);
   linearizeBranches(MF);
 
   MF.dump();

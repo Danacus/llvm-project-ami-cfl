@@ -46,11 +46,11 @@ public:
 
   void
   propagatePersistency(const MachineFunction &MF, MachineInstr &MI,
-                       const MachineOperand &MO, const MachineRegion &MR,
+                       const MachineOperand &MO, const MachineRegion *MR,
                        SmallPtrSet<MachineInstr *, 16> &PersistentDefs);
-  void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR,
-                     const MachineRegion &Scope);
-  void analyzeRegion(const MachineFunction &MF, const MachineRegion &MR) {
+  void analyzeRegion(const MachineFunction &MF, const MachineRegion *MR,
+                     const MachineRegion *Scope);
+  void analyzeRegion(const MachineFunction &MF, const MachineRegion *MR) {
     analyzeRegion(MF, MR, MR);
   }
 
