@@ -71,11 +71,11 @@ void initializeRISCVInsertVSETVLIPass(PassRegistry &);
 FunctionPass *createRISCVRedundantCopyEliminationPass();
 void initializeRISCVRedundantCopyEliminationPass(PassRegistry &);
 
-FunctionPass *createAMiLinearizeRegionPass();
-void initializeAMiLinearizeRegionPass(PassRegistry &);
+FunctionPass *createRISCVAMiLinearizeRegionPass();
+void initializeRISCVAMiLinearizeRegionPass(PassRegistry &);
 
-FunctionPass *createAMiLinearizeBranchPass();
-void initializeAMiLinearizeBranchPass(PassRegistry &);
+FunctionPass *createRISCVLinearizeBranchPass();
+void initializeRISCVLinearizeBranchPass(PassRegistry &);
 
 InstructionSelector *createRISCVInstructionSelector(const RISCVTargetMachine &,
                                                     RISCVSubtarget &,

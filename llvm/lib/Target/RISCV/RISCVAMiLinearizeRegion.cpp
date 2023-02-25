@@ -35,12 +35,12 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "ami-linearize-region"
+#define DEBUG_TYPE "riscv-ami-linearize-region"
 
-char AMiLinearizeRegion::ID = 0;
+char RISCVAMiLinearizeRegion::ID = 0;
 
 template <RISCV::AMi::Qualifier Q>
-void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
+void RISCVAMiLinearizeRegion::setQualifier(MachineInstr *I) {
   if (RISCV::AMi::hasQualifier<Q>(I->getOpcode()))
     return;
 
@@ -56,7 +56,7 @@ void AMiLinearizeRegion::setQualifier(MachineInstr *I) {
   }
 }
 
-bool AMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
+bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
   if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
@@ -107,7 +107,7 @@ bool AMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
   return true;
 }
 
-void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
+void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   errs() << "Handling region " << *Region << "\n";
   for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
     MI->dump();
@@ -157,7 +157,7 @@ void AMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   }
 }
 
-bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
+bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Region Pass\n";
 
   const auto &ST = MF.getSubtarget<RISCVSubtarget>();
@@ -202,22 +202,22 @@ bool AMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   return true;
 }
 
-AMiLinearizeRegion::AMiLinearizeRegion() : MachineFunctionPass(ID) {
-  initializeAMiLinearizeRegionPass(*PassRegistry::getPassRegistry());
+RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion() : MachineFunctionPass(ID) {
+  initializeRISCVAMiLinearizeRegionPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
+INITIALIZE_PASS_BEGIN(RISCVAMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                       false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
-INITIALIZE_PASS_END(AMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
+INITIALIZE_PASS_END(RISCVAMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)
 
 namespace llvm {
 
-FunctionPass *createAMiLinearizeRegionPass() {
-  return new AMiLinearizeRegion();
+FunctionPass *createRISCVAMiLinearizeRegionPass() {
+  return new RISCVAMiLinearizeRegion();
 }
 
 } // namespace llvm

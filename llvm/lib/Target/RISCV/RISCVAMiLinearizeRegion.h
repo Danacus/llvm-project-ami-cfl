@@ -25,7 +25,7 @@ using namespace llvm;
 
 namespace {
 
-class AMiLinearizeRegion : public MachineFunctionPass {
+class RISCVAMiLinearizeRegion : public MachineFunctionPass {
 public:
   static char ID;
 
@@ -36,7 +36,7 @@ public:
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
 
-  AMiLinearizeRegion();
+  RISCVAMiLinearizeRegion();
 
   template <RISCV::AMi::Qualifier Q>
   void setQualifier(MachineInstr *I);

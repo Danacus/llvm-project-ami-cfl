@@ -22,7 +22,7 @@ using namespace llvm;
 
 namespace {
 
-class AMiLinearizeBranch : public MachineFunctionPass {
+class RISCVLinearizeBranch : public MachineFunctionPass {
 public:
   static char ID;
 
@@ -36,7 +36,7 @@ public:
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
 
-  AMiLinearizeBranch();
+  RISCVLinearizeBranch();
 
   void findActivatingBranches();
   MachineBasicBlock *createFlowBlock(MachineFunction &MF, MachineRegion *MR);

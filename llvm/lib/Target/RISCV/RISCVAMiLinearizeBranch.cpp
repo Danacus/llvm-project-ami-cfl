@@ -38,11 +38,11 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "ami-linearize-branch"
+#define DEBUG_TYPE "riscv-linearize-branch"
 
-char AMiLinearizeBranch::ID = 0;
+char RISCVLinearizeBranch::ID = 0;
 
-MachineBasicBlock *AMiLinearizeBranch::createFlowBlock(MachineFunction &MF,
+MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
                                                       MachineRegion *MR) {
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
@@ -157,7 +157,7 @@ MachineBasicBlock *AMiLinearizeBranch::createFlowBlock(MachineFunction &MF,
   return EndBlock;
 }
 
-void AMiLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
+void RISCVLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
     if (Branch.ElseRegion) {
       createFlowBlock(MF, Branch.IfRegion);
@@ -165,7 +165,7 @@ void AMiLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
   }
 }
 
-void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
+void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
   MF.dump();
   SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
 
@@ -246,7 +246,7 @@ void AMiLinearizeBranch::linearizeBranches(MachineFunction &MF) {
   MF.dump();
 }
 
-bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
+bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   errs() << "AMi Linearize Branch Pass\n";
 
   // auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
@@ -288,22 +288,22 @@ bool AMiLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   return true;
 }
 
-AMiLinearizeBranch::AMiLinearizeBranch() : MachineFunctionPass(ID) {
-  initializeAMiLinearizeBranchPass(*PassRegistry::getPassRegistry());
+RISCVLinearizeBranch::RISCVLinearizeBranch() : MachineFunctionPass(ID) {
+  initializeRISCVLinearizeBranchPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
+INITIALIZE_PASS_BEGIN(RISCVLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
                       false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 // INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
-INITIALIZE_PASS_END(AMiLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
+INITIALIZE_PASS_END(RISCVLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
                     false, false)
 
 namespace llvm {
 
-FunctionPass *createAMiLinearizeBranchPass() {
-  return new AMiLinearizeBranch();
+FunctionPass *createRISCVLinearizeBranchPass() {
+  return new RISCVLinearizeBranch();
 }
 
 } // namespace llvm
