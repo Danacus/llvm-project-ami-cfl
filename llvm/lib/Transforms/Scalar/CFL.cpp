@@ -142,13 +142,14 @@ void CFLPass::wrapExtCall(CallBase &CS, Function *Callee) {
   static Function *F = Callee->getParent()->getFunction("cfl_fptr_wrap");
   assert(F);
   std::vector<Value *> args;
-  args.push_back(CastInst::CreatePointerCast(
-      Callee, F->getParamByValType(0)->getPointerTo(), "",
-      &CS));
+  // args.push_back(CastInst::CreatePointerCast(
+  //     Callee, F->getParamByValType(0)->getPointerTo(), "",
+  //     &CS));
+  args.push_back(Callee);
   CallInst *CI = CallInst::Create(F, args, "", &CS);
   // CS.setCalledFunction(CastInst::CreatePointerCast(CI, Callee->getType(), "",
                                                    // &CS));
-  CS.setCalledFunction(Callee);
+  CS.setCalledFunction(CI);
 }
 
 void CFLPass::wrapLoad(LoadInst *LI) {
@@ -157,13 +158,15 @@ void CFLPass::wrapLoad(LoadInst *LI) {
   static InlineFunctionInfo IFI;
   assert(F);
   std::vector<Value *> args;
-  args.push_back(CastInst::CreatePointerCast(
-      LI->getPointerOperand(), F->getParamByValType(0)->getPointerTo(), "",
-      LI));
+  // args.push_back(CastInst::CreatePointerCast(
+  //     LI->getPointerOperand(), F->getParamByValType(0)->getPointerTo(), "",
+  //     LI));
+  args.push_back(LI->getPointerOperand());
   CallInst *CI = CallInst::Create(F, args, "", LI);
   // CallSite CS(CI);
-  LI->setOperand(
-      0, CastInst::CreatePointerCast(CI, LI->getPointerOperandType(), "", LI));
+  // LI->setOperand(
+  //     0, CastInst::CreatePointerCast(CI, LI->getPointerOperandType(), "", LI));
+  LI->setOperand(0, CI);
   // do not inline now to avoid loops-cfl detecting this as an escaping value
   // due to the call to an unrecognized function
   // assert(InlineFunction(CS, IFI));
@@ -175,13 +178,15 @@ void CFLPass::wrapStore(StoreInst *SI) {
   static InlineFunctionInfo IFI;
   assert(F);
   std::vector<Value *> args;
-  args.push_back(CastInst::CreatePointerCast(
-      SI->getPointerOperand(), F->getParamByValType(0)->getPointerTo(), "",
-      SI));
+  // args.push_back(CastInst::CreatePointerCast(
+  //     SI->getPointerOperand(), F->getParamByValType(0)->getPointerTo(), "",
+  //     SI));
+  args.push_back(SI->getPointerOperand());
   CallInst *CI = CallInst::Create(F, args, "", SI);
   // CallSite CS(CI);
-  SI->setOperand(
-      1, CastInst::CreatePointerCast(CI, SI->getPointerOperandType(), "", SI));
+  SI->setOperand(1, CI);
+  // SI->setOperand(
+  //     1, CastInst::CreatePointerCast(CI, SI->getPointerOperandType(), "", SI));
   // do not inline now to avoid loops-cfl detecting this as an escaping value
   // due to the call to an unrecognized function
   // assert(InlineFunction(CS, IFI));
@@ -199,8 +204,8 @@ void CFLPass::wrapUninterestingCondition(IfCondition &IFC) {
     CondF = F->getParent()->getFunction("cfl_br_get_fixed");
   }
 
-  int branchBGID = getBGID(*IFC.Branch);
-  int branchIBID = getIBID(*IFC.Branch);
+  // int branchBGID = getBGID(*IFC.Branch);
+  // int branchIBID = getIBID(*IFC.Branch);
 
   // assert that the branch is not tainted
   assert(!getInstructionTaint(*IFC.Branch));
@@ -211,10 +216,10 @@ void CFLPass::wrapUninterestingCondition(IfCondition &IFC) {
   CondFArgs.push_back(IfCond);
   CondFArgs.push_back(makeConstBool(C, fixed_res));
   // add the required IDs if CFL_DEBUG==2
-  if (CondF->arg_size() > CondFArgs.size()) {
-    CondFArgs.push_back(makeConstI32(C, branchBGID));
-    CondFArgs.push_back(makeConstI32(C, branchIBID));
-  }
+  // if (CondF->arg_size() > CondFArgs.size()) {
+  //   CondFArgs.push_back(makeConstI32(C, branchBGID));
+  //   CondFArgs.push_back(makeConstI32(C, branchIBID));
+  // }
   Value *FixedCond =
       CallInst::Create(CondF, CondFArgs, "", IfHeader->getTerminator());
   IFC.Branch->setCondition(FixedCond);
@@ -227,6 +232,10 @@ void CFLPass::wrapCondition(IfCondition &IFC) {
   Function *F = IFC.MergePoint->getParent();
   BasicBlock *IfHeader = IFC.Branch->getParent();
   Value *IfCond = IFC.Branch->getCondition();
+
+  
+  
+  IfCond->getType()->dump();
   if (!CondF) {
     CondF = F->getParent()->getFunction("cfl_br_cond");
     IfTrueF = F->getParent()->getFunction("cfl_br_iftrue");
@@ -234,10 +243,24 @@ void CFLPass::wrapCondition(IfCondition &IFC) {
     MergePointF = F->getParent()->getFunction("cfl_br_merge");
   }
 
+
+  CondF->dump();
+  IfTrueF->dump();
+  IfFalseF->dump();
+  MergePointF->dump();
+  // CondF->getParamByValType(0)->dump();
+
+
+  llvm::IRBuilder<> Builder(IFC.Branch);
+  Value *IfCondInt = Builder.CreateIntCast(IfCond, Type::getInt32Ty(F->getContext()), true);
+
   // Create local to pass to wrappers
   AllocaInst *AITmp =
-      new AllocaInst(CondF->getParamByValType(0), 0, "cfl_tmp",
+      new AllocaInst(Type::getInt32Ty(F->getContext()), 0, "cfl_tmp",
                      &*(F->getEntryBlock().getFirstInsertionPt()));
+  // AITmp->getAllocatedType();
+  // CondF->getArg(0)->getType()->dump();
+  // CondF->getFunctionType()->getParamType(0);
   const DataLayout &DL =
       AITmp->getParent()->getParent()->getParent()->getDataLayout();
   LLVMContext &C = AITmp->getContext();
@@ -253,23 +276,23 @@ void CFLPass::wrapCondition(IfCondition &IFC) {
         if (IFC.IfFalse) errs() << IFC.IfFalse->getName() << "\n";
 #endif
 
-  int branchBGID = getBGID(*IFC.Branch);
-  int branchIBID = getIBID(*IFC.Branch);
+  // int branchBGID = getBGID(*IFC.Branch);
+  // int branchIBID = getIBID(*IFC.Branch);
 
   // Call wrappers
   std::vector<Value *> CondFArgs;
   CondFArgs.push_back(AITmp);
   // add the required IDs if CFL_DEBUG==2
-  if (CondF->arg_size() > CondFArgs.size()) {
-    CondFArgs.push_back(makeConstI32(C, branchBGID));
-    CondFArgs.push_back(makeConstI32(C, branchIBID));
-  }
+  // if (CondF->arg_size() > CondFArgs.size()) {
+  //   CondFArgs.push_back(makeConstI32(C, branchBGID));
+  //   CondFArgs.push_back(makeConstI32(C, branchIBID));
+  // }
   CallInst::Create(CondF, CondFArgs, "", IfHeader->getTerminator());
 
   if (IFC.IfTrue != IFC.MergePoint) {
     std::vector<Value *> IfTrueFArgs;
     IfTrueFArgs.push_back(AITmp);
-    IfTrueFArgs.push_back(IfCond);
+    IfTrueFArgs.push_back(IfCondInt);
     CallInst::Create(IfTrueF, IfTrueFArgs, "",
                      &*(IFC.IfTrue->getFirstInsertionPt()));
   }
@@ -277,7 +300,7 @@ void CFLPass::wrapCondition(IfCondition &IFC) {
   if (IFC.IfFalse != IFC.MergePoint) {
     std::vector<Value *> IfFalseFArgs;
     IfFalseFArgs.push_back(AITmp);
-    IfFalseFArgs.push_back(IfCond);
+    IfFalseFArgs.push_back(IfCondInt);
     CallInst::Create(IfFalseF, IfFalseFArgs, "",
                      &*(IFC.IfFalse->getFirstInsertionPt()));
   }
@@ -350,8 +373,6 @@ IfCondition *CFLPass::getIfCondition(DominatorTree *DT, PostDominatorTree *PDT,
   if (!BI->isConditional() || BI->getNumSuccessors() != 2)
     return NULL;
 
-  cflPassLog("here 0");
-
   // Look for i-postdominator with 2 predecessors, dominated by branch
   BasicBlock *BB = BI->getParent();
   BB->dump();
@@ -359,8 +380,6 @@ IfCondition *CFLPass::getIfCondition(DominatorTree *DT, PostDominatorTree *PDT,
   IPD->dump();
   if (!IPD || !IPD->hasNPredecessors(2) || !DT->dominates(BB, IPD))
     return NULL;
-
-  cflPassLog("here 1");
 
   // Found candidate merge point, ensure it isn't someone else's point
   auto SuccIt = ++df_begin(BB);
@@ -374,8 +393,6 @@ IfCondition *CFLPass::getIfCondition(DominatorTree *DT, PostDominatorTree *PDT,
       return NULL;
     SuccIt++;
   }
-
-  cflPassLog("here 2");
 
   // Found the merge point block, fill info and return
   IFC.Branch = BI;
@@ -435,17 +452,14 @@ void CFLPass::cfl(Function *F, DominatorTree *DT, PostDominatorTree *PDT) {
   // Loop over CFG to first find and then wrap conditions
   std::vector<IfCondition> ifConditions;
   for (auto &BB : *F) {
-    cflPassLog("hello");
     BranchInst *BI = dyn_cast<BranchInst>(BB.getTerminator());
     if (!BI)
       continue;
-    cflPassLog("hello 2");
     if (BI->isConditional())
       ++totalBranches;
     IfCondition *IFC = getIfCondition(DT, PDT, BI);
     if (!IFC)
       continue;
-    cflPassLog("hello 3");
     ++totalIFCs;
     if (SimpleBranches) {
       // Only simple branches LLVM's GetIfCondition can handle
@@ -514,6 +528,8 @@ PreservedAnalyses CFLPass::run(Function &F, FunctionAnalysisManager &AM) {
   oprint("[+] Total Branches     : " << totalBranches);
   oprint("[+] Total IFCs         : " << totalIFCs);
   oprint("[+] Linearized Branches: " << linearizedBranches);
+
+  F.getParent()->dump();
 
   return PreservedAnalyses::none();
 }
