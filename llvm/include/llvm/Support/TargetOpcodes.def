@@ -118,6 +118,7 @@ HANDLE_TARGET_OPCODE(SECRET)
 HANDLE_TARGET_OPCODE(EXTEND)
 HANDLE_TARGET_OPCODE(BRANCH_TARGET)
 HANDLE_TARGET_OPCODE(SECRET_DEP_BR)
+HANDLE_TARGET_OPCODE(CT_SELECT)
 
 /// BUNDLE - This instruction represents an instruction bundle. Instructions
 /// which immediately follow a BUNDLE instruction which are marked with

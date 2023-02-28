@@ -34,7 +34,7 @@ public:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
-  SmallVector<SensitiveBranch, 16> ActivatingBranches;
+  SmallVector<SensitiveBranch *, 16> ActivatingBranches;
 
   RISCVLinearizeBranch();
 

@@ -93,6 +93,10 @@ public:
 
   unsigned getInstSizeInBytes(const MachineInstr &MI) const override;
 
+  Register materializeBranchCondition(MachineBasicBlock::iterator InsertPoint, 
+                                      SmallVectorImpl<MachineOperand> &Cond, 
+                                      MachineRegisterInfo &MRI) const;
+
   bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                      MachineBasicBlock *&FBB,
                      SmallVectorImpl<MachineOperand> &Cond,

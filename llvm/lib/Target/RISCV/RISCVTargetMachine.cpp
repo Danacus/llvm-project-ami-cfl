@@ -75,6 +75,11 @@ static cl::opt<bool>
                            cl::desc("Enable AMi linearization"), cl::init(false),
                            cl::Hidden);
 
+static cl::opt<bool>
+    EnableMolnarLinearization("riscv-enable-molnar-linearization",
+                           cl::desc("Enable Molnar linearization"), cl::init(false),
+                           cl::Hidden);
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCVTargetMachine> X(getTheRISCV32Target());
   RegisterTargetMachine<RISCVTargetMachine> Y(getTheRISCV64Target());
@@ -92,6 +97,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVDAGToDAGISelPass(*PR);
   initializeRISCVLinearizeBranchPass(*PR);
   initializeRISCVAMiLinearizeRegionPass(*PR);
+  initializeRISCVMolnarLinearizeRegionPass(*PR);
 }
 
 static StringRef computeDataLayout(const Triple &TT) {
@@ -181,6 +187,7 @@ RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
   Key += "RVVMin";
   Key += std::to_string(RVVBitsMin);
   Key += "RVVMax";
+  // Harden branch regions: remove branches and make stores conditional
   Key += std::to_string(RVVBitsMax);
   Key += CPU;
   Key += TuneCPU;
@@ -404,6 +411,14 @@ void RISCVPassConfig::addPreRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createRISCVMergeBaseOffsetOptPass());
   addPass(createRISCVInsertVSETVLIPass());
+
+  if (EnableMolnarLinearization == cl::BOU_TRUE) {
+    addPass(createTrackSecretsAnalysisPass(true));
+    addPass(createSensitiveRegionAnalysisPass(true));
+    addPass(createPersistencyAnalysisPass(true));
+    addPass(createRISCVLinearizeBranchPass());
+    addPass(createRISCVMolnarLinearizeRegionPass());
+  }
 }
 
 void RISCVPassConfig::addPostRegAlloc() {

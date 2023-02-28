@@ -13,7 +13,8 @@ using namespace llvm;
 namespace llvm {
 
 struct SensitiveBranch {
-  MachineBasicBlock *MBB;
+  MachineBasicBlock *MBB = nullptr;
+  MachineBasicBlock *FlowBlock = nullptr;
   SmallVector<MachineOperand> Cond;
   MachineRegion *ElseRegion = nullptr;
   MachineRegion *IfRegion = nullptr;
@@ -59,7 +60,7 @@ template <> struct DenseMapInfo<SensitiveBranch> {
 
 class SensitiveRegionAnalysis : public MachineFunctionPass {
 public:
-  using BranchSet = SmallSet<SensitiveBranch, 16>;
+  using BranchSet = SmallVector<SensitiveBranch, 16>;
   using RegionSet = SmallPtrSet<MachineRegion *, 16>;
 
 private:
@@ -75,11 +76,11 @@ private:
 public:
   static char ID;
 
-  iterator_range<BranchSet::const_iterator> sensitive_branches() {
+  iterator_range<BranchSet::iterator> sensitive_branches() {
     return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
   }
 
-  iterator_range<BranchSet::const_iterator>
+  iterator_range<BranchSet::iterator>
   sensitive_branches(MachineBasicBlock *MBB, bool InElseRegion) {
     BranchSet *Branches;
 
@@ -90,6 +91,27 @@ public:
     }
 
     return make_range(Branches->begin(), Branches->end());
+  }
+
+  MachineRegion *getSensitiveRegion(MachineBasicBlock *MBB) {
+    MachineRegion *Current = nullptr;
+    unsigned int CurrentDepth = 0;
+
+    for (auto &Branch : ElseBranchMap[MBB]) {
+      if (Branch.ElseRegion->getDepth() > CurrentDepth) {
+        CurrentDepth = Branch.ElseRegion->getDepth();
+        Current = Branch.ElseRegion; 
+      }
+    }
+
+    for (auto &Branch : IfBranchMap[MBB]) {
+      if (Branch.IfRegion->getDepth() > CurrentDepth) {
+        CurrentDepth = Branch.IfRegion->getDepth();
+        Current = Branch.IfRegion; 
+      }
+    }
+
+    return Current;
   }
 
   iterator_range<RegionSet::iterator> sensitive_regions() {

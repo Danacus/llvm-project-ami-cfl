@@ -43,7 +43,7 @@ using namespace llvm;
 char RISCVLinearizeBranch::ID = 0;
 
 MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
-                                                      MachineRegion *MR) {
+                                                         MachineRegion *MR) {
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
   SmallVector<MachineBasicBlock *> Exitings;
@@ -159,8 +159,8 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
 
 void RISCVLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
-    if (Branch.ElseRegion) {
-      createFlowBlock(MF, Branch.IfRegion);
+    if (Branch->ElseRegion) {
+      createFlowBlock(MF, Branch->IfRegion);
     }
   }
 }
@@ -169,7 +169,8 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
   MF.dump();
   SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
 
-  for (auto &Branch : ActivatingBranches) {
+  for (auto *B : ActivatingBranches) {
+    auto &Branch = *B;
     ToActivate.insert(Branch.MBB);
 
     auto *OldBranchExit = Branch.IfRegion->getExit();
@@ -213,7 +214,7 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
              "if and else should exit to the same block");
 
       for (auto OP : Branch.Cond) {
-        if (OP.isReg() && OP.isUse()) {
+        if (OP.isReg() && OP.isUse() && OP.getReg().isPhysical()) {
           Branch.IfRegion->getExit()->addLiveIn(OP.getReg().asMCReg());
         }
       }
@@ -233,14 +234,15 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
       ToActivate.insert(Branch.IfRegion->getExit());
     }
 
-    SRA->removeBranch(BranchBlock);
-    SRA->addBranch(
-        SensitiveBranch(BranchBlock, NewCond, nullptr, Branch.IfRegion));
+    Branch.FlowBlock = Branch.IfRegion->getExit();
+    // SRA->removeBranch(BranchBlock);
+    // SRA->addBranch(
+    //     SensitiveBranch(BranchBlock, NewCond, nullptr, Branch.IfRegion));
 
-    if (Branch.ElseRegion) {
-      SRA->addBranch(SensitiveBranch(Branch.IfRegion->getExit(), CondReversed,
-                                     nullptr, Branch.ElseRegion));
-    }
+    // if (Branch.ElseRegion) {
+    //   SRA->addBranch(SensitiveBranch(Branch.IfRegion->getExit(), CondReversed,
+    //                                  nullptr, Branch.ElseRegion));
+    // }
   }
 
   MF.dump();
@@ -264,20 +266,29 @@ bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
+  for (auto &B : SRA->sensitive_branches()) {
+    ActivatingBranches.push_back(&B);
+  }
+  // ActivatingBranches = SmallVector<SensitiveBranch
+  // *>(SRA->sensitive_branches());
+
+  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
+  //           std::greater<SensitiveBranch>());
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-            std::greater<SensitiveBranch>());
+            [](const SensitiveBranch *Lhs, const SensitiveBranch *Rhs) -> bool {
+              return *Lhs > *Rhs;
+            });
   // std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
   for (auto &B : ActivatingBranches) {
-    errs() << "Activating branch: " << B.MBB->getFullName();
+    errs() << "Activating branch: " << B->MBB->getFullName();
     errs() << "if region:\n";
-    B.IfRegion->dump();
+    B->IfRegion->dump();
 
-    if (B.ElseRegion) {
+    if (B->ElseRegion) {
       errs() << "else region:\n";
-      B.ElseRegion->dump();
+      B->ElseRegion->dump();
     }
   }
 

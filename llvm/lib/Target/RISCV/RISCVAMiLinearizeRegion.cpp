@@ -176,6 +176,8 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto &Branch : ActivatingBranches) {
     setBranchActivating(*Branch.MBB);
+    if (Branch.FlowBlock)
+      setBranchActivating(*Branch.FlowBlock);
     
     if (Branch.IfRegion) {
       handleRegion(Branch.IfRegion);

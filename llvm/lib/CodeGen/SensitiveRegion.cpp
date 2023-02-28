@@ -13,19 +13,27 @@ using namespace llvm;
 
 void SensitiveRegionAnalysis::removeBranch(MachineBasicBlock *MBB) {
   auto Key = SensitiveBranch(MBB);
-  if (SensitiveBranches.contains(Key)) {
-    SensitiveBranches.erase(Key);
-    for (auto &Pair : IfBranchMap)
-      if (Pair.getSecond().contains(Key))
-        Pair.getSecond().erase(Key);
-    for (auto &Pair : ElseBranchMap)
-      if (Pair.getSecond().contains(Key))
-        Pair.getSecond().erase(Key);
+  BranchSet::iterator ToRemove =
+      std::find(SensitiveBranches.begin(), SensitiveBranches.end(), Key);
+  if (ToRemove != SensitiveBranches.end()) {
+    SensitiveBranches.erase(ToRemove);
+    for (auto &Pair : IfBranchMap) {
+      BranchSet::iterator ToRemove =
+          std::find(Pair.getSecond().begin(), Pair.getSecond().end(), Key);
+      if (ToRemove != Pair.getSecond().end())
+        Pair.getSecond().erase(ToRemove);
+    }
+    for (auto &Pair : ElseBranchMap) {
+      BranchSet::iterator ToRemove =
+          std::find(Pair.getSecond().begin(), Pair.getSecond().end(), Key);
+      if (ToRemove != Pair.getSecond().end())
+        Pair.getSecond().erase(ToRemove);
+    }
   }
 }
 
 void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
-  SensitiveBranches.insert(Branch);
+  SensitiveBranches.push_back(Branch);
   SensitiveRegions.insert(Branch.IfRegion);
 
   if (Branch.ElseRegion)
@@ -34,13 +42,13 @@ void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
   if (Branch.ElseRegion) {
     for (auto *MBB : Branch.ElseRegion->blocks()) {
       SensitiveBlocks.set(MBB->getNumber());
-      ElseBranchMap[MBB].insert(Branch);
+      ElseBranchMap[MBB].push_back(Branch);
     }
   }
 
   for (auto *MBB : Branch.IfRegion->blocks()) {
     SensitiveBlocks.set(MBB->getNumber());
-    IfBranchMap[MBB].insert(Branch);
+    IfBranchMap[MBB].push_back(Branch);
   }
 }
 

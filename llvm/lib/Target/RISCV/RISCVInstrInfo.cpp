@@ -1074,6 +1074,84 @@ unsigned RISCVInstrInfo::removeBranch(MachineBasicBlock &MBB,
   return 2;
 }
 
+Register RISCVInstrInfo::materializeBranchCondition(MachineBasicBlock::iterator InsertPoint, SmallVectorImpl<MachineOperand> &Cond, MachineRegisterInfo &MRI) const {
+  auto CC = static_cast<RISCVCC::CondCode>(Cond[0].getImm());
+  auto *MBB = InsertPoint->getParent();
+  switch (CC) {
+  default:
+    llvm_unreachable("Unrecognized conditional branch");
+  case RISCVCC::COND_EQ: {
+    auto XorReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder NewMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::XOR), XorReg);
+    NewMI.add(Cond[1]);
+    NewMI.add(Cond[2]);
+    auto DstReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder LastMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::SLTIU), DstReg);
+    LastMI.addReg(XorReg);
+    LastMI.addImm(1);
+    return DstReg;
+  }
+  case RISCVCC::COND_NE: {    
+    auto XorReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder NewMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::XOR), XorReg);
+    NewMI.add(Cond[1]);
+    NewMI.add(Cond[2]);
+    auto DstReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder LastMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::SLTU), DstReg);
+    LastMI.addReg(RISCV::X0);
+    LastMI.addReg(XorReg);
+    return DstReg;
+  }
+  case RISCVCC::COND_LT: {    
+    auto DstReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder LastMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::SLT), DstReg);
+    LastMI.add(Cond[1]);
+    LastMI.add(Cond[2]);
+    return DstReg;
+  }
+  case RISCVCC::COND_GE: {    
+    auto Reg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder MI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::SLT), Reg);
+    MI.add(Cond[1]);
+    MI.add(Cond[2]);
+    auto XorReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder NewMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::XORI), XorReg);
+    NewMI.addReg(Reg);
+    NewMI.addImm(1);
+    return XorReg;
+  }
+  case RISCVCC::COND_LTU: {    
+    auto DstReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder LastMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::SLTU), DstReg);
+    LastMI.add(Cond[1]);
+    LastMI.add(Cond[2]);
+    return DstReg;
+  }
+  case RISCVCC::COND_GEU: {    
+    auto Reg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder MI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::SLTU), Reg);
+    MI.add(Cond[1]);
+    MI.add(Cond[2]);
+    auto XorReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    MachineInstrBuilder NewMI =
+        BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::XORI), XorReg);
+    NewMI.addReg(Reg);
+    NewMI.addImm(1);
+    return XorReg;
+  }
+  }
+}
+
+
 // Inserts a branch into the end of the specific MachineBasicBlock, returning
 // the number of instructions inserted.
 unsigned RISCVInstrInfo::insertBranch(

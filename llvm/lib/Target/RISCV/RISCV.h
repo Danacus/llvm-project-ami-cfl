@@ -74,6 +74,9 @@ void initializeRISCVRedundantCopyEliminationPass(PassRegistry &);
 FunctionPass *createRISCVAMiLinearizeRegionPass();
 void initializeRISCVAMiLinearizeRegionPass(PassRegistry &);
 
+FunctionPass *createRISCVMolnarLinearizeRegionPass();
+void initializeRISCVMolnarLinearizeRegionPass(PassRegistry &);
+
 FunctionPass *createRISCVLinearizeBranchPass();
 void initializeRISCVLinearizeBranchPass(PassRegistry &);
 

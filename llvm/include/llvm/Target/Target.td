@@ -1315,6 +1315,15 @@ def EXTEND : StandardPseudoInstruction {
   let hasNoSchedulingInfo = false;
   let isMeta = true;
 }
+def CT_SELECT : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins variable_ops);
+  let AsmString = "CT_SELECT";
+  let hasSideEffects = false;
+  let isAsCheapAsAMove = false;
+  let hasNoSchedulingInfo = false;
+  let isMeta = true;
+}
 def BRANCH_TARGET : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins unknown:$src);
