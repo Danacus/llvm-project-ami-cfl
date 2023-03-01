@@ -36,6 +36,8 @@ public:
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
   DenseMap<MachineRegion *, Register> TakenRegMap;
+  GlobalValue *GlobalTaken = nullptr;
+  GlobalValue *GlobalDummy = nullptr;
 
   RISCVMolnarLinearizeRegion();
 

@@ -117,6 +117,11 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
+  GlobalTaken = MF.getFunction().getParent()->getNamedValue("cfl_taken");
+  assert(GlobalTaken && "Expected global taken variable");
+  GlobalDummy = MF.getFunction().getParent()->getNamedValue("cfl_dummy");
+  assert(GlobalDummy && "Expected global dummy address");
+
   // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
   //           std::greater<SensitiveBranch>());
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
@@ -126,10 +131,16 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   // TODO Load global taken value
   Register TopTakenReg =
       MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+  // Register TempReg =
+  //     MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+  // BuildMI(*MF.begin(), MF.begin()->getFirstTerminator(), DebugLoc(),
+  //         TII->get(RISCV::LUI), TempReg)
+  //     .addGlobalAddress(GlobalTaken);
   BuildMI(*MF.begin(), MF.begin()->getFirstTerminator(), DebugLoc(),
-          TII->get(RISCV::ADDI), TopTakenReg)
-      .addReg(RISCV::X0)
-      .addImm(1);
+          TII->get(RISCV::PseudoLI), TopTakenReg)
+      // .addReg(TempReg)
+      // .addReg(RISCV::X0)
+      .addGlobalAddress(GlobalTaken);
   handleRegion(nullptr, MRI.getTopLevelRegion(), TopTakenReg);
 
   for (auto &Branch : ActivatingBranches) {
@@ -138,8 +149,10 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     Branch.IfRegion->dump();
     errs() << Branch.IfRegion->getDepth() << "\n";
 
+    SmallVector<MachineOperand, 8> CondReversed = SmallVector<MachineOperand>(Branch.Cond);
+    TII->reverseBranchCondition(CondReversed);
     Register CondReg = TII->materializeBranchCondition(
-        Branch.MBB->getFirstTerminator(), Branch.Cond, MF.getRegInfo());
+        Branch.MBB->getFirstTerminator(), CondReversed, MF.getRegInfo());
     Register TakenReg =
         MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
 
@@ -168,14 +181,20 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
     if (Branch.ElseRegion) {
       assert(Branch.FlowBlock && "Expected flow block");
+      Register InvCondReg =
+          MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
       Register InvTakenReg =
           MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
       TakenRegMap.insert({Branch.ElseRegion, InvTakenReg});
       // XOR with 1 to invert
       BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
-              DebugLoc(), TII->get(RISCV::XORI), InvTakenReg)
+              DebugLoc(), TII->get(RISCV::XORI), InvCondReg)
           .addReg(TakenReg)
           .addImm(1);
+      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(), DebugLoc(),
+              TII->get(RISCV::AND), InvTakenReg)
+          .addReg(InvCondReg)
+          .addReg(IncomingTaken);
       handleRegion(Branch.FlowBlock, Branch.ElseRegion, InvTakenReg);
     }
   }
@@ -200,8 +219,15 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         auto *ParentRegion = SRA->getSensitiveRegion(MBB);
         assert(ParentRegion);
         Register CondReg = TakenRegMap[ParentRegion];
+        // Register CondReg;
+        // if (ParentRegion) {
+        //   CondReg = TakenRegMap[ParentRegion];
+        // } else {
+        //   CondReg = TopTakenReg;
+        // }
         assert(CondReg.isValid());
         SelectMI.addReg(CondReg);
+
       }
       ToRemove.insert(&*I);
     }
