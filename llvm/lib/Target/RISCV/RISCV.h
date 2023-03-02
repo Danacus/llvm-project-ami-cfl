@@ -80,6 +80,9 @@ void initializeRISCVMolnarLinearizeRegionPass(PassRegistry &);
 FunctionPass *createRISCVLinearizeBranchPass();
 void initializeRISCVLinearizeBranchPass(PassRegistry &);
 
+FunctionPass *createRISCVSimplifySensitiveRegionPass();
+void initializeRISCVSimplifySensitiveRegionPass(PassRegistry &);
+
 InstructionSelector *createRISCVInstructionSelector(const RISCVTargetMachine &,
                                                     RISCVSubtarget &,
                                                     RISCVRegisterBankInfo &);

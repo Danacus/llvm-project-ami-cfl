@@ -208,9 +208,11 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
     for (MachineBasicBlock::iterator I = Exit->begin();
          I != Exit->getFirstNonPHI(); ++I) {
+      SmallVector<uint> OpsToRemove;
       auto SelectMI =
           BuildMI(*Exit, Exit->getFirstNonPHI(), DebugLoc(),
                   TII->get(TargetOpcode::CT_SELECT), I->getOperand(0).getReg());
+      uint Counter = 1;
       for (MachineInstr::mop_iterator J = std::next(I->operands_begin());
            J != I->operands_end(); J += 2) {
         Register Reg = J->getReg();
@@ -218,6 +220,7 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         MachineBasicBlock *MBB = std::next(J)->getMBB();
         auto *ParentRegion = SRA->getSensitiveRegion(MBB);
         assert(ParentRegion);
+        // if (ParentRegion) {
         Register CondReg = TakenRegMap[ParentRegion];
         // Register CondReg;
         // if (ParentRegion) {
@@ -227,9 +230,17 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         // }
         assert(CondReg.isValid());
         SelectMI.addReg(CondReg);
-
+        OpsToRemove.push_back(Counter++);
+        OpsToRemove.push_back(Counter++);
+        // }
       }
-      ToRemove.insert(&*I);
+
+      for (auto Idx = OpsToRemove.rbegin(); Idx != OpsToRemove.rend(); ++Idx) {
+        I->removeOperand(*Idx);
+      }
+      
+      if (I->getNumOperands() == 1)
+        ToRemove.insert(&*I);
     }
 
     for (auto *MI : ToRemove) {

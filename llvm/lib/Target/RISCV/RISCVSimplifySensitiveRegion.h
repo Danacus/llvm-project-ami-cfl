@@ -1,5 +1,5 @@
-#ifndef LLVM_CODEGEN_AMI_LINEARIZE_REGION_H
-#define LLVM_CODEGEN_AMI_LINEARIZE_REGION_H
+#ifndef LLVM_TARGET_RISCV_SIMPLIFY_SENSITIVE_REGION_H
+#define LLVM_TARGET_RISCV_SIMPLIFY_SENSITIVE_REGION_H
 
 #include "RISCVInstrInfo.h"
 #include "llvm/CodeGen/FindSecrets.h"
@@ -22,7 +22,7 @@ using namespace llvm;
 
 namespace {
 
-class RISCVLinearizeBranch : public MachineFunctionPass {
+class RISCVSimplifySensitiveRegion : public MachineFunctionPass {
 public:
   static char ID;
 
@@ -36,12 +36,11 @@ public:
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch *, 16> ActivatingBranches;
 
-  RISCVLinearizeBranch();
+  RISCVSimplifySensitiveRegion();
 
-  void findActivatingBranches();
-  MachineBasicBlock *createFlowBlock(MachineFunction &MF, MachineRegion *MR, bool ReplaceExit);
-  void createFlowBlocks(MachineFunction &MF);
-  void linearizeBranches(MachineFunction &MF);
+  void updatePHIs(MachineFunction &MF, MachineBasicBlock *Exiting);
+  MachineBasicBlock *createExitingBlock(MachineFunction &MF, MachineRegion *MR);
+  void createExitingBlocks(MachineFunction &MF);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -67,4 +66,4 @@ public:
 
 } // namespace
 
-#endif // LLVM_CODEGEN_AMI_LINEARIZE_REGION
+#endif // LLVM_TARGET_RISCV_SIMPLIFY_SENSITIVE_REGION_H

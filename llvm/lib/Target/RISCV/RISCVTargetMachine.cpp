@@ -98,6 +98,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVLinearizeBranchPass(*PR);
   initializeRISCVAMiLinearizeRegionPass(*PR);
   initializeRISCVMolnarLinearizeRegionPass(*PR);
+  initializeRISCVSimplifySensitiveRegionPass(*PR);
 }
 
 static StringRef computeDataLayout(const Triple &TT) {
@@ -416,6 +417,7 @@ void RISCVPassConfig::addPreRegAlloc() {
     addPass(createTrackSecretsAnalysisPass(true));
     addPass(createSensitiveRegionAnalysisPass(true));
     addPass(createPersistencyAnalysisPass(true));
+    addPass(createRISCVSimplifySensitiveRegionPass());
     addPass(createRISCVLinearizeBranchPass());
     addPass(createRISCVMolnarLinearizeRegionPass());
   }

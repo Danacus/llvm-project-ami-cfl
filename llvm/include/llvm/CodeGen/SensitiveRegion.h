@@ -93,6 +93,14 @@ public:
     return make_range(Branches->begin(), Branches->end());
   }
 
+  void insertBranchInBlockMap(MachineBasicBlock *MBB, SensitiveBranch &Branch, bool InElseRegion) {
+    if (!InElseRegion) {
+      IfBranchMap[MBB].push_back(Branch);
+    } else {
+      ElseBranchMap[MBB].push_back(Branch);
+    }
+  }
+
   MachineRegion *getSensitiveRegion(MachineBasicBlock *MBB) {
     MachineRegion *Current = nullptr;
     unsigned int CurrentDepth = 0;

@@ -1,6 +1,6 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
-#include "RISCVAMiLinearizeBranch.h"
+#include "RISCVSimplifySensitiveRegion.h"
 #include "RISCVInstrInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -38,13 +38,12 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-linearize-branch"
+#define DEBUG_TYPE "riscv-simplify-sensitive-region"
 
-char RISCVLinearizeBranch::ID = 0;
+char RISCVSimplifySensitiveRegion::ID = 0;
 
-MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
-                                                         MachineRegion *MR,
-                                                         bool ReplaceExit) {
+MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunction &MF,
+                                                         MachineRegion *MR) {
   auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
   SmallVector<MachineBasicBlock *> Exitings;
@@ -58,11 +57,9 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
   for (auto *Exiting : Exitings) {
     // TII->removeBranch(*Exiting);
     // TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
-    Exiting->dump();
-    errs() << "Number: " << Exiting->getNumber() << "\n";
     if (Exiting->getNumber() >= MaxNumber) {
       MaxNumber = Exiting->getNumber();
-      InsertPoint = std::next(Exiting->getIterator());
+      InsertPoint = Exiting->getIterator();
     }
   }
 
@@ -134,7 +131,7 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
     }
   }
 
-  MF.insert(InsertPoint, EndBlock);
+  MF.insert(++InsertPoint, EndBlock);
 
   // BuildMI(*EndBlock, EndBlock->end(), DL,
   // TII->get(TargetOpcode::BRANCH_TARGET))
@@ -149,8 +146,6 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
   MPDT->getBase().addNewBlock(EndBlock, OldExit);
   MDF->addBasicBlock(EndBlock, {OldExit});
 
-  if (ReplaceExit)
-    MR->replaceExitRecursive(EndBlock);
   if (!MR->isTopLevelRegion() && MR->getParent()) {
     MRI.setRegionFor(EndBlock, MR->getParent());
     MRI.updateStatistics(MR->getParent());
@@ -161,102 +156,73 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
   return EndBlock;
 }
 
-void RISCVLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
-  for (auto &Branch : ActivatingBranches) {
-    if (Branch->ElseRegion) {
-      createFlowBlock(MF, Branch->IfRegion, true);
-    }
-    // createFlowBlock(MF, Branch->IfRegion, true);
-    // if (Branch->ElseRegion)
-    //   createFlowBlock(MF, Branch->ElseRegion, false);
-  }
-}
+void RISCVSimplifySensitiveRegion::updatePHIs(MachineFunction &MF, MachineBasicBlock *Exiting) {
+  MachineBasicBlock *Exit = Exiting->getSingleSuccessor();
 
-void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
-  MF.dump();
-  SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
+  SmallPtrSet<MachineInstr *, 8> ToRemove;
 
-  for (auto *B : ActivatingBranches) {
-    auto &Branch = *B;
-    ToActivate.insert(Branch.MBB);
+  for (MachineBasicBlock::iterator I = Exit->begin();
+       I != Exit->getFirstNonPHI(); ++I) {
+    SmallVector<MachineOperand> MovedOps;
+    SmallVector<uint> OpsToRemove;
+    uint Counter = 1;
+    for (MachineInstr::mop_iterator J = std::next(I->operands_begin());
+         J != I->operands_end(); J += 2) {
+      MachineBasicBlock *MBB = std::next(J)->getMBB();
 
-    auto *OldBranchExit = Branch.IfRegion->getExit();
-    if (Branch.ElseRegion)
-      OldBranchExit = OldBranchExit->getSingleSuccessor();
-    errs() << "Old exit:\n";
-    OldBranchExit->dump();
-
-    DebugLoc DL;
-
-    auto *BranchBlock = Branch.MBB;
-
-    SmallVector<MachineOperand> NewCond;
-
-    for (auto OP : Branch.Cond) {
-      if (OP.isReg() && !OP.isDef())
-        OP.setIsKill(false);
-      NewCond.push_back(OP);
-    }
-
-    SmallVector<MachineOperand> CondReversed = NewCond;
-    TII->reverseBranchCondition(CondReversed);
-
-    TII->removeBranch(*BranchBlock);
-    for (auto *Succ : BranchBlock->successors())
-      if (Succ != Branch.IfRegion->getEntry())
-        BranchBlock->removeSuccessor(Succ);
-
-    MachineBasicBlock *Entry = Branch.IfRegion->getEntry();
-    MachineBasicBlock *Target = nullptr;
-    if (Entry != BranchBlock->getFallThrough(true))
-      Target = Entry;
-    TII->insertBranch(*BranchBlock, Branch.IfRegion->getExit(), Target, NewCond,
-                      DL);
-    BranchBlock->addSuccessor(Branch.IfRegion->getExit());
-
-    if (Branch.ElseRegion) {
-      Branch.ElseRegion->dump();
-      Branch.ElseRegion->getExit()->dump();
-      // assert(Branch.ElseRegion->getExit()->getSingleSuccessor() == OldBranchExit &&
-      //        "if and else should exit to the same block");
-
-      for (auto OP : Branch.Cond) {
-        if (OP.isReg() && OP.isUse() && OP.getReg().isPhysical()) {
-          Branch.IfRegion->getExit()->addLiveIn(OP.getReg().asMCReg());
-        }
+      if (MBB->isSuccessor(Exiting)) {
+        MovedOps.push_back(*J);
+        MovedOps.push_back(*std::next(J));
+        OpsToRemove.push_back(Counter);
+        OpsToRemove.push_back(Counter + 1);
       }
 
-      Branch.IfRegion->getExit()->removeSuccessor(OldBranchExit);
-      TII->removeBranch(*Branch.IfRegion->getExit());
-
-      MachineBasicBlock *Entry = Branch.ElseRegion->getEntry();
-      Branch.IfRegion->getExit()->addSuccessor(Entry);
-
-      MachineBasicBlock *Target = nullptr;
-      if (Entry != Branch.IfRegion->getExit()->getFallThrough(true))
-        Target = Entry;
-      TII->insertBranch(*Branch.IfRegion->getExit(),
-                        OldBranchExit, Target, CondReversed, DL);
-      Branch.IfRegion->getExit()->addSuccessor(OldBranchExit);
-      ToActivate.insert(Branch.IfRegion->getExit());
+      Counter += 2;
     }
 
-    Branch.FlowBlock = Branch.IfRegion->getExit();
-    // SRA->removeBranch(BranchBlock);
-    // SRA->addBranch(
-    //     SensitiveBranch(BranchBlock, NewCond, nullptr, Branch.IfRegion));
+    for (auto Idx = OpsToRemove.rbegin(); Idx != OpsToRemove.rend(); ++Idx) {
+      I->removeOperand(*Idx);
+    }
 
-    // if (Branch.ElseRegion) {
-    //   SRA->addBranch(SensitiveBranch(Branch.IfRegion->getExit(), CondReversed,
-    //                                  nullptr, Branch.ElseRegion));
-    // }
+    if (MovedOps.size() > 0) {
+      Register NewReg = MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+      auto NewPHI = BuildMI(*Exiting, Exiting->getFirstNonPHI(), DebugLoc(), TII->get(TargetOpcode::PHI), NewReg);
+
+      for (auto Op : MovedOps)
+        NewPHI.add(Op);
+
+      I->addOperand(MachineOperand::CreateReg(NewReg, false));
+      I->addOperand(MachineOperand::CreateMBB(Exiting));
+    }
+    
+    if (I->getNumOperands() == 1)
+      ToRemove.insert(&*I);
   }
 
-  MF.dump();
+  for (auto *MI : ToRemove) {
+    MI->eraseFromParent();
+  }
 }
 
-bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
-  errs() << "AMi Linearize Branch Pass\n";
+void RISCVSimplifySensitiveRegion::createExitingBlocks(MachineFunction &MF) {
+  for (auto &Branch : ActivatingBranches) {
+    // if (Branch->ElseRegion) {
+    //   createFlowBlock(MF, Branch->IfRegion);
+    // }
+    auto *NewExiting = createExitingBlock(MF, Branch->IfRegion);
+    SRA->insertBranchInBlockMap(NewExiting, *Branch, false);
+    updatePHIs(MF, NewExiting);
+
+    if (Branch->ElseRegion) {
+      auto *NewExiting = createExitingBlock(MF, Branch->ElseRegion);
+      SRA->insertBranchInBlockMap(NewExiting, *Branch, true);
+      updatePHIs(MF, NewExiting);
+    }
+  }
+}
+
+bool RISCVSimplifySensitiveRegion::runOnMachineFunction(MachineFunction &MF) {
+  errs() << "RISCV Simplify Sensitive Regions\n";
 
   // auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
 
@@ -299,29 +265,28 @@ bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  createFlowBlocks(MF);
-  linearizeBranches(MF);
+  createExitingBlocks(MF);
 
   MF.dump();
   return true;
 }
 
-RISCVLinearizeBranch::RISCVLinearizeBranch() : MachineFunctionPass(ID) {
-  initializeRISCVLinearizeBranchPass(*PassRegistry::getPassRegistry());
+RISCVSimplifySensitiveRegion::RISCVSimplifySensitiveRegion() : MachineFunctionPass(ID) {
+  initializeRISCVSimplifySensitiveRegionPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(RISCVLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
+INITIALIZE_PASS_BEGIN(RISCVSimplifySensitiveRegion, DEBUG_TYPE, "RISCV Simplify Sensitive Region",
                       false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 // INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
-INITIALIZE_PASS_END(RISCVLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
+INITIALIZE_PASS_END(RISCVSimplifySensitiveRegion, DEBUG_TYPE, "RISCV Simplify Sensitive Region",
                     false, false)
 
 namespace llvm {
 
-FunctionPass *createRISCVLinearizeBranchPass() {
-  return new RISCVLinearizeBranch();
+FunctionPass *createRISCVSimplifySensitiveRegionPass() {
+  return new RISCVSimplifySensitiveRegion();
 }
 
 } // namespace llvm

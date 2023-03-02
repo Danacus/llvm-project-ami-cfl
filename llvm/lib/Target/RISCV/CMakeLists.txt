@@ -22,6 +22,7 @@ add_llvm_target(RISCVCodeGen
   RISCVAMiLinearizeRegion.cpp
   RISCVMolnarLinearizeRegion.cpp
   RISCVAMiLinearizeBranch.cpp
+  RISCVSimplifySensitiveRegion.cpp
   RISCVAsmPrinter.cpp
   RISCVCodeGenPrepare.cpp
   RISCVMakeCompressible.cpp
