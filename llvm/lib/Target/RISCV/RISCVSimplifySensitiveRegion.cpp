@@ -49,6 +49,9 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
   SmallVector<MachineBasicBlock *> Exitings;
   MR->getExitingBlocks(Exitings);
 
+  if (Exitings.size() <= 1)
+    return nullptr;
+
   DebugLoc DL;
 
   MachineFunction::iterator InsertPoint = MF.end();
@@ -59,7 +62,7 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
     // TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
     if (Exiting->getNumber() >= MaxNumber) {
       MaxNumber = Exiting->getNumber();
-      InsertPoint = Exiting->getIterator();
+      InsertPoint = std::next(Exiting->getIterator());
     }
   }
 
@@ -131,13 +134,16 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
     }
   }
 
-  MF.insert(++InsertPoint, EndBlock);
+  MF.insert(InsertPoint, EndBlock);
 
   // BuildMI(*EndBlock, EndBlock->end(), DL,
   // TII->get(TargetOpcode::BRANCH_TARGET))
   //     .addMBB(EndBlock);
 
   EndBlock->addSuccessor(MR->getExit());
+
+  // if (EndBlock->getSingleSuccessor()->succ_size() > 2)
+  //   MR->replaceExitRecursive(EndBlock);
 
   if (EndBlock->getFallThrough(true) != MR->getExit())
     TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
@@ -146,9 +152,13 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
   MPDT->getBase().addNewBlock(EndBlock, OldExit);
   MDF->addBasicBlock(EndBlock, {OldExit});
 
+  // MR->replaceExitRecursive(EndBlock);
+
   if (!MR->isTopLevelRegion() && MR->getParent()) {
-    MRI.setRegionFor(EndBlock, MR->getParent());
-    MRI.updateStatistics(MR->getParent());
+    // MRI.setRegionFor(EndBlock, MR->getParent());
+    // MRI.updateStatistics(MR->getParent());
+    MRI.setRegionFor(EndBlock, MR);
+    MRI.updateStatistics(MR);
   }
 
   ActivatingRegions.insert(MR);
@@ -210,13 +220,17 @@ void RISCVSimplifySensitiveRegion::createExitingBlocks(MachineFunction &MF) {
     //   createFlowBlock(MF, Branch->IfRegion);
     // }
     auto *NewExiting = createExitingBlock(MF, Branch->IfRegion);
-    SRA->insertBranchInBlockMap(NewExiting, *Branch, false);
-    updatePHIs(MF, NewExiting);
+    if (NewExiting) {
+      SRA->insertBranchInBlockMap(NewExiting, *Branch, false);
+      updatePHIs(MF, NewExiting);
+    }
 
     if (Branch->ElseRegion) {
       auto *NewExiting = createExitingBlock(MF, Branch->ElseRegion);
-      SRA->insertBranchInBlockMap(NewExiting, *Branch, true);
-      updatePHIs(MF, NewExiting);
+      if (NewExiting) {
+        SRA->insertBranchInBlockMap(NewExiting, *Branch, true);
+        updatePHIs(MF, NewExiting);
+      }
     }
   }
 }
@@ -248,11 +262,11 @@ bool RISCVSimplifySensitiveRegion::runOnMachineFunction(MachineFunction &MF) {
 
   // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
   //           std::greater<SensitiveBranch>());
-  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-            [](const SensitiveBranch *Lhs, const SensitiveBranch *Rhs) -> bool {
-              return *Lhs > *Rhs;
-            });
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
+  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
+  //           [](const SensitiveBranch *Lhs, const SensitiveBranch *Rhs) -> bool {
+  //             return *Lhs > *Rhs;
+  //           });
+  std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
   for (auto &B : ActivatingBranches) {
     errs() << "Activating branch: " << B->MBB->getFullName();

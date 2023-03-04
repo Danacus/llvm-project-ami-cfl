@@ -218,16 +218,20 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         Register Reg = J->getReg();
         SelectMI.addReg(Reg);
         MachineBasicBlock *MBB = std::next(J)->getMBB();
+        errs() << "here\n";
+        MBB->dump();
         auto *ParentRegion = SRA->getSensitiveRegion(MBB);
-        assert(ParentRegion);
+        // assert(ParentRegion);
         // if (ParentRegion) {
-        Register CondReg = TakenRegMap[ParentRegion];
-        // Register CondReg;
-        // if (ParentRegion) {
-        //   CondReg = TakenRegMap[ParentRegion];
-        // } else {
-        //   CondReg = TopTakenReg;
-        // }
+        // Register CondReg = TakenRegMap[ParentRegion];
+        Register CondReg;
+        if (ParentRegion) {
+          ParentRegion->dump();
+          CondReg = TakenRegMap[ParentRegion];
+        } else {
+          errs() << "No parent region\n";
+          CondReg = TopTakenReg;
+        }
         assert(CondReg.isValid());
         SelectMI.addReg(CondReg);
         OpsToRemove.push_back(Counter++);

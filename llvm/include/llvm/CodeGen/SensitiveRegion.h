@@ -140,6 +140,7 @@ public:
     // Get largest region that starts at BB. (See
     // RegionInfoBase::getMaxRegionExit)
     MachineRegion *FR = MRI->getRegionFor(MBB);
+    MachineRegion *Original = FR;
     assert(FR && "AMi error: no region for given block");
     while (auto *Expanded = FR->getExpandedRegion()) {
       FR = Expanded;
@@ -150,6 +151,16 @@ public:
     while (FR && FR->getParent() && FR->getParent()->getEntry() == MBB &&
            FR->getExit())
       FR = FR->getParent();
+
+    SmallVector<MachineBasicBlock *> Exitings;
+    while (FR->getExitingBlocks(Exitings) && FR->getExit()->succ_size() == 1)
+      FR->replaceExit(FR->getExit()->getSingleSuccessor());
+
+    MachineRegion *Parent = Original->getParent();
+    if (Parent && FR->getParent() == nullptr) {
+      Parent->addSubRegion(FR);
+    }
+
     return FR;
   }
 

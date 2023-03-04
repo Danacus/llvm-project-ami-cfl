@@ -40,15 +40,21 @@ void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
     SensitiveRegions.insert(Branch.ElseRegion);
 
   if (Branch.ElseRegion) {
+    errs() << "Adding branch region\n";
+    Branch.ElseRegion->dump();
     for (auto *MBB : Branch.ElseRegion->blocks()) {
       SensitiveBlocks.set(MBB->getNumber());
       ElseBranchMap[MBB].push_back(Branch);
+      MBB->dump();
     }
   }
 
+  errs() << "Adding branch region\n";
+  Branch.IfRegion->dump();
   for (auto *MBB : Branch.IfRegion->blocks()) {
     SensitiveBlocks.set(MBB->getNumber());
     IfBranchMap[MBB].push_back(Branch);
+    MBB->dump();
   }
 }
 

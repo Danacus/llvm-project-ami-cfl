@@ -46,20 +46,20 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<SensitiveRegionAnalysis>();
-    AU.addPreserved<SensitiveRegionAnalysis>();
+    // AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addPreserved<TrackSecretsAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     AU.addRequiredTransitive<MachineRegionInfoPass>();
-    AU.addPreserved<MachineRegionInfoPass>();
+    // AU.addPreserved<MachineRegionInfoPass>();
     AU.addUsedIfAvailable<MachineDominatorTree>();
-    AU.addPreserved<MachineDominatorTree>();
+    // AU.addPreserved<MachineDominatorTree>();
     AU.addUsedIfAvailable<MachinePostDominatorTree>();
-    AU.addPreserved<MachinePostDominatorTree>();
+    // AU.addPreserved<MachinePostDominatorTree>();
     AU.addUsedIfAvailable<MachineDominanceFrontier>();
-    AU.addPreserved<MachineDominanceFrontier>();
+    // AU.addPreserved<MachineDominanceFrontier>();
     AU.addPreserved<ReachingDefAnalysis>();
-    AU.setPreservesCFG();
+    // AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
