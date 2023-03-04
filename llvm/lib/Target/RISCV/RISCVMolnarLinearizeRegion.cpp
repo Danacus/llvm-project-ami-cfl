@@ -213,31 +213,52 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
           BuildMI(*Exit, Exit->getFirstNonPHI(), DebugLoc(),
                   TII->get(TargetOpcode::CT_SELECT), I->getOperand(0).getReg());
       uint Counter = 1;
+      Register CondReg;
+      uint CurrentDepth = 0;
+      Register First;
+      Register Second;
+      
       for (MachineInstr::mop_iterator J = std::next(I->operands_begin());
            J != I->operands_end(); J += 2) {
         Register Reg = J->getReg();
-        SelectMI.addReg(Reg);
+        if (Counter == 1) {
+          First = Reg;
+        } else if (Counter == 3) {
+          Second = Reg;
+        } else {
+          llvm_unreachable("CT_SELECT with more than 2 operands not supported");
+        }
+        // SelectMI.addReg(Reg);
         MachineBasicBlock *MBB = std::next(J)->getMBB();
         errs() << "here\n";
         MBB->dump();
         auto *ParentRegion = SRA->getSensitiveRegion(MBB);
-        // assert(ParentRegion);
-        // if (ParentRegion) {
-        // Register CondReg = TakenRegMap[ParentRegion];
-        Register CondReg;
-        if (ParentRegion) {
+
+        if (ParentRegion && ParentRegion->getDepth() > CurrentDepth) {
+          // Only replace the condition register if the parent region is deeper
           ParentRegion->dump();
           CondReg = TakenRegMap[ParentRegion];
+          CurrentDepth = ParentRegion->getDepth();
+
+          if (Counter > 1) {
+            // We are using the condition of the second option,
+            // so we need to flip the two options such that the one
+            // selected for this condition comes first
+            Register Temp = Second;
+            Second = First;
+            First = Temp;
+          }
         } else {
           errs() << "No parent region\n";
-          CondReg = TopTakenReg;
+          // No need to set CondReg, as it is assumed to be set for the next option
         }
-        assert(CondReg.isValid());
-        SelectMI.addReg(CondReg);
         OpsToRemove.push_back(Counter++);
         OpsToRemove.push_back(Counter++);
-        // }
       }
+      assert(First.isValid() && Second.isValid() && CondReg.isValid() && "Invalid CT_SELECT");
+      SelectMI.addReg(First);
+      SelectMI.addReg(Second);
+      SelectMI.addReg(CondReg);
 
       for (auto Idx = OpsToRemove.rbegin(); Idx != OpsToRemove.rend(); ++Idx) {
         I->removeOperand(*Idx);
