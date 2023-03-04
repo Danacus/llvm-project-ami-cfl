@@ -329,9 +329,6 @@ typename Tr::RegionT *RegionBase<Tr>::getSubRegionNode(BlockT *BB) const {
   if (!R || R == this)
     return nullptr;
 
-  BB->dump();
-  R->dump();
-
   // If we pass the BB out of this region, that means our code is broken.
   assert(contains(R) && "BB not in current region!");
 

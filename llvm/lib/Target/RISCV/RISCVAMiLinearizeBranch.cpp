@@ -272,6 +272,9 @@ bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
   MRI = SRA->getRegionInfo();
 
+  ActivatingRegions.clear();
+  ActivatingBranches.clear();
+
   for (auto &B : SRA->sensitive_branches()) {
     ActivatingBranches.push_back(&B);
   }

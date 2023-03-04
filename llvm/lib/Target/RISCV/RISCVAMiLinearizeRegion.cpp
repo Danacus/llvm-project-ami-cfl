@@ -119,8 +119,8 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
     I->dump();
     // TODO: fix this to only allow writing to stack in mimicry mode
     // if this instruction originates from calling convention lowering.
-    // if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
-    //   continue;
+    if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
+      continue;
     
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 

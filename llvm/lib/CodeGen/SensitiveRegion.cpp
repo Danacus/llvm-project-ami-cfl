@@ -41,21 +41,15 @@ void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
     SensitiveRegions.insert(Branch.ElseRegion);
 
   if (Branch.ElseRegion) {
-    errs() << "Adding branch region\n";
-    Branch.ElseRegion->dump();
     for (auto *MBB : Branch.ElseRegion->blocks()) {
       SensitiveBlocks.set(MBB->getNumber());
       ElseBranchMap[MBB].push_back(Branch);
-      MBB->dump();
     }
   }
 
-  errs() << "Adding branch region\n";
-  Branch.IfRegion->dump();
   for (auto *MBB : Branch.IfRegion->blocks()) {
     SensitiveBlocks.set(MBB->getNumber());
     IfBranchMap[MBB].push_back(Branch);
-    MBB->dump();
   }
 }
 
@@ -89,24 +83,6 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion
     TBB = FBB;
     FBB = Temp;
   }
-
-  /*
-  MachineRegion *FR = getMaxRegionFor(FBB);
-
-  // Find the exiting blocks of this region
-  SmallVector<MachineBasicBlock *> Exitings;
-  FR->getExitingBlocks(Exitings);
-
-  bool HasElseRegion = FR->getExit() != TBB;
-
-  MachineRegion *TR = nullptr;
-  if (HasElseRegion) {
-    TR = getMaxRegionFor(TBB);
-  } else {
-    assert(FR->getExit() == TBB && "AMi error: if branch without else "
-                                   "region must exit to branch target");
-  }
-  */
 
   MachineBasicBlock *Exit = MPDT->findNearestCommonDominator(TBB, FBB);
   assert(Exit && "Expected a branch exit");
@@ -156,10 +132,6 @@ void SensitiveRegionAnalysis::handleRegion(MachineRegion *MR) {
 }
 
 bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
-  // MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
-  // auto &Secrets =
-  // getAnalysis<TrackSecretsAnalysisVirtReg>().getSecrets().SecretUses;
-  // MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   if (MRI)
     delete MRI;
   TSA = &getAnalysis<TrackSecretsAnalysis>();
@@ -171,12 +143,10 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
   SensitiveRegions.clear();
   SensitiveBlocks.clear();
+  SensitiveBranchBlocks.clear();
   IfBranchMap.clear();
   ElseBranchMap.clear();
   SensitiveBranches.clear();
-
-  // MF.dump();
-  // MRI->dump();
 
   auto &Secrets = TSA->SecretUses;
 
