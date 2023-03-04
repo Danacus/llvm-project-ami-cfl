@@ -93,6 +93,8 @@ public:
 
   unsigned getInstSizeInBytes(const MachineInstr &MI) const override;
 
+  Register createCTSelect(Register DstReg, MachineBasicBlock *MBB, MachineBasicBlock::iterator InsertPoint, Register MaskReg, Register TrueReg, Register FalseReg, MachineRegisterInfo &MRI) const;
+
   Register materializeBranchCondition(MachineBasicBlock::iterator InsertPoint, 
                                       SmallVectorImpl<MachineOperand> &Cond, 
                                       MachineRegisterInfo &MRI) const;

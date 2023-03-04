@@ -1074,6 +1074,17 @@ unsigned RISCVInstrInfo::removeBranch(MachineBasicBlock &MBB,
   return 2;
 }
 
+Register RISCVInstrInfo::createCTSelect(Register DstReg, MachineBasicBlock *MBB, MachineBasicBlock::iterator InsertPoint, Register MaskReg, Register TrueReg, Register FalseReg, MachineRegisterInfo &MRI) const {
+  auto TmpReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  auto TmpReg2 = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  auto InvMaskReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::XORI), InvMaskReg).addReg(MaskReg).addImm(-1);
+  BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::AND), TmpReg).addReg(MaskReg).addReg(TrueReg);
+  BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::AND), TmpReg2).addReg(InvMaskReg).addReg(FalseReg);
+  BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::AND), DstReg).addReg(TmpReg).addReg(TmpReg2);
+  return DstReg;
+}
+
 Register RISCVInstrInfo::materializeBranchCondition(MachineBasicBlock::iterator InsertPoint, SmallVectorImpl<MachineOperand> &Cond, MachineRegisterInfo &MRI) const {
   auto CC = static_cast<RISCVCC::CondCode>(Cond[0].getImm());
   auto *MBB = InsertPoint->getParent();
