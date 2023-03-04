@@ -50,7 +50,7 @@ public:
     AU.addPreserved<TrackSecretsAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
-    AU.addRequiredTransitive<MachineRegionInfoPass>();
+    // AU.addRequiredTransitive<MachineRegionInfoPass>();
     // AU.addPreserved<MachineRegionInfoPass>();
     AU.addUsedIfAvailable<MachineDominatorTree>();
     // AU.addPreserved<MachineDominatorTree>();
@@ -58,7 +58,7 @@ public:
     // AU.addPreserved<MachinePostDominatorTree>();
     AU.addUsedIfAvailable<MachineDominanceFrontier>();
     // AU.addPreserved<MachineDominanceFrontier>();
-    AU.addPreserved<ReachingDefAnalysis>();
+    // AU.addPreserved<ReachingDefAnalysis>();
     // AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

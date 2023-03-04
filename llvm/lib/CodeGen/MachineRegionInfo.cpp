@@ -71,6 +71,17 @@ void MachineRegionInfo::recalculate(MachineFunction &F,
   calculate(F);
 }
 
+void MachineRegionInfo::init(MachineFunction &F, MachineDominatorTree *DT_, MachinePostDominatorTree *PDT_, MachineDominanceFrontier *DF_) {
+  DT = DT_;
+  PDT = PDT_;
+  DF = DF_;
+
+  MachineBasicBlock *Entry = GraphTraits<MachineFunction*>::getEntryNode(&F);
+
+  TopLevelRegion = new MachineRegion(Entry, nullptr, this, DT, nullptr);
+  updateStatistics(TopLevelRegion);
+}
+
 //===----------------------------------------------------------------------===//
 // MachineRegionInfoPass implementation
 //

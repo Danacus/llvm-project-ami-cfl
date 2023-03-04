@@ -114,7 +114,7 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   PA = &getAnalysis<PersistencyAnalysisPass>();
 
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  const auto *MRI = SRA->getRegionInfo();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
   GlobalTaken = MF.getFunction().getParent()->getNamedValue("cfl_taken");
@@ -126,7 +126,7 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   //           std::greater<SensitiveBranch>());
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
-  MRI.dump();
+  MRI->dump();
 
   // TODO Load global taken value
   Register TopTakenReg =
@@ -141,7 +141,7 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
       // .addReg(TempReg)
       // .addReg(RISCV::X0)
       .addGlobalAddress(GlobalTaken);
-  handleRegion(nullptr, MRI.getTopLevelRegion(), TopTakenReg);
+  handleRegion(nullptr, MRI->getTopLevelRegion(), TopTakenReg);
 
   for (auto &Branch : ActivatingBranches) {
     errs() << "Branch:\n";

@@ -53,7 +53,7 @@ public:
     AU.addRequiredTransitive<MachineDominatorTree>();
     AU.addRequiredTransitive<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
-    AU.addRequiredTransitive<MachineRegionInfoPass>();
+    // AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.addRequired<SensitiveRegionAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);

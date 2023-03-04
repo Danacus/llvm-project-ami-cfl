@@ -51,8 +51,8 @@ public:
     AU.addPreserved<TrackSecretsAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
-    AU.addRequiredTransitive<MachineRegionInfoPass>();
-    AU.addPreserved<MachineRegionInfoPass>();
+    // AU.addRequiredTransitive<MachineRegionInfoPass>();
+    // AU.addPreserved<MachineRegionInfoPass>();
     AU.addUsedIfAvailable<MachineDominatorTree>();
     AU.addPreserved<MachineDominatorTree>();
     AU.addUsedIfAvailable<MachinePostDominatorTree>();

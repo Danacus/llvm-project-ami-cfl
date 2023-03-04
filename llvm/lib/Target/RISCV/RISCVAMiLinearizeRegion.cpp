@@ -166,13 +166,13 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   PA = &getAnalysis<PersistencyAnalysisPass>();
 
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  const auto *MRI = SRA->getRegionInfo();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
             std::greater<SensitiveBranch>());
 
-  handleRegion(MRI.getTopLevelRegion());
+  handleRegion(MRI->getTopLevelRegion());
 
   for (auto &Branch : ActivatingBranches) {
     setBranchActivating(*Branch.MBB);

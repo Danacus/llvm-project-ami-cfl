@@ -61,7 +61,7 @@ public:
     if (!IsSSA) {
       AU.addRequired<ReachingDefAnalysis>();
     }
-    AU.addRequiredTransitive<MachineRegionInfoPass>();
+    // AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.addRequiredTransitive<MachineDominatorTree>();
     AU.addRequiredTransitive<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();

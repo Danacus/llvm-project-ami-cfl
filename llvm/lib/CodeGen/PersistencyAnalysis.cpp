@@ -117,7 +117,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  const auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  const auto *MRI = SRA->getRegionInfo();
 
   if (!IsSSA) {
     RDA = &getAnalysis<ReachingDefAnalysis>();
@@ -144,7 +144,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 
   // Entire function can be called in mimicry mode, so treat the top level
   // region as an activating region.
-  analyzeRegion(MF, MRI.getTopLevelRegion());
+  analyzeRegion(MF, MRI->getTopLevelRegion());
 
   for (auto &Branch : Branches) {
     analyzeRegion(MF, Branch.IfRegion);

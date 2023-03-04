@@ -1,4 +1,5 @@
 
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
@@ -58,7 +59,7 @@ void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
   }
 }
 
-void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
+void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion *Parent) {
   const auto &ST = MBB->getParent()->getSubtarget();
   const auto *TII = ST.getInstrInfo();
   MBB->dump();
@@ -89,6 +90,7 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
     FBB = Temp;
   }
 
+  /*
   MachineRegion *FR = getMaxRegionFor(FBB);
 
   // Find the exiting blocks of this region
@@ -104,16 +106,68 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB) {
     assert(FR->getExit() == TBB && "AMi error: if branch without else "
                                    "region must exit to branch target");
   }
+  */
+
+  MachineBasicBlock *Exit = MPDT->findNearestCommonDominator(TBB, FBB);
+  assert(Exit && "Expected a branch exit");
+  MachineRegion *TR = nullptr;
+  MachineRegion *FR = nullptr;
+  
+  if (Exit != TBB) {
+    TR = new MachineRegion(TBB, Exit, MRI, MDT);
+    MRI->setRegionFor(TBB, TR);
+    Parent->addSubRegion(TR);
+    handleRegion(TR);
+  }
+
+  if (Exit != FBB) {
+    FR = new MachineRegion(FBB, Exit, MRI, MDT);
+    MRI->setRegionFor(FBB, FR);
+    Parent->addSubRegion(FR);
+    handleRegion(FR);
+  }
 
   addBranch(SensitiveBranch(MBB, Cond, TR, FR));
+}
+
+void SensitiveRegionAnalysis::handleRegion(MachineRegion *MR) {
+  SparseBitVector<128> HandledBlocks;
+  SmallVector<MachineBasicBlock *> WorkList;
+  WorkList.push_back(MR->getEntry());
+  HandledBlocks.set(MR->getEntry()->getNumber());
+
+  while (!WorkList.empty()) {
+    MachineBasicBlock *MBB = WorkList.pop_back_val();
+
+    if (SensitiveBranchBlocks.test(MBB->getNumber()) && !SensitiveBlocks.test(MBB->getNumber())) {
+      handleBranch(MBB, MR);
+    }
+
+    if (!SensitiveBlocks.test(MBB->getNumber()))
+      MRI->setRegionFor(MBB, MR);
+
+    for (auto *Succ : MBB->successors()) {
+      if (!HandledBlocks.test(Succ->getNumber()) && !SensitiveBlocks.test(MBB->getNumber())) {
+        HandledBlocks.set(Succ->getNumber());
+        WorkList.push_back(Succ);
+      }
+    }
+  }
 }
 
 bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   // MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // auto &Secrets =
   // getAnalysis<TrackSecretsAnalysisVirtReg>().getSecrets().SecretUses;
-  MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  // MRI = &getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  if (MRI)
+    delete MRI;
   TSA = &getAnalysis<TrackSecretsAnalysis>();
+  MDT = &getAnalysis<MachineDominatorTree>();
+  MPDT = &getAnalysis<MachinePostDominatorTree>();
+  MDF = &getAnalysis<MachineDominanceFrontier>();
+  MRI = new MachineRegionInfo();
+  MRI->init(MF, MDT, MPDT, MDF);
 
   SensitiveRegions.clear();
   SensitiveBlocks.clear();
@@ -121,36 +175,44 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   ElseBranchMap.clear();
   SensitiveBranches.clear();
 
-  MF.dump();
-  MRI->dump();
+  // MF.dump();
+  // MRI->dump();
 
   auto &Secrets = TSA->SecretUses;
 
   SmallPtrSet<MachineBasicBlock *, 16> HandledBranches;
 
+  // Mark blocks with secret dependent branches
   for (auto &Secret : Secrets) {
     if (!(Secret.second.getSecretMask() & 1u))
       continue;
 
     auto *User = Secret.second.getUser();
-    User->dump();
 
     // We still need those registers
+    // TODO: Does this code belong here? Can is be removed?
     for (auto &MO : User->uses()) {
       if (MO.isReg())
         MO.setIsKill(false);
     }
 
     if (User->isConditionalBranch()) {
-      if (HandledBranches.contains(User->getParent())) {
-        // Already handled this branch
-        continue;
-      }
-
-      handleBranch(User->getParent());
-      HandledBranches.insert(User->getParent());
+      SensitiveBranchBlocks.set(User->getParent()->getNumber());
     }
   }
+
+  MachineRegion *TopLevelRegion = MRI->getTopLevelRegion();
+  TopLevelRegion->dump();
+
+  // Remove garbage from MachineRegionInfo, I don't want it
+  for (auto &Child : *TopLevelRegion) {
+    TopLevelRegion->removeSubRegion(&*Child);
+  }
+
+  // Construct tree of sensitive regions
+  handleRegion(TopLevelRegion);
+
+  MRI->dump();
 
   for (auto &B : SensitiveBranches) {
     errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
@@ -162,6 +224,7 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
       B.ElseRegion->dump();
     }
   }
+
 
   return false;
 }

@@ -44,7 +44,6 @@ char RISCVSimplifySensitiveRegion::ID = 0;
 
 MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunction &MF,
                                                          MachineRegion *MR) {
-  auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
   SmallVector<MachineBasicBlock *> Exitings;
   MR->getExitingBlocks(Exitings);
@@ -157,8 +156,8 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
   if (!MR->isTopLevelRegion() && MR->getParent()) {
     // MRI.setRegionFor(EndBlock, MR->getParent());
     // MRI.updateStatistics(MR->getParent());
-    MRI.setRegionFor(EndBlock, MR);
-    MRI.updateStatistics(MR);
+    MRI->setRegionFor(EndBlock, MR);
+    MRI->updateStatistics(MR);
   }
 
   ActivatingRegions.insert(MR);
@@ -248,11 +247,11 @@ bool RISCVSimplifySensitiveRegion::runOnMachineFunction(MachineFunction &MF) {
   MF.dump();
 
   // findActivatingBranches();
-  MRI = &getAnalysisIfAvailable<MachineRegionInfoPass>()->getRegionInfo();
   MDT = getAnalysisIfAvailable<MachineDominatorTree>();
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
+  MRI = SRA->getRegionInfo();
 
   for (auto &B : SRA->sensitive_branches()) {
     ActivatingBranches.push_back(&B);

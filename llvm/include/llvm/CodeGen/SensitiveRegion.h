@@ -4,9 +4,12 @@
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/MachineDominators.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 
 using namespace llvm;
 
@@ -66,15 +69,23 @@ public:
 private:
   RegionSet SensitiveRegions;
   SparseBitVector<128> SensitiveBlocks;
+  SparseBitVector<128> SensitiveBranchBlocks;
   DenseMap<MachineBasicBlock *, BranchSet> IfBranchMap;
   DenseMap<MachineBasicBlock *, BranchSet> ElseBranchMap;
   BranchSet SensitiveBranches;
-  MachineRegionInfo *MRI;
+  MachineRegionInfo *MRI = nullptr;
   TrackSecretsAnalysis *TSA;
+  MachineDominatorTree *MDT;
+  MachinePostDominatorTree *MPDT;
+  MachineDominanceFrontier *MDF;
   bool IsSSA;
 
 public:
   static char ID;
+
+  MachineRegionInfo *getRegionInfo() {
+    return MRI;
+  }
 
   iterator_range<BranchSet::iterator> sensitive_branches() {
     return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
@@ -166,14 +177,18 @@ public:
 
   void addBranch(SensitiveBranch Branch);
   void removeBranch(MachineBasicBlock *MBB);
-  void handleBranch(MachineBasicBlock *MBB);
+  void handleRegion(MachineRegion *MR);
+  void handleBranch(MachineBasicBlock *MBB, MachineRegion *Parent = nullptr);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<MachineRegionInfoPass>();
+    // AU.addRequired<MachineRegionInfoPass>();
     // AU.addPreserved<MachineRegionInfoPass>();
     AU.addRequired<TrackSecretsAnalysis>();
+    AU.addRequired<MachineDominatorTree>();
+    AU.addRequired<MachinePostDominatorTree>();
+    AU.addRequired<MachineDominanceFrontier>();
     // AU.addPreserved<TrackSecretsAnalysis>();
     // AU.setPreservesCFG();
     AU.setPreservesAll();

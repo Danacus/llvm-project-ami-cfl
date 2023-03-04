@@ -80,6 +80,9 @@ public:
 
   void recalculate(MachineFunction &F, MachineDominatorTree *DT,
                    MachinePostDominatorTree *PDT, MachineDominanceFrontier *DF);
+
+  
+  void init(MachineFunction &F, MachineDominatorTree *DT_, MachinePostDominatorTree *PDT_, MachineDominanceFrontier *DF_);
 };
 
 class MachineRegionInfoPass : public MachineFunctionPass {

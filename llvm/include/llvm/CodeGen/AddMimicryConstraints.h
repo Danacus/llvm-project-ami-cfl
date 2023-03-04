@@ -41,7 +41,7 @@ public:
     AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
-    AU.addRequiredTransitive<MachineRegionInfoPass>();
+    // AU.addRequiredTransitive<MachineRegionInfoPass>();
     // AU.addUsedIfAvailable<LiveVariables>();
     AU.addRequired<SlotIndexes>();
     AU.addPreserved<SlotIndexes>();
