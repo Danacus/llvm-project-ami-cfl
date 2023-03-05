@@ -99,9 +99,13 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
         LeakedOperands.clear();
         TII->constantTimeLeakage(MI, LeakedOperands);
 
-        if (TII->isPersistentStore(MI)) {
-          if (Scope == MR)
+        if (Scope == MR) {
+          if (TII->isPersistentStore(MI)) {
             PersistentStores[Scope].insert(&MI);
+          }
+          if (MI.isCall()) {
+            CallInstructions[Scope].insert(&MI);
+          }
         }
 
         for (auto &MO : LeakedOperands) {
@@ -126,6 +130,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 
   PersistentStores.clear();
   PersistentInstructions.clear();
+  CallInstructions.clear();
   PersistentRegionInputMap.clear();
 
   for (auto &B : SRA->sensitive_branches()) {

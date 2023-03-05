@@ -61,127 +61,48 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
     Register LoadedReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
     Register StoredReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
     // TODO: support LB and LH
-    BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::GLW),
+    auto NewMI = BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::LW),
             LoadedReg)
         .add(I->getOperand(1))
         .add(I->getOperand(2));
+    NewMI->getOperand(1).setIsKill(false);
     TII->createCTSelect(StoredReg, I->getParent(), I->getIterator(), TakenReg,
                         I->getOperand(0).getReg(), LoadedReg, *RegInfo);
     I->getOperand(0).setReg(StoredReg);
   }
+
+  for (MachineInstr *I : PA->getCallInstrs(Region)) {
+    BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::SW))
+        .addReg(TakenReg)
+        .addReg(GlobalTakenAddrReg)
+        .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
+  }
 }
 
-bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
-  errs() << "Molnar Linearize Region Pass\n";
-
-  const auto &ST = MF.getSubtarget<RISCVSubtarget>();
-  TII = ST.getInstrInfo();
-  TRI = ST.getRegisterInfo();
-  PA = &getAnalysis<PersistencyAnalysisPass>();
-
-  RegInfo = &MF.getRegInfo();
-
-  SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  const auto *MRI = SRA->getRegionInfo();
-  ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
-
+Register RISCVMolnarLinearizeRegion::loadTakenReg(MachineFunction &MF) {
+  errs() << "loadTakenReg\n";
+  // Setup global variable with external linkage
   Module *Mod = MF.getFunction().getParent();
   Mod->getOrInsertGlobal("cfl_taken", Type::getInt32Ty(Mod->getContext()));
   GlobalTaken = Mod->getNamedGlobal("cfl_taken");
   GlobalTaken->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-  assert(GlobalTaken && "Expected global taken variable");
-  Mod->getOrInsertGlobal(
-      "CFL_DUMMY_ADDR",
-      ArrayType::get(Type::getInt32Ty(Mod->getContext()), 4096));
-  GlobalDummy = Mod->getNamedGlobal("CFL_DUMMY_ADDR");
-  GlobalDummy->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-  GlobalDummy->setAlignment(MaybeAlign(4096));
-  assert(GlobalDummy && "Expected global dummy address");
-
-  std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
-
-  MRI->dump();
 
   // Load global taken value
-  Register TmpReg = MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+  GlobalTakenAddrReg = MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
   Register TopTakenReg =
       MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
 
   MachineBasicBlock::iterator InsertPoint = MF.begin()->begin();
-  BuildMI(*MF.begin(), InsertPoint, DebugLoc(),
-          TII->get(RISCV::LUI), TmpReg)
+  BuildMI(*MF.begin(), InsertPoint, DebugLoc(), TII->get(RISCV::LUI), GlobalTakenAddrReg)
       .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_HI);
-  BuildMI(*MF.begin(), InsertPoint, DebugLoc(),
-          TII->get(RISCV::LW), TopTakenReg)
-      .addReg(TmpReg)
+  BuildMI(*MF.begin(), InsertPoint, DebugLoc(), TII->get(RISCV::LW),
+          TopTakenReg)
+      .addReg(GlobalTakenAddrReg)
       .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
+  return TopTakenReg;
+}
 
-  handleRegion(nullptr, MRI->getTopLevelRegion(), TopTakenReg);
-
-  for (auto &Branch : ActivatingBranches) {
-    errs() << "Branch:\n";
-    Branch.MBB->dump();
-    Branch.IfRegion->dump();
-    errs() << Branch.IfRegion->getDepth() << "\n";
-
-    SmallVector<MachineOperand, 8> CondReversed =
-        SmallVector<MachineOperand>(Branch.Cond);
-    TII->reverseBranchCondition(CondReversed);
-    Register CondReg = TII->materializeBranchCondition(
-        Branch.MBB->getFirstTerminator(), CondReversed, MF.getRegInfo());
-    Register CondMaskReg =
-        MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-
-    BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(),
-            TII->get(RISCV::SUB), CondMaskReg)
-        .addReg(RISCV::X0)
-        .addReg(CondReg);
-    Register TakenReg =
-        MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-
-    auto *ParentRegion = SRA->getSensitiveRegion(Branch.MBB);
-
-    Register IncomingTaken;
-    if (ParentRegion) {
-      errs() << "here\n";
-      ParentRegion->dump();
-      assert(TakenRegMap[ParentRegion].isValid() &&
-             "No taken reg for parent region");
-      IncomingTaken = TakenRegMap[ParentRegion];
-    } else {
-      IncomingTaken = TopTakenReg;
-    }
-    BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(),
-            TII->get(RISCV::AND), TakenReg)
-        .addReg(CondMaskReg)
-        .addReg(IncomingTaken);
-
-    // Harden branch regions: remove branches and make stores conditional
-    if (Branch.IfRegion) {
-      TakenRegMap.insert({Branch.IfRegion, TakenReg});
-      handleRegion(Branch.MBB, Branch.IfRegion, TakenReg);
-    }
-
-    if (Branch.ElseRegion) {
-      assert(Branch.FlowBlock && "Expected flow block");
-      Register InvCondReg =
-          MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-      Register InvTakenReg =
-          MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-      TakenRegMap.insert({Branch.ElseRegion, InvTakenReg});
-      // XOR with -1 for NOT operation, inverts mask
-      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
-              DebugLoc(), TII->get(RISCV::XORI), InvCondReg)
-          .addReg(TakenReg)
-          .addImm(-1);
-      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
-              DebugLoc(), TII->get(RISCV::AND), InvTakenReg)
-          .addReg(InvCondReg)
-          .addReg(IncomingTaken);
-      handleRegion(Branch.FlowBlock, Branch.ElseRegion, InvTakenReg);
-    }
-  }
-
+void RISCVMolnarLinearizeRegion::replacePHIInstructions() {
   for (auto &Branch : ActivatingBranches) {
     // Replace PHI instructions with conditional selection
     MachineBasicBlock *Exit = Branch.IfRegion->getExit();
@@ -208,9 +129,8 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         } else {
           llvm_unreachable("CT_SELECT with more than 2 operands not supported");
         }
-        // SelectMI.addReg(Reg);
         MachineBasicBlock *MBB = std::next(J)->getMBB();
-        errs() << "here\n";
+        LLVM_DEBUG(errs() << "here\n");
         MBB->dump();
         auto *ParentRegion = SRA->getSensitiveRegion(MBB);
 
@@ -229,7 +149,7 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
             First = Temp;
           }
         } else {
-          errs() << "No parent region\n";
+          LLVM_DEBUG(errs() << "No parent region\n");
           // No need to set CondReg, as it is assumed to be set for the next
           // option
         }
@@ -237,18 +157,11 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         OpsToRemove.push_back(Counter++);
       }
 
-      // auto SelectMI =
-      //     BuildMI(*Exit, Exit->getFirstNonPHI(), DebugLoc(),
-      //             TII->get(TargetOpcode::CT_SELECT),
-      //             I->getOperand(0).getReg());
-      // assert(First.isValid() && Second.isValid() && CondReg.isValid() &&
-      // "Invalid CT_SELECT"); SelectMI.addReg(First); SelectMI.addReg(Second);
-      // SelectMI.addReg(CondReg);
       MachineBasicBlock::iterator InsertPoint = Exit->getFirstNonPHI();
       if (InsertPoint == Exit->begin())
         ++InsertPoint;
       TII->createCTSelect(I->getOperand(0).getReg(), Exit, InsertPoint, CondReg,
-                          First, Second, MF.getRegInfo());
+                          First, Second, *RegInfo);
 
       for (auto Idx = OpsToRemove.rbegin(); Idx != OpsToRemove.rend(); ++Idx) {
         I->removeOperand(*Idx);
@@ -262,20 +175,98 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
       MI->eraseFromParent();
     }
   }
+}
 
-  SmallPtrSet<MachineInstr *, 8> ToRemove;
+void RISCVMolnarLinearizeRegion::linearizeBranches(MachineFunction &MF) {
+  Register TopTakenReg = loadTakenReg(MF);
+  handleRegion(nullptr, MRI->getTopLevelRegion(), TopTakenReg);
 
-  for (MachineBasicBlock &MB : MF) {
-    for (MachineInstr &MI : MB) {
-      if (MI.getOpcode() == TargetOpcode::SECRET)
-        ToRemove.insert(&MI);
+  for (auto &Branch : ActivatingBranches) {
+    SmallVector<MachineOperand, 8> CondReversed =
+        SmallVector<MachineOperand>(Branch.Cond);
+    TII->reverseBranchCondition(CondReversed);
+    Register CondReg = TII->materializeBranchCondition(
+        Branch.MBB->getFirstTerminator(), CondReversed, *RegInfo);
+    Register CondMaskReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
+
+    BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(),
+            TII->get(RISCV::SUB), CondMaskReg)
+        .addReg(RISCV::X0)
+        .addReg(CondReg);
+    Register TakenReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
+
+    auto *ParentRegion = SRA->getSensitiveRegion(Branch.MBB);
+
+    Register IncomingTaken;
+    if (ParentRegion) {
+      assert(TakenRegMap[ParentRegion].isValid() &&
+             "No taken reg for parent region");
+      IncomingTaken = TakenRegMap[ParentRegion];
+    } else {
+      IncomingTaken = TopTakenReg;
+    }
+    BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(),
+            TII->get(RISCV::AND), TakenReg)
+        .addReg(CondMaskReg)
+        .addReg(IncomingTaken);
+
+    // Harden branch regions: remove branches and make stores conditional
+    if (Branch.IfRegion) {
+      TakenRegMap.insert({Branch.IfRegion, TakenReg});
+      handleRegion(Branch.MBB, Branch.IfRegion, TakenReg);
+    }
+
+    if (Branch.ElseRegion) {
+      assert(Branch.FlowBlock && "Expected flow block");
+      Register InvCondReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
+      Register InvTakenReg =
+          RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
+      TakenRegMap.insert({Branch.ElseRegion, InvTakenReg});
+      // XOR with -1 for NOT operation, inverts mask
+      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
+              DebugLoc(), TII->get(RISCV::XORI), InvCondReg)
+          .addReg(TakenReg)
+          .addImm(-1);
+      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
+              DebugLoc(), TII->get(RISCV::AND), InvTakenReg)
+          .addReg(InvCondReg)
+          .addReg(IncomingTaken);
+      handleRegion(Branch.FlowBlock, Branch.ElseRegion, InvTakenReg);
     }
   }
 
-  for (auto *MI : ToRemove) {
-    MI->eraseFromParent();
+  MachinePostDominatorTree &MPDT = getAnalysis<MachinePostDominatorTree>();
+  MPDT.dump();
+  
+  for (MachineBasicBlock *RetBlock : MPDT.getBase().roots()) {
+    BuildMI(*RetBlock, RetBlock->getFirstTerminator(), DebugLoc(), TII->get(RISCV::SW))
+        .addReg(TopTakenReg)
+        .addReg(GlobalTakenAddrReg)
+        .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
   }
-  MF.dump();
+}
+
+bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
+  LLVM_DEBUG(errs() << "Molnar Linearize Region Pass\n");
+
+  const auto &ST = MF.getSubtarget<RISCVSubtarget>();
+  TII = ST.getInstrInfo();
+  TRI = ST.getRegisterInfo();
+  PA = &getAnalysis<PersistencyAnalysisPass>();
+
+  RegInfo = &MF.getRegInfo();
+
+  SRA = &getAnalysis<SensitiveRegionAnalysis>();
+  MRI = SRA->getRegionInfo();
+  TakenRegMap.clear();
+  ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
+
+  std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
+
+  linearizeBranches(MF);
+  replacePHIInstructions();
+
+  LLVM_DEBUG(MF.dump());
 
   return true;
 }
@@ -287,7 +278,6 @@ RISCVMolnarLinearizeRegion::RISCVMolnarLinearizeRegion()
 
 INITIALIZE_PASS_BEGIN(RISCVMolnarLinearizeRegion, DEBUG_TYPE,
                       "Molnar Linearize Region", false, false)
-// INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_END(RISCVMolnarLinearizeRegion, DEBUG_TYPE,

@@ -371,12 +371,9 @@ void RISCVPassConfig::addPreEmitPass2() {
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(&RemoveBranchPseudosPassID);
-    // addPass(createTrackSecretsAnalysisPass(false));
-    // addPass(createSensitiveRegionAnalysisPass(false));
-    // addPass(createPersistencyAnalysisPass(false));
-    // addPass(createAMiLinearizeBranchPass());
-    // addPass(createAMiLinearizeRegionPass());
   }
+
+  addPass(&RemoveSecretPseudosPassID);
 }
 
 void RISCVPassConfig::addMachineSSAOptimization() {
@@ -388,9 +385,6 @@ void RISCVPassConfig::addMachineSSAOptimization() {
     addPass(createRISCVSExtWRemovalPass());
     addPass(createRISCVStripWSuffixPass());
   }
-
-  // if (EnableAMiLinearization == cl::BOU_TRUE)
-  //   addPass(createAMiLinearizeBranchPass());
 }
 
 void RISCVPassConfig::addPreSSADestruction() {

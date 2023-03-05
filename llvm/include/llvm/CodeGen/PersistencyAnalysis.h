@@ -24,6 +24,7 @@ private:
   ReachingDefAnalysis *RDA;
 
   RegionInstrMap PersistentStores;
+  RegionInstrMap CallInstructions;
   RegionInstrMap PersistentInstructions;
   RegionInstrMap PersistentRegionInputMap;
 
@@ -42,6 +43,11 @@ public:
   SmallPtrSet<MachineInstr *, 16>
   getPersistentStores(const MachineRegion *MR) {
     return PersistentStores[MR];
+  }
+
+  SmallPtrSet<MachineInstr *, 16>
+  getCallInstrs(const MachineRegion *MR) {
+    return CallInstructions[MR];
   }
 
   void

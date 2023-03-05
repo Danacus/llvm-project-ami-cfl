@@ -31,6 +31,7 @@ public:
 
   const RISCVInstrInfo *TII;
   const RISCVRegisterInfo *TRI;
+  MachineRegionInfo *MRI;
   MachineRegisterInfo *RegInfo;
   SensitiveRegionAnalysis *SRA;
   PersistencyAnalysisPass *PA;
@@ -38,20 +39,22 @@ public:
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
   DenseMap<MachineRegion *, Register> TakenRegMap;
   GlobalVariable *GlobalTaken = nullptr;
-  GlobalVariable *GlobalDummy = nullptr;
+  Register GlobalTakenAddrReg;
 
   RISCVMolnarLinearizeRegion();
 
   void handleRegion(MachineBasicBlock *BranchBlock, MachineRegion *Region, Register TakenReg);
+  Register loadTakenReg(MachineFunction &MF);
+  void linearizeBranches(MachineFunction &MF);
+  void replacePHIInstructions();
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
     AU.addRequiredTransitive<MachineDominatorTree>();
-    AU.addRequiredTransitive<MachinePostDominatorTree>();
+    AU.addRequired<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
-    // AU.addRequiredTransitive<MachineRegionInfoPass>();
     AU.addRequired<SensitiveRegionAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);

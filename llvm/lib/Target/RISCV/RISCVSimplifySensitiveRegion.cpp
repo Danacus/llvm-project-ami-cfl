@@ -253,6 +253,8 @@ bool RISCVSimplifySensitiveRegion::runOnMachineFunction(MachineFunction &MF) {
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
   MRI = SRA->getRegionInfo();
 
+  ActivatingBranches.clear();
+
   for (auto &B : SRA->sensitive_branches()) {
     ActivatingBranches.push_back(&B);
   }
