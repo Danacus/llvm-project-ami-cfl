@@ -31,13 +31,14 @@ public:
 
   const RISCVInstrInfo *TII;
   const RISCVRegisterInfo *TRI;
+  MachineRegisterInfo *RegInfo;
   SensitiveRegionAnalysis *SRA;
   PersistencyAnalysisPass *PA;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
   DenseMap<MachineRegion *, Register> TakenRegMap;
-  GlobalValue *GlobalTaken = nullptr;
-  GlobalValue *GlobalDummy = nullptr;
+  GlobalVariable *GlobalTaken = nullptr;
+  GlobalVariable *GlobalDummy = nullptr;
 
   RISCVMolnarLinearizeRegion();
 

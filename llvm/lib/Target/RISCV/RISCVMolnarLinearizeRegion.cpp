@@ -57,52 +57,17 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
           *BranchBlock, BranchBlock->getSingleSuccessor(), DebugLoc());
   }
 
-  for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
-    MI->dump();
-    // setQualifier<RISCV::Molnar::Persistent>(MI);
-  }
-
-  errs() << "Stores\n";
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
-    I->dump();
-    // TODO: fix this to only allow writing to stack in mimicry mode
-    // if this instruction originates from calling convention lowering.
-    // if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
-    //   continue;
-
-    // MachineInstr &GhostLoad = *std::prev(I->getIterator());
-
-    // if (GhostLoad.getOpcode() == RISCV::GLW) {
-    //   assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
-    //          "Molnar error: invalid ghost load");
-    //   continue;
-    // }
-
-    // assert(GhostLoad.getOpcode() == TargetOpcode::GHOST_LOAD &&
-    //        "Molnar error: expected GHOST_LOAD pseudo");
-    // assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
-    //        "Molnar error: invalid GHOST_LOAD");
-
-    // BuildMI(*I->getParent(), GhostLoad.getIterator(), DebugLoc(),
-    //         TII->get(RISCV::ADDI),
-    //         GhostLoad.getOperand(0).getReg().asMCReg())
-    //     .add(GhostLoad.getOperand(1))
-    //     .addImm(0);
-    // GhostLoad.eraseFromParent();
-
-    // if (I->getNumOperands() > 2 && I->getOperand(0).isReg()) {
-    //   MachineOperand Op1 = I->getOperand(1);
-    //   Op1.setIsKill(false);
-    //   MachineOperand Op2 = I->getOperand(2);
-    //   BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
-    //           TII->get(RISCV::GLW), I->getOperand(0).getReg().asMCReg())
-    //       .add(Op1)
-    //       .add(Op2);
-    // } else {
-    //   llvm_unreachable(
-    //       "Molnar error: unable to nullify unwanted side-effects in "
-    //       "mimicry mode!");
-    // }
+    Register LoadedReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
+    Register StoredReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
+    // TODO: support LB and LH
+    BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::GLW),
+            LoadedReg)
+        .add(I->getOperand(1))
+        .add(I->getOperand(2));
+    TII->createCTSelect(StoredReg, I->getParent(), I->getIterator(), TakenReg,
+                        I->getOperand(0).getReg(), LoadedReg, *RegInfo);
+    I->getOperand(0).setReg(StoredReg);
   }
 }
 
@@ -114,42 +79,43 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
   PA = &getAnalysis<PersistencyAnalysisPass>();
 
+  RegInfo = &MF.getRegInfo();
+
   SRA = &getAnalysis<SensitiveRegionAnalysis>();
   const auto *MRI = SRA->getRegionInfo();
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
-  GlobalTaken = MF.getFunction().getParent()->getNamedValue("cfl_taken");
+  Module *Mod = MF.getFunction().getParent();
+  Mod->getOrInsertGlobal("cfl_taken", Type::getInt32Ty(Mod->getContext()));
+  GlobalTaken = Mod->getNamedGlobal("cfl_taken");
+  GlobalTaken->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
   assert(GlobalTaken && "Expected global taken variable");
-  GlobalDummy = MF.getFunction().getParent()->getNamedValue("CFL_DUMMY_ADDR");
+  Mod->getOrInsertGlobal(
+      "CFL_DUMMY_ADDR",
+      ArrayType::get(Type::getInt32Ty(Mod->getContext()), 4096));
+  GlobalDummy = Mod->getNamedGlobal("CFL_DUMMY_ADDR");
+  GlobalDummy->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+  GlobalDummy->setAlignment(MaybeAlign(4096));
   assert(GlobalDummy && "Expected global dummy address");
 
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-  //           std::greater<SensitiveBranch>());
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
   MRI->dump();
 
-  // TODO Load global taken value
-  Register TmpReg =
-      MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+  // Load global taken value
+  Register TmpReg = MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
   Register TopTakenReg =
       MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-  // Register TempReg =
-  //     MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-  // BuildMI(*MF.begin(), MF.begin()->getFirstTerminator(), DebugLoc(),
-  //         TII->get(RISCV::LUI), TempReg)
-  //     .addGlobalAddress(GlobalTaken);
-  // BuildMI(*MF.begin(), MF.begin()->getFirstTerminator(), DebugLoc(),
-  //         TII->get(RISCV::PseudoLI), TopTakenReg)
-      // .addReg(TempReg)
-      // .addReg(RISCV::X0)
-      // .addGlobalAddress(GlobalTaken);
-  BuildMI(*MF.begin(), MF.begin()->getFirstTerminator(), DebugLoc(), TII->get(RISCV::LUI), TmpReg)
-    .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_HI);
-  BuildMI(*MF.begin(), MF.begin()->getFirstTerminator(), DebugLoc(), TII->get(RISCV::LW), TopTakenReg)
-    .addReg(TmpReg).addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
 
-  
+  MachineBasicBlock::iterator InsertPoint = MF.begin()->begin();
+  BuildMI(*MF.begin(), InsertPoint, DebugLoc(),
+          TII->get(RISCV::LUI), TmpReg)
+      .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_HI);
+  BuildMI(*MF.begin(), InsertPoint, DebugLoc(),
+          TII->get(RISCV::LW), TopTakenReg)
+      .addReg(TmpReg)
+      .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
+
   handleRegion(nullptr, MRI->getTopLevelRegion(), TopTakenReg);
 
   for (auto &Branch : ActivatingBranches) {
@@ -158,7 +124,8 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     Branch.IfRegion->dump();
     errs() << Branch.IfRegion->getDepth() << "\n";
 
-    SmallVector<MachineOperand, 8> CondReversed = SmallVector<MachineOperand>(Branch.Cond);
+    SmallVector<MachineOperand, 8> CondReversed =
+        SmallVector<MachineOperand>(Branch.Cond);
     TII->reverseBranchCondition(CondReversed);
     Register CondReg = TII->materializeBranchCondition(
         Branch.MBB->getFirstTerminator(), CondReversed, MF.getRegInfo());
@@ -207,8 +174,8 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
               DebugLoc(), TII->get(RISCV::XORI), InvCondReg)
           .addReg(TakenReg)
           .addImm(-1);
-      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(), DebugLoc(),
-              TII->get(RISCV::AND), InvTakenReg)
+      BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
+              DebugLoc(), TII->get(RISCV::AND), InvTakenReg)
           .addReg(InvCondReg)
           .addReg(IncomingTaken);
       handleRegion(Branch.FlowBlock, Branch.ElseRegion, InvTakenReg);
@@ -230,7 +197,7 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
       uint CurrentDepth = 0;
       Register First;
       Register Second;
-      
+
       for (MachineInstr::mop_iterator J = std::next(I->operands_begin());
            J != I->operands_end(); J += 2) {
         Register Reg = J->getReg();
@@ -263,7 +230,8 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
           }
         } else {
           errs() << "No parent region\n";
-          // No need to set CondReg, as it is assumed to be set for the next option
+          // No need to set CondReg, as it is assumed to be set for the next
+          // option
         }
         OpsToRemove.push_back(Counter++);
         OpsToRemove.push_back(Counter++);
@@ -271,20 +239,21 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
       // auto SelectMI =
       //     BuildMI(*Exit, Exit->getFirstNonPHI(), DebugLoc(),
-      //             TII->get(TargetOpcode::CT_SELECT), I->getOperand(0).getReg());
-      // assert(First.isValid() && Second.isValid() && CondReg.isValid() && "Invalid CT_SELECT");
-      // SelectMI.addReg(First);
-      // SelectMI.addReg(Second);
+      //             TII->get(TargetOpcode::CT_SELECT),
+      //             I->getOperand(0).getReg());
+      // assert(First.isValid() && Second.isValid() && CondReg.isValid() &&
+      // "Invalid CT_SELECT"); SelectMI.addReg(First); SelectMI.addReg(Second);
       // SelectMI.addReg(CondReg);
       MachineBasicBlock::iterator InsertPoint = Exit->getFirstNonPHI();
       if (InsertPoint == Exit->begin())
         ++InsertPoint;
-      TII->createCTSelect(I->getOperand(0).getReg(), Exit, InsertPoint, CondReg, First, Second, MF.getRegInfo());
+      TII->createCTSelect(I->getOperand(0).getReg(), Exit, InsertPoint, CondReg,
+                          First, Second, MF.getRegInfo());
 
       for (auto Idx = OpsToRemove.rbegin(); Idx != OpsToRemove.rend(); ++Idx) {
         I->removeOperand(*Idx);
       }
-      
+
       if (I->getNumOperands() == 1)
         ToRemove.insert(&*I);
     }

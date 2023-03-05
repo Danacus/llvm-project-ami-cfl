@@ -1081,7 +1081,7 @@ Register RISCVInstrInfo::createCTSelect(Register DstReg, MachineBasicBlock *MBB,
   BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::XORI), InvMaskReg).addReg(MaskReg).addImm(-1);
   BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::AND), TmpReg).addReg(MaskReg).addReg(TrueReg);
   BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::AND), TmpReg2).addReg(InvMaskReg).addReg(FalseReg);
-  BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::AND), DstReg).addReg(TmpReg).addReg(TmpReg2);
+  BuildMI(*MBB, InsertPoint, DebugLoc(), get(RISCV::OR), DstReg).addReg(TmpReg).addReg(TmpReg2);
   return DstReg;
 }
 

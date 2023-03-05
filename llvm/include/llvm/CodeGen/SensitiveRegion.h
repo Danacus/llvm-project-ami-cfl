@@ -158,12 +158,16 @@ public:
     // AU.addRequired<MachineRegionInfoPass>();
     // AU.addPreserved<MachineRegionInfoPass>();
     AU.addRequired<TrackSecretsAnalysis>();
+    AU.addPreserved<TrackSecretsAnalysis>();
     AU.addRequired<MachineDominatorTree>();
+    AU.addPreserved<MachineDominatorTree>();
     AU.addRequired<MachinePostDominatorTree>();
+    AU.addPreserved<MachinePostDominatorTree>();
     AU.addRequired<MachineDominanceFrontier>();
+    AU.addPreserved<MachineDominanceFrontier>();
     // AU.addPreserved<TrackSecretsAnalysis>();
     // AU.setPreservesCFG();
-    AU.setPreservesAll();
+    // AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

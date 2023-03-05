@@ -119,8 +119,8 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
     I->dump();
     // TODO: fix this to only allow writing to stack in mimicry mode
     // if this instruction originates from calling convention lowering.
-    if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
-      continue;
+    // if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
+    //   continue;
     
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
@@ -130,6 +130,8 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
       continue;
     }
 
+    if (GhostLoad.getOpcode() != TargetOpcode::GHOST_LOAD)
+      continue;
     assert(GhostLoad.getOpcode() == TargetOpcode::GHOST_LOAD &&
            "AMi error: expected GHOST_LOAD pseudo");
     assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
@@ -146,6 +148,7 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
       MachineOperand Op1 = I->getOperand(1);
       Op1.setIsKill(false);
       MachineOperand Op2 = I->getOperand(2);
+      // TODO: support LB and LH
       BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
               TII->get(RISCV::GLW), I->getOperand(0).getReg().asMCReg())
           .add(Op1)
