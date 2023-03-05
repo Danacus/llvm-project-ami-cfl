@@ -248,7 +248,7 @@ void TrackSecretsAnalysis::handleUse(MachineInstr &UseInst, MachineOperand &MO,
                                      uint64_t SecretMask, SecretsSet &WorkSet,
                                      SecretsMap &SecretDefs) {
   SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
-  errs() << "handleUse " << MO << " in " << UseInst << "\n";
+  LLVM_DEBUG(errs() << "handleUse " << MO << " in " << UseInst << "\n");
 
   // Transfer the operand
   TII->transferSecret(UseInst, MO, SecretMask, NewDefs);
@@ -287,7 +287,7 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
     Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>());
   }
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 
   // Step 1: find secret arguments and globals
   SecretsSet WorkSet;
@@ -331,11 +331,11 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto S : SecretUses) {
     for (auto MO : S.second.operands()) {
-      errs() << *S.second.getUser();
-      errs() << "Secret: ";
-      errs() << MO << " with mask ";
-      errs() << std::bitset<4>(S.second.getSecretMask()).to_string() << " in ";
-      errs() << *S.second.getUser();
+      LLVM_DEBUG(errs() << *S.second.getUser());
+      LLVM_DEBUG(errs() << "Secret: ");
+      LLVM_DEBUG(errs() << MO << " with mask ");
+      LLVM_DEBUG(errs() << std::bitset<4>(S.second.getSecretMask()).to_string() << " in ");
+      LLVM_DEBUG(errs() << *S.second.getUser());
     }
   }
 

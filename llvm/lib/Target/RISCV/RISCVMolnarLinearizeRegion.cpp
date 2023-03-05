@@ -43,10 +43,7 @@ char RISCVMolnarLinearizeRegion::ID = 0;
 void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
                                               MachineRegion *Region,
                                               Register TakenReg) {
-  errs() << "Handling region " << *Region << "\n";
-
-  // also TODO: make sure taken value is stored to global before function
-  // call
+  LLVM_DEBUG(errs() << "Handling region " << *Region << "\n");
 
   if (BranchBlock) {
     TII->removeBranch(*BranchBlock);
@@ -60,8 +57,7 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
     Register LoadedReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
     Register StoredReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
-    // TODO: support LB and LH
-    auto NewMI = BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::LW),
+    auto NewMI = BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(TII->getMatchingLoad(*I)),
             LoadedReg)
         .add(I->getOperand(1))
         .add(I->getOperand(2));
@@ -80,7 +76,6 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
 }
 
 Register RISCVMolnarLinearizeRegion::loadTakenReg(MachineFunction &MF) {
-  errs() << "loadTakenReg\n";
   // Setup global variable with external linkage
   Module *Mod = MF.getFunction().getParent();
   Mod->getOrInsertGlobal("cfl_taken", Type::getInt32Ty(Mod->getContext()));
@@ -131,7 +126,7 @@ void RISCVMolnarLinearizeRegion::replacePHIInstructions() {
         }
         MachineBasicBlock *MBB = std::next(J)->getMBB();
         LLVM_DEBUG(errs() << "here\n");
-        MBB->dump();
+        LLVM_DEBUG(MBB->dump());
         auto *ParentRegion = SRA->getSensitiveRegion(MBB);
 
         if (ParentRegion && ParentRegion->getDepth() > CurrentDepth) {
@@ -236,7 +231,6 @@ void RISCVMolnarLinearizeRegion::linearizeBranches(MachineFunction &MF) {
   }
 
   MachinePostDominatorTree &MPDT = getAnalysis<MachinePostDominatorTree>();
-  MPDT.dump();
   
   for (MachineBasicBlock *RetBlock : MPDT.getBase().roots()) {
     BuildMI(*RetBlock, RetBlock->getFirstTerminator(), DebugLoc(), TII->get(RISCV::SW))

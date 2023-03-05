@@ -57,8 +57,6 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
   int MaxNumber = 0;
 
   for (auto *Exiting : Exitings) {
-    // TII->removeBranch(*Exiting);
-    // TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
     if (Exiting->getNumber() >= MaxNumber) {
       MaxNumber = Exiting->getNumber();
       InsertPoint = std::next(Exiting->getIterator());
@@ -66,23 +64,20 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
   }
 
   MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
-  // MF.insert(MR->getExit()->getIterator(), EndBlock);
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 
   auto *OldExit = MR->getExit();
 
   for (auto *Exiting : Exitings) {
-    errs() << "Exiting\n";
-    Exiting->dump();
+    LLVM_DEBUG(errs() << "Exiting\n");
+    LLVM_DEBUG(Exiting->dump());
     MachineBasicBlock *ETBB;
     MachineBasicBlock *EFBB;
     SmallVector<MachineOperand> ECond;
     TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
 
     MachineBasicBlock *FallThrough = Exiting->getFallThrough(true);
-    // if (FallThrough == EndBlock && EndBlock != nullptr)
-    //   FallThrough = EndBlock->getFallThrough();
 
     if (!ETBB)
       ETBB = FallThrough;
@@ -135,14 +130,7 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
 
   MF.insert(InsertPoint, EndBlock);
 
-  // BuildMI(*EndBlock, EndBlock->end(), DL,
-  // TII->get(TargetOpcode::BRANCH_TARGET))
-  //     .addMBB(EndBlock);
-
   EndBlock->addSuccessor(MR->getExit());
-
-  // if (EndBlock->getSingleSuccessor()->succ_size() > 2)
-  //   MR->replaceExitRecursive(EndBlock);
 
   if (EndBlock->getFallThrough(true) != MR->getExit())
     TII->insertUnconditionalBranch(*EndBlock, MR->getExit(), DL);
@@ -151,17 +139,13 @@ MachineBasicBlock *RISCVSimplifySensitiveRegion::createExitingBlock(MachineFunct
   MPDT->getBase().addNewBlock(EndBlock, OldExit);
   MDF->addBasicBlock(EndBlock, {OldExit});
 
-  // MR->replaceExitRecursive(EndBlock);
-
   if (!MR->isTopLevelRegion() && MR->getParent()) {
-    // MRI.setRegionFor(EndBlock, MR->getParent());
-    // MRI.updateStatistics(MR->getParent());
     MRI->setRegionFor(EndBlock, MR);
     MRI->updateStatistics(MR);
   }
 
   ActivatingRegions.insert(MR);
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   return EndBlock;
 }
 
@@ -215,9 +199,6 @@ void RISCVSimplifySensitiveRegion::updatePHIs(MachineFunction &MF, MachineBasicB
 
 void RISCVSimplifySensitiveRegion::createExitingBlocks(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
-    // if (Branch->ElseRegion) {
-    //   createFlowBlock(MF, Branch->IfRegion);
-    // }
     auto *NewExiting = createExitingBlock(MF, Branch->IfRegion);
     if (NewExiting) {
       SRA->insertBranchInBlockMap(NewExiting, *Branch, false);
@@ -235,18 +216,14 @@ void RISCVSimplifySensitiveRegion::createExitingBlocks(MachineFunction &MF) {
 }
 
 bool RISCVSimplifySensitiveRegion::runOnMachineFunction(MachineFunction &MF) {
-  errs() << "RISCV Simplify Sensitive Regions\n";
-
-  // auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
+  LLVM_DEBUG(errs() << "RISCV Simplify Sensitive Regions\n");
 
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  // MRI.dump();
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 
-  // findActivatingBranches();
   MDT = getAnalysisIfAvailable<MachineDominatorTree>();
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
@@ -258,31 +235,12 @@ bool RISCVSimplifySensitiveRegion::runOnMachineFunction(MachineFunction &MF) {
   for (auto &B : SRA->sensitive_branches()) {
     ActivatingBranches.push_back(&B);
   }
-  // ActivatingBranches = SmallVector<SensitiveBranch
-  // *>(SRA->sensitive_branches());
 
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-  //           std::greater<SensitiveBranch>());
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-  //           [](const SensitiveBranch *Lhs, const SensitiveBranch *Rhs) -> bool {
-  //             return *Lhs > *Rhs;
-  //           });
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
-
-  for (auto &B : ActivatingBranches) {
-    errs() << "Activating branch: " << B->MBB->getFullName();
-    errs() << "if region:\n";
-    B->IfRegion->dump();
-
-    if (B->ElseRegion) {
-      errs() << "else region:\n";
-      B->ElseRegion->dump();
-    }
-  }
 
   createExitingBlocks(MF);
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   return true;
 }
 
@@ -292,8 +250,6 @@ RISCVSimplifySensitiveRegion::RISCVSimplifySensitiveRegion() : MachineFunctionPa
 
 INITIALIZE_PASS_BEGIN(RISCVSimplifySensitiveRegion, DEBUG_TYPE, "RISCV Simplify Sensitive Region",
                       false, false)
-// INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-// INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_END(RISCVSimplifySensitiveRegion, DEBUG_TYPE, "RISCV Simplify Sensitive Region",
                     false, false)

@@ -17,11 +17,11 @@ void PersistencyAnalysisPass::propagatePersistency(
     const MachineFunction &MF, MachineInstr &MI, const MachineOperand &MO,
     const MachineRegion *MR,
     SmallPtrSet<MachineInstr *, 16> &PersistentDefs) {
-  errs() << "propagatePersistency\n";
-  MI.dump();
-  MO.dump();
-  MR->dump();
-  errs() << "\n";
+  LLVM_DEBUG(errs() << "propagatePersistency\n");
+  LLVM_DEBUG(MI.dump());
+  LLVM_DEBUG(MO.dump());
+  LLVM_DEBUG(MR->dump());
+  LLVM_DEBUG(errs() << "\n");
 
   if (!MO.isReg())
     return;
@@ -43,7 +43,7 @@ void PersistencyAnalysisPass::propagatePersistency(
 
   while (!WorkSet.empty()) {
     auto *I = WorkSet.pop_back_val();
-    I->dump();
+    LLVM_DEBUG(I->dump());
 
     if (PersistentDefs.contains(I))
       continue;
@@ -74,17 +74,17 @@ void PersistencyAnalysisPass::propagatePersistency(
     }
   }
 
-  errs() << "Done propagating\n";
+  LLVM_DEBUG(errs() << "Done propagating\n");
 }
 
 void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
                                             const MachineRegion *MR,
                                             const MachineRegion *Scope) {
-  errs() << "Analyze region: \n";
-  MR->dump();
-  errs() << "in scope\n";
-  Scope->dump();
-  errs() << "\n";
+  LLVM_DEBUG(errs() << "Analyze region: \n");
+  LLVM_DEBUG(MR->dump());
+  LLVM_DEBUG(errs() << "in scope\n");
+  LLVM_DEBUG(Scope->dump());
+  LLVM_DEBUG(errs() << "\n");
 
   SmallPtrSet<MachineInstr *, 16> *LocalPersistentDefs =
       &PersistentInstructions[Scope];
@@ -134,15 +134,15 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   PersistentRegionInputMap.clear();
 
   for (auto &B : SRA->sensitive_branches()) {
-    errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
-    errs() << "if region:\n";
-    errs() << B.IfRegion << "\n";
-    B.IfRegion->dump();
+    LLVM_DEBUG(errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n");
+    LLVM_DEBUG(errs() << "if region:\n");
+    LLVM_DEBUG(errs() << B.IfRegion << "\n");
+    LLVM_DEBUG(B.IfRegion->dump());
 
     if (B.ElseRegion) {
-      errs() << "else region:\n";
-      errs() << B.ElseRegion << "\n";
-      B.ElseRegion->dump();
+      LLVM_DEBUG(errs() << "else region:\n");
+      LLVM_DEBUG(errs() << B.ElseRegion << "\n");
+      LLVM_DEBUG(B.ElseRegion->dump());
     }
   }
   auto Branches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
@@ -159,23 +159,23 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  errs() << "Persistent instructions: \n";
+  LLVM_DEBUG(errs() << "Persistent instructions: \n");
 
   for (const auto &Pair : PersistentInstructions) {
-    Pair.first->dump();
+    LLVM_DEBUG(Pair.first->dump());
 
     for (const auto *MI : Pair.second) {
-      MI->dump();
+      LLVM_DEBUG(MI->dump());
     }
   }
 
-  errs() << "Persistent stores: \n";
+  LLVM_DEBUG(errs() << "Persistent stores: \n");
 
   for (const auto &Pair : PersistentStores)  {
-    Pair.first->dump();
+    LLVM_DEBUG(Pair.first->dump());
     
     for (const auto *MI : Pair.second) {
-      MI->dump();
+      LLVM_DEBUG(MI->dump());
     }
   }
 

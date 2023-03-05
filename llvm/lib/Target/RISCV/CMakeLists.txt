@@ -21,7 +21,7 @@ add_public_tablegen_target(RISCVCommonTableGen)
 add_llvm_target(RISCVCodeGen
   RISCVAMiLinearizeRegion.cpp
   RISCVMolnarLinearizeRegion.cpp
-  RISCVAMiLinearizeBranch.cpp
+  RISCVLinearizeBranch.cpp
   RISCVSimplifySensitiveRegion.cpp
   RISCVAsmPrinter.cpp
   RISCVCodeGenPrepare.cpp

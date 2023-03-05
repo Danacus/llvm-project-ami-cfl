@@ -51,7 +51,6 @@ void RISCVAMiLinearizeRegion::setQualifier(MachineInstr *I) {
   } else {
     // llvm_unreachable("AMi error: unsupported instruction cannot be
     // qualified!");
-    I->dump();
     errs() << "AMi error: unsupported instruction cannot be qualified!\n";
   }
 }
@@ -108,38 +107,27 @@ bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
 }
 
 void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
-  errs() << "Handling region " << *Region << "\n";
+  LLVM_DEBUG(errs() << "Handling region " << *Region << "\n");
   for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
-    MI->dump();
     setQualifier<RISCV::AMi::Persistent>(MI);
   }
 
-  errs() << "Stores\n";
+  LLVM_DEBUG(errs() << "Stores\n");
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
-    I->dump();
-    // TODO: fix this to only allow writing to stack in mimicry mode
-    // if this instruction originates from calling convention lowering.
-    // if (I->getOperand(1).getReg().asMCReg() == RISCV::X2)
-    //   continue;
-    
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
-    if (GhostLoad.getOpcode() == RISCV::GLW) {
-      assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
-             "AMi error: invalid ghost load");
-      continue;
-    }
-
+    // TODO: fix this to only allow writing to stack in mimicry mode
+    // if this instruction originates from calling convention lowering.
     if (GhostLoad.getOpcode() != TargetOpcode::GHOST_LOAD)
       continue;
+
     assert(GhostLoad.getOpcode() == TargetOpcode::GHOST_LOAD &&
            "AMi error: expected GHOST_LOAD pseudo");
     assert(GhostLoad.getOperand(0).getReg() == I->getOperand(0).getReg() &&
            "AMi error: invalid GHOST_LOAD");
 
     BuildMI(*I->getParent(), GhostLoad.getIterator(), DebugLoc(),
-            TII->get(RISCV::ADDI),
-            GhostLoad.getOperand(0).getReg().asMCReg())
+            TII->get(RISCV::ADDI), GhostLoad.getOperand(0).getReg().asMCReg())
         .add(GhostLoad.getOperand(1))
         .addImm(0);
     GhostLoad.eraseFromParent();
@@ -148,9 +136,11 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
       MachineOperand Op1 = I->getOperand(1);
       Op1.setIsKill(false);
       MachineOperand Op2 = I->getOperand(2);
-      // TODO: support LB and LH
-      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
-              TII->get(RISCV::GLW), I->getOperand(0).getReg().asMCReg())
+
+      auto Opcode = RISCV::AMi::getQualified<RISCV::AMi::Ghost>(
+          TII->getMatchingLoad(*I));
+      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(Opcode),
+              I->getOperand(0).getReg().asMCReg())
           .add(Op1)
           .add(Op2);
     } else {
@@ -161,7 +151,7 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
 }
 
 bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
-  errs() << "AMi Linearize Region Pass\n";
+  LLVM_DEBUG(errs() << "AMi Linearize Region Pass\n");
 
   const auto &ST = MF.getSubtarget<RISCVSubtarget>();
   TII = ST.getInstrInfo();
@@ -181,7 +171,7 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     setBranchActivating(*Branch.MBB);
     if (Branch.FlowBlock)
       setBranchActivating(*Branch.FlowBlock);
-    
+
     if (Branch.IfRegion) {
       handleRegion(Branch.IfRegion);
     }
@@ -190,20 +180,6 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  SmallPtrSet<MachineInstr *, 8> ToRemove;
-
-  for (MachineBasicBlock &MB : MF) {
-    for (MachineInstr &MI : MB) {
-      if (MI.getOpcode() == TargetOpcode::SECRET)
-        ToRemove.insert(&MI);
-    }
-  }
-
-  for (auto *MI : ToRemove) {
-    MI->eraseFromParent();
-  }
-  MF.dump();
-
   return true;
 }
 
@@ -211,8 +187,8 @@ RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion() : MachineFunctionPass(ID) {
   initializeRISCVAMiLinearizeRegionPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(RISCVAMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
-                      false, false)
+INITIALIZE_PASS_BEGIN(RISCVAMiLinearizeRegion, DEBUG_TYPE,
+                      "AMi Linearize Region", false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)

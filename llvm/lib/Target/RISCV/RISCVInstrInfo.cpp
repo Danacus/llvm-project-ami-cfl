@@ -222,7 +222,6 @@ void RISCVInstrInfo::constantTimeLeakage(const MachineInstr &MI,
 
 bool RISCVInstrInfo::isPersistentStore(const MachineInstr &MI) const {
   switch (MI.getOpcode()) {
-  case RISCV::FLD:
   case RISCV::SB:
   case RISCV::SH:
   case RISCV::SW:
@@ -233,6 +232,27 @@ bool RISCVInstrInfo::isPersistentStore(const MachineInstr &MI) const {
     return RISCV::AMi::getClass(MI.getOpcode()) == RISCV::AMi::AlwaysPersistent;
   default:
     return false;
+  }
+}
+
+uint16_t RISCVInstrInfo::getMatchingLoad(MachineInstr &Store) const {
+  switch (Store.getOpcode()) {
+  case RISCV::SB:
+    return RISCV::LB;
+  case RISCV::SH:
+    return RISCV::LH;
+  case RISCV::SW:
+    return RISCV::LW;
+  case RISCV::FSH:
+    return RISCV::FLH;
+  case RISCV::FSW:
+    return RISCV::FLW;
+  case RISCV::SD:
+    return RISCV::LD;
+  case RISCV::FSD:
+    return RISCV::FLD;
+  default:
+    llvm_unreachable("Not a store instruction");
   }
 }
 

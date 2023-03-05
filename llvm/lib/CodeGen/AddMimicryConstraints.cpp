@@ -24,7 +24,7 @@ void AddMimicryConstraints::addConstraintsToIfRegions(MachineInstr *MI) {
   auto *MBB = MI->getParent();
 
   MachineFunction &MF = *MBB->getParent();
-  MI->dump();
+  LLVM_DEBUG(MI->dump());
 
   for (auto &Branch : SRA.sensitive_branches(MBB, true)) {
     if (!Branch.ElseRegion->contains(MI))
@@ -53,7 +53,7 @@ void AddMimicryConstraints::addConstraintsToElseRegions(MachineInstr *MI) {
   auto *MBB = MI->getParent();
 
   MachineFunction &MF = *MBB->getParent();
-  MI->dump();
+  LLVM_DEBUG(MI->dump());
 
   for (auto &Branch : SRA.sensitive_branches(MBB, false)) {
     if (!Branch.ElseRegion)
@@ -176,8 +176,8 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  MF.dump();
-  LIS->dump();
+  LLVM_DEBUG(MF.dump());
+  LLVM_DEBUG(LIS->dump());
 
   return true;
 }

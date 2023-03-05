@@ -23,7 +23,7 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   bool MadeChange = false;
 
-  MRI->dump();
+  LLVM_DEBUG(MRI->dump());
   
   SmallVector<MachineBasicBlock *> ToUpdate;
 
@@ -31,7 +31,7 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
     auto *Exit = Branch.IfRegion->getExit();
 
     if (!Branch.ElseRegion) {
-      errs() << "Creating else region for \n";
+      LLVM_DEBUG(errs() << "Creating else region for \n");
       Branch.IfRegion->dump();
 
       auto *ElseMBB = MF.CreateMachineBasicBlock();
@@ -41,7 +41,6 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
       Branch.MBB->addSuccessor(ElseMBB);
       TII->insertUnconditionalBranch(*ElseMBB, Branch.IfRegion->getExit(), DebugLoc());
       ElseMBB->addSuccessor(Exit);
-      // MF.insert(Exit->getIterator(), ElseMBB);
       MF.insert(MF.end(), ElseMBB);
       MadeChange = true;
       ToUpdate.push_back(Branch.MBB);
@@ -57,8 +56,6 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
         MachineRegion *MR = new MachineRegion(ElseMBB, Exit, MRI, MDT);
         MRI->setRegionFor(ElseMBB, MR);
         MRI->updateStatistics(MR);
-        // if (Branch.IfRegion->getParent())
-        // Branch.IfRegion->getParent()->addSubRegion(MR);
         MRI->getRegionFor(Branch.MBB)->addSubRegion(MR);
       }
 
@@ -67,19 +64,13 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
 
       BuildMI(*ElseMBB, ElseMBB->begin(), DebugLoc(), TII->get(TargetOpcode::EXTEND));
     }
-
-    // BuildMI(*Exit, Exit->begin(), DebugLoc(), TII->get(TargetOpcode::BRANCH_TARGET)).addMBB(Branch.MBB);
   }
 
   for (auto *MBB : ToUpdate) {
     SRA->handleBranch(MBB);
   }
 
-  // for (auto &Branch : SRA->sensitive_branches()) {
-  //   BuildMI(*Branch.MBB, Branch.MBB->getFirstTerminator(), DebugLoc(), TII->get(TargetOpcode::SECRET_DEP_BR));
-  // }
-
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   
   return MadeChange;
 }
@@ -94,11 +85,7 @@ CreateSensitiveRegions::CreateSensitiveRegions()
 
 INITIALIZE_PASS_BEGIN(CreateSensitiveRegions, DEBUG_TYPE,
                       "Create Sensitive Regions", true, false)
-// INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
-// INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
-// INITIALIZE_PASS_DEPENDENCY(MachinePostDominatorTree)
-// INITIALIZE_PASS_DEPENDENCY(MachineDominanceFrontier)
 INITIALIZE_PASS_END(CreateSensitiveRegions, DEBUG_TYPE,
                     "Create Sensitive Regions", true, false)
 

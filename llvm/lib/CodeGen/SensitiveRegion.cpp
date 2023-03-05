@@ -56,7 +56,7 @@ void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
 void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion *Parent) {
   const auto &ST = MBB->getParent()->getSubtarget();
   const auto *TII = ST.getInstrInfo();
-  MBB->dump();
+  LLVM_DEBUG(MBB->dump());
 
   removeBranch(MBB);
 
@@ -172,7 +172,7 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   }
 
   MachineRegion *TopLevelRegion = MRI->getTopLevelRegion();
-  TopLevelRegion->dump();
+  LLVM_DEBUG(TopLevelRegion->dump());
 
   // Remove garbage from MachineRegionInfo, I don't want it
   for (auto &Child : *TopLevelRegion) {
@@ -182,16 +182,16 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   // Construct tree of sensitive regions
   handleRegion(TopLevelRegion);
 
-  MRI->dump();
+  LLVM_DEBUG(MRI->dump());
 
   for (auto &B : SensitiveBranches) {
-    errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n";
-    errs() << "if region:\n";
-    B.IfRegion->dump();
+    LLVM_DEBUG(errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n");
+    LLVM_DEBUG(errs() << "if region:\n");
+    LLVM_DEBUG(B.IfRegion->dump());
 
     if (B.ElseRegion) {
-      errs() << "else region:\n";
-      B.ElseRegion->dump();
+      LLVM_DEBUG(errs() << "else region:\n");
+      LLVM_DEBUG(B.ElseRegion->dump());
     }
   }
 

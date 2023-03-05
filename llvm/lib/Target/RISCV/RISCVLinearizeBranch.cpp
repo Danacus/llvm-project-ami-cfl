@@ -1,6 +1,6 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
-#include "RISCVAMiLinearizeBranch.h"
+#include "RISCVLinearizeBranch.h"
 #include "RISCVInstrInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -45,7 +45,6 @@ char RISCVLinearizeBranch::ID = 0;
 MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
                                                          MachineRegion *MR,
                                                          bool ReplaceExit) {
-  // auto &MRI = getAnalysis<MachineRegionInfoPass>().getRegionInfo();
   // Find the exiting blocks of the if region
   SmallVector<MachineBasicBlock *> Exitings;
   MR->getExitingBlocks(Exitings);
@@ -56,10 +55,8 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
   int MaxNumber = 0;
 
   for (auto *Exiting : Exitings) {
-    // TII->removeBranch(*Exiting);
-    // TII->insertUnconditionalBranch(*Exiting, MR->getExit(), DebugLoc());
-    Exiting->dump();
-    errs() << "Number: " << Exiting->getNumber() << "\n";
+    LLVM_DEBUG(Exiting->dump());
+    LLVM_DEBUG(errs() << "Number: " << Exiting->getNumber() << "\n");
     if (Exiting->getNumber() >= MaxNumber) {
       MaxNumber = Exiting->getNumber();
       InsertPoint = std::next(Exiting->getIterator());
@@ -67,23 +64,20 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
   }
 
   MachineBasicBlock *EndBlock = MF.CreateMachineBasicBlock();
-  // MF.insert(MR->getExit()->getIterator(), EndBlock);
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 
   auto *OldExit = MR->getExit();
 
   for (auto *Exiting : Exitings) {
-    errs() << "Exiting\n";
-    Exiting->dump();
+    LLVM_DEBUG(errs() << "Exiting\n");
+    LLVM_DEBUG(Exiting->dump());
     MachineBasicBlock *ETBB;
     MachineBasicBlock *EFBB;
     SmallVector<MachineOperand> ECond;
     TII->analyzeBranch(*Exiting, ETBB, EFBB, ECond);
 
     MachineBasicBlock *FallThrough = Exiting->getFallThrough(true);
-    // if (FallThrough == EndBlock && EndBlock != nullptr)
-    //   FallThrough = EndBlock->getFallThrough();
 
     if (!ETBB)
       ETBB = FallThrough;
@@ -136,10 +130,6 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
 
   MF.insert(InsertPoint, EndBlock);
 
-  // BuildMI(*EndBlock, EndBlock->end(), DL,
-  // TII->get(TargetOpcode::BRANCH_TARGET))
-  //     .addMBB(EndBlock);
-
   EndBlock->addSuccessor(MR->getExit());
 
   if (EndBlock->getFallThrough(true) != MR->getExit())
@@ -157,7 +147,7 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
   }
 
   ActivatingRegions.insert(MR);
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   return EndBlock;
 }
 
@@ -166,14 +156,11 @@ void RISCVLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
     if (Branch->ElseRegion) {
       createFlowBlock(MF, Branch->IfRegion, true);
     }
-    // createFlowBlock(MF, Branch->IfRegion, true);
-    // if (Branch->ElseRegion)
-    //   createFlowBlock(MF, Branch->ElseRegion, false);
   }
 }
 
 void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   SmallPtrSet<MachineBasicBlock *, 8> ToActivate;
 
   for (auto *B : ActivatingBranches) {
@@ -183,8 +170,8 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
     auto *OldBranchExit = Branch.IfRegion->getExit();
     if (Branch.ElseRegion)
       OldBranchExit = OldBranchExit->getSingleSuccessor();
-    errs() << "Old exit:\n";
-    OldBranchExit->dump();
+    LLVM_DEBUG(errs() << "Old exit:\n");
+    LLVM_DEBUG(OldBranchExit->dump());
 
     DebugLoc DL;
 
@@ -215,10 +202,8 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
     BranchBlock->addSuccessor(Branch.IfRegion->getExit());
 
     if (Branch.ElseRegion) {
-      Branch.ElseRegion->dump();
-      Branch.ElseRegion->getExit()->dump();
-      // assert(Branch.ElseRegion->getExit()->getSingleSuccessor() == OldBranchExit &&
-      //        "if and else should exit to the same block");
+      LLVM_DEBUG(Branch.ElseRegion->dump());
+      LLVM_DEBUG(Branch.ElseRegion->getExit()->dump());
 
       for (auto OP : Branch.Cond) {
         if (OP.isReg() && OP.isUse() && OP.getReg().isPhysical()) {
@@ -242,30 +227,18 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
     }
 
     Branch.FlowBlock = Branch.IfRegion->getExit();
-    // SRA->removeBranch(BranchBlock);
-    // SRA->addBranch(
-    //     SensitiveBranch(BranchBlock, NewCond, nullptr, Branch.IfRegion));
-
-    // if (Branch.ElseRegion) {
-    //   SRA->addBranch(SensitiveBranch(Branch.IfRegion->getExit(), CondReversed,
-    //                                  nullptr, Branch.ElseRegion));
-    // }
   }
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 }
 
 bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
-  errs() << "AMi Linearize Branch Pass\n";
+  LLVM_DEBUG(errs() << "AMi Linearize Branch Pass\n");
 
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  // MRI.dump();
-  MF.dump();
-
-  // findActivatingBranches();
   MDT = getAnalysisIfAvailable<MachineDominatorTree>();
   MPDT = getAnalysisIfAvailable<MachinePostDominatorTree>();
   MDF = getAnalysisIfAvailable<MachineDominanceFrontier>();
@@ -278,32 +251,16 @@ bool RISCVLinearizeBranch::runOnMachineFunction(MachineFunction &MF) {
   for (auto &B : SRA->sensitive_branches()) {
     ActivatingBranches.push_back(&B);
   }
-  // ActivatingBranches = SmallVector<SensitiveBranch
-  // *>(SRA->sensitive_branches());
 
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-  //           std::greater<SensitiveBranch>());
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
             [](const SensitiveBranch *Lhs, const SensitiveBranch *Rhs) -> bool {
               return *Lhs > *Rhs;
             });
-  // std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
-
-  for (auto &B : ActivatingBranches) {
-    errs() << "Activating branch: " << B->MBB->getFullName();
-    errs() << "if region:\n";
-    B->IfRegion->dump();
-
-    if (B->ElseRegion) {
-      errs() << "else region:\n";
-      B->ElseRegion->dump();
-    }
-  }
 
   createFlowBlocks(MF);
   linearizeBranches(MF);
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   return true;
 }
 
@@ -311,12 +268,10 @@ RISCVLinearizeBranch::RISCVLinearizeBranch() : MachineFunctionPass(ID) {
   initializeRISCVLinearizeBranchPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(RISCVLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
+INITIALIZE_PASS_BEGIN(RISCVLinearizeBranch, DEBUG_TYPE, "RISCV Linearize Branch",
                       false, false)
-// INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-// INITIALIZE_PASS_DEPENDENCY(TrackSecretsAnalysisVirtReg)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
-INITIALIZE_PASS_END(RISCVLinearizeBranch, DEBUG_TYPE, "AMi Linearize Branch",
+INITIALIZE_PASS_END(RISCVLinearizeBranch, DEBUG_TYPE, "RISCV Linearize Branch",
                     false, false)
 
 namespace llvm {
