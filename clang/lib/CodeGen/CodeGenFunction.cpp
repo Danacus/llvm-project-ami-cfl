@@ -714,9 +714,6 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   CurFnInfo = &FnInfo;
   assert(CurFn->isDeclaration() && "Function already has body?");
 
-  llvm::errs() << "Start function\n";
-  CurFn->dump();
-
   // If this function is ignored for any of the enabled sanitizers,
   // disable the sanitizer for the function.
   do {
@@ -1154,8 +1151,6 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   if (D && D->hasAttr<HLSLShaderAttr>())
     CGM.getHLSLRuntime().emitEntryFunction(FD, Fn);
 
-  llvm::errs() << "EmitFunctionProlog\n";
-  CurFn->dump();
   EmitFunctionProlog(*CurFnInfo, CurFn, Args);
 
   if (isa_and_nonnull<CXXMethodDecl>(D) &&
