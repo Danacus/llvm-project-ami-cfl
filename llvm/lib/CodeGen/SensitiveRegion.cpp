@@ -1,4 +1,6 @@
 
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/GraphTraits.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
@@ -56,7 +58,7 @@ void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
 void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion *Parent) {
   const auto &ST = MBB->getParent()->getSubtarget();
   const auto *TII = ST.getInstrInfo();
-  LLVM_DEBUG(MBB->dump());
+  LLVM_DEBUG(errs() << "handleBranch entry\n");
 
   removeBranch(MBB);
 
@@ -68,8 +70,8 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion
     llvm_unreachable("AMi error: failed to analyze secret-dependent branch");
 
   // When there is only a single conditional branch as terminator,
-  // FBB will not be set. In this case it is probably safe to assume that
-  // FBB is the fallthrough block (at least for RISC-V).
+  // FBB will not be set. In this case it is safe to assume that
+  // FBB is the fallthrough block.
   if (!FBB)
     FBB = MBB->getFallThrough();
 
@@ -104,29 +106,26 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion
   }
 
   addBranch(SensitiveBranch(MBB, Cond, TR, FR));
+
+  LLVM_DEBUG(errs() << "handleBranch exit\n");
 }
 
 void SensitiveRegionAnalysis::handleRegion(MachineRegion *MR) {
-  SparseBitVector<128> HandledBlocks;
-  SmallVector<MachineBasicBlock *> WorkList;
-  WorkList.push_back(MR->getEntry());
-  HandledBlocks.set(MR->getEntry()->getNumber());
+  LLVM_DEBUG(MDT->dump());
+  LLVM_DEBUG(MR->dump());
 
-  while (!WorkList.empty()) {
-    MachineBasicBlock *MBB = WorkList.pop_back_val();
+  for (auto *Node : regionDomTreeIterator(MR)) {
+    auto *MBB = Node->getBlock();
 
-    if (SensitiveBranchBlocks.test(MBB->getNumber()) && !SensitiveBlocks.test(MBB->getNumber())) {
+    if (HandledBlocks.test(MBB->getNumber()))
+      continue;
+
+    HandledBlocks.set(MBB->getNumber());
+    
+    LLVM_DEBUG(MBB->dump());
+
+    if (SensitiveBranchBlocks.test(MBB->getNumber())) {
       handleBranch(MBB, MR);
-    }
-
-    if (!SensitiveBlocks.test(MBB->getNumber()))
-      MRI->setRegionFor(MBB, MR);
-
-    for (auto *Succ : MBB->successors()) {
-      if (!HandledBlocks.test(Succ->getNumber()) && !SensitiveBlocks.test(MBB->getNumber())) {
-        HandledBlocks.set(Succ->getNumber());
-        WorkList.push_back(Succ);
-      }
     }
   }
 }
@@ -141,6 +140,7 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   MRI = new MachineRegionInfo();
   MRI->init(MF, MDT, MPDT, MDF);
 
+  HandledBlocks.clear();
   SensitiveRegions.clear();
   SensitiveBlocks.clear();
   SensitiveBranchBlocks.clear();

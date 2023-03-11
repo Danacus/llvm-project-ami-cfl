@@ -61,7 +61,8 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
             LoadedReg)
         .add(I->getOperand(1))
         .add(I->getOperand(2));
-    NewMI->getOperand(1).setIsKill(false);
+    if (NewMI->getOperand(1).isReg() && !NewMI->getOperand(1).isDef())
+      NewMI->getOperand(1).setIsKill(false);
     TII->createCTSelect(StoredReg, I->getParent(), I->getIterator(), TakenReg,
                         I->getOperand(0).getReg(), LoadedReg, *RegInfo);
     I->getOperand(0).setReg(StoredReg);

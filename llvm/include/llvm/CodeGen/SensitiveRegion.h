@@ -5,11 +5,11 @@
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/MachineDominators.h"
-#include "llvm/CodeGen/MachinePostDominators.h"
 
 using namespace llvm;
 
@@ -61,6 +61,30 @@ template <> struct DenseMapInfo<SensitiveBranch> {
   }
 };
 
+class region_domtree_iterator
+    : public df_iterator<DomTreeNodeBase<MachineBasicBlock> *> {
+  using super =
+      df_iterator<DomTreeNodeBase<MachineBasicBlock> *>;
+
+public:
+  using Self = region_domtree_iterator;
+  using value_type = typename super::value_type;
+
+  // Construct the begin iterator.
+  region_domtree_iterator(MachineDominatorTree *MDT, MachineRegion *MR)
+      : super(df_begin(MDT->getNode(MR->getEntry()))) {
+    // Mark the exit of the region as visited, so that the children of the
+    // exit and the exit itself, i.e. the block outside the region will never
+    // be visited.
+    super::Visited.insert(MDT->getNode(MR->getExit()));
+  }
+
+  // Construct the end iterator.
+  region_domtree_iterator() : super(df_end<value_type>((DomTreeNodeBase<MachineBasicBlock> *)nullptr)) {}
+
+  /*implicit*/ region_domtree_iterator(super I) : super(I) {}
+};
+
 class SensitiveRegionAnalysis : public MachineFunctionPass {
 public:
   using BranchSet = SmallVector<SensitiveBranch, 16>;
@@ -68,6 +92,7 @@ public:
 
 private:
   RegionSet SensitiveRegions;
+  SparseBitVector<128> HandledBlocks;
   SparseBitVector<128> SensitiveBlocks;
   SparseBitVector<128> SensitiveBranchBlocks;
   DenseMap<MachineBasicBlock *, BranchSet> IfBranchMap;
@@ -83,16 +108,14 @@ private:
 public:
   static char ID;
 
-  MachineRegionInfo *getRegionInfo() {
-    return MRI;
-  }
+  MachineRegionInfo *getRegionInfo() { return MRI; }
 
   iterator_range<BranchSet::iterator> sensitive_branches() {
     return make_range(SensitiveBranches.begin(), SensitiveBranches.end());
   }
 
-  iterator_range<BranchSet::iterator>
-  sensitive_branches(MachineBasicBlock *MBB, bool InElseRegion) {
+  iterator_range<BranchSet::iterator> sensitive_branches(MachineBasicBlock *MBB,
+                                                         bool InElseRegion) {
     BranchSet *Branches;
 
     if (InElseRegion) {
@@ -104,7 +127,8 @@ public:
     return make_range(Branches->begin(), Branches->end());
   }
 
-  void insertBranchInBlockMap(MachineBasicBlock *MBB, SensitiveBranch &Branch, bool InElseRegion) {
+  void insertBranchInBlockMap(MachineBasicBlock *MBB, SensitiveBranch &Branch,
+                              bool InElseRegion) {
     if (!InElseRegion) {
       IfBranchMap[MBB].push_back(Branch);
     } else {
@@ -119,14 +143,14 @@ public:
     for (auto &Branch : ElseBranchMap[MBB]) {
       if (Branch.ElseRegion->getDepth() > CurrentDepth) {
         CurrentDepth = Branch.ElseRegion->getDepth();
-        Current = Branch.ElseRegion; 
+        Current = Branch.ElseRegion;
       }
     }
 
     for (auto &Branch : IfBranchMap[MBB]) {
       if (Branch.IfRegion->getDepth() > CurrentDepth) {
         CurrentDepth = Branch.IfRegion->getDepth();
-        Current = Branch.IfRegion; 
+        Current = Branch.IfRegion;
       }
     }
 
@@ -145,6 +169,10 @@ public:
     return SensitiveBlocks.test(MBB->getNumber());
   }
 
+  iterator_range<region_domtree_iterator> regionDomTreeIterator(MachineRegion *MR) {
+    return iterator_range<region_domtree_iterator>(region_domtree_iterator(MDT, MR), region_domtree_iterator());
+  }
+
   SensitiveRegionAnalysis(bool IsSSA = true);
 
   void addBranch(SensitiveBranch Branch);
@@ -155,8 +183,6 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    // AU.addRequired<MachineRegionInfoPass>();
-    // AU.addPreserved<MachineRegionInfoPass>();
     AU.addRequired<TrackSecretsAnalysis>();
     AU.addPreserved<TrackSecretsAnalysis>();
     AU.addRequired<MachineDominatorTree>();
@@ -165,9 +191,6 @@ public:
     AU.addPreserved<MachinePostDominatorTree>();
     AU.addRequired<MachineDominanceFrontier>();
     AU.addPreserved<MachineDominanceFrontier>();
-    // AU.addPreserved<TrackSecretsAnalysis>();
-    // AU.setPreservesCFG();
-    // AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
