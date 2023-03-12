@@ -105,6 +105,7 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion
 }
 
 void SensitiveRegionAnalysis::handleIndirectBranch(MachineBasicBlock *MBB, MachineRegion *Parent) {
+  LLVM_DEBUG(errs() << "handleIndirectBranch entry\n");
   auto MI = MBB->getFirstTerminator();
   int JTIdx = -1;
   for (auto Op : MI->operands()) 
@@ -127,6 +128,7 @@ void SensitiveRegionAnalysis::handleIndirectBranch(MachineBasicBlock *MBB, Machi
   }
 
   addBranch(SensitiveBranch(MBB, Regions));
+  LLVM_DEBUG(errs() << "handleIndirectBranch exit\n");
 }
 
 void SensitiveRegionAnalysis::handleRegion(MachineRegion *MR) {
@@ -190,6 +192,8 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
       if (MO.isReg())
         MO.setIsKill(false);
     }
+
+    LLVM_DEBUG(User->dump());
 
     if (User->isConditionalBranch() || User->isIndirectBranch()) {
       SensitiveBranchBlocks.set(User->getParent()->getNumber());

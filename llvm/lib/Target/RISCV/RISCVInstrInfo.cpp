@@ -188,6 +188,7 @@ void RISCVInstrInfo::constantTimeLeakage(const MachineInstr &MI,
   case RISCV::LWU:
   case RISCV::LD: {
     // TODO
+    Operands.push_back(MI.getOperand(1));
     break;    
   }
   case RISCV::FLD:
@@ -210,6 +211,17 @@ void RISCVInstrInfo::constantTimeLeakage(const MachineInstr &MI,
   case RISCV::BLTU:
   case RISCV::BGEU: {
     // Branch instructions leak their condition operands through control flow
+    Operands.push_back(MI.getOperand(0));
+    Operands.push_back(MI.getOperand(1));
+    break;
+  }
+
+  case RISCV::JAL: {
+    Operands.push_back(MI.getOperand(0));
+    break;
+  }
+
+  case RISCV::JALR: {
     Operands.push_back(MI.getOperand(0));
     Operands.push_back(MI.getOperand(1));
     break;

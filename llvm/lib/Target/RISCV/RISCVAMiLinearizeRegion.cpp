@@ -74,9 +74,10 @@ bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB, Machin
     }
   }
 
-  // We can't handle blocks that end in an indirect branch.
-  if (I->getDesc().isIndirectBranch())
-    return true;
+  if (I->getDesc().isIndirectBranch()) {
+    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    return false;
+  }
 
   // We can't handle blocks with more than 2 terminators.
   if (NumTerminators > 2)
