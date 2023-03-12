@@ -189,6 +189,14 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     // if (Branch.FlowBlock)
     //   setBranchActivating(*Branch.FlowBlock);
 
+    for (auto *Region : Branch.Regions) {
+      SmallVector<MachineBasicBlock *> Exitings;
+      Region->getExitingBlocks(Exitings);
+      for (auto *Exiting : Exitings)
+        setBranchActivating(*Exiting, Region->getExit());
+      handleRegion(Region);
+    }
+    /*
     if (Branch.IfRegion) {
       SmallVector<MachineBasicBlock *> Exitings;
       Branch.IfRegion->getExitingBlocks(Exitings);
@@ -203,6 +211,7 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
         setBranchActivating(*Exiting, Branch.ElseRegion->getExit());
       handleRegion(Branch.ElseRegion);
     }
+    */
   }
 
   return true;

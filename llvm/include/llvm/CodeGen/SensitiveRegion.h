@@ -17,32 +17,52 @@ namespace llvm {
 
 struct SensitiveBranch {
   MachineBasicBlock *MBB = nullptr;
+  SmallVector<MachineRegion *> Regions;
+
+  // For direct conditional branches
   MachineBasicBlock *FlowBlock = nullptr;
   SmallVector<MachineOperand> Cond;
-  MachineRegion *ElseRegion = nullptr;
-  MachineRegion *IfRegion = nullptr;
 
-  SmallVector<MachineRegion *> Regions;
+  bool IsIndirect = false;
 
   SensitiveBranch(MachineBasicBlock *MBB) : MBB(MBB) {}
 
   SensitiveBranch(MachineBasicBlock *MBB, SmallVector<MachineOperand> Cond,
                   MachineRegion *TR, MachineRegion *FR)
-      : MBB(MBB), Cond(Cond), ElseRegion(TR), IfRegion(FR) {
-    Regions.push_back(TR);
+      : MBB(MBB), Cond(Cond), IsIndirect(false) {
+    assert(FR && "Expected at least one region\n");
     Regions.push_back(FR);
+    if (TR)
+      Regions.push_back(TR);
   }
 
+  SensitiveBranch(MachineBasicBlock *MBB, SmallVector<MachineRegion *> Regions)
+      : MBB(MBB), Regions(Regions), IsIndirect(true) {}
+
   bool operator<(const SensitiveBranch &Other) const {
-    return (*Regions.begin())->getDepth() < (*Other.Regions.begin())->getDepth();
+    return (*Regions.begin())->getDepth() <
+           (*Other.Regions.begin())->getDepth();
   }
 
   bool operator>(const SensitiveBranch &Other) const {
-    return (*Regions.begin())->getDepth() > (*Other.Regions.begin())->getDepth();
+    return (*Regions.begin())->getDepth() >
+           (*Other.Regions.begin())->getDepth();
   }
 
   bool operator==(const SensitiveBranch &Other) const {
     return MBB == Other.MBB;
+  }
+
+  MachineRegion *ifRegion() {
+    if (Regions.size() < 1)
+      return nullptr;
+    return Regions[0];
+  }
+
+  MachineRegion *elseRegion() {
+    if (Regions.size() < 2)
+      return nullptr;
+    return Regions[1];
   }
 };
 
@@ -68,8 +88,7 @@ template <> struct DenseMapInfo<SensitiveBranch> {
 
 class region_domtree_iterator
     : public df_iterator<DomTreeNodeBase<MachineBasicBlock> *> {
-  using super =
-      df_iterator<DomTreeNodeBase<MachineBasicBlock> *>;
+  using super = df_iterator<DomTreeNodeBase<MachineBasicBlock> *>;
 
 public:
   using Self = region_domtree_iterator;
@@ -85,7 +104,10 @@ public:
   }
 
   // Construct the end iterator.
-  region_domtree_iterator() : super(df_end<value_type>((DomTreeNodeBase<MachineBasicBlock> *)nullptr)) {}
+  region_domtree_iterator()
+      : super(
+            df_end<value_type>((DomTreeNodeBase<MachineBasicBlock> *)nullptr)) {
+  }
 
   /*implicit*/ region_domtree_iterator(super I) : super(I) {}
 };
@@ -100,8 +122,14 @@ private:
   SparseBitVector<128> HandledBlocks;
   SparseBitVector<128> SensitiveBlocks;
   SparseBitVector<128> SensitiveBranchBlocks;
+
+  // Deprecated maps
   DenseMap<MachineBasicBlock *, BranchSet> IfBranchMap;
   DenseMap<MachineBasicBlock *, BranchSet> ElseBranchMap;
+
+  DenseMap<MachineBasicBlock *, BranchSet> BranchMap;
+  DenseMap<MachineBasicBlock *, RegionSet> RegionMap;
+
   BranchSet SensitiveBranches;
   MachineRegionInfo *MRI = nullptr;
   TrackSecretsAnalysis *TSA;
@@ -121,23 +149,16 @@ public:
 
   iterator_range<BranchSet::iterator> sensitive_branches(MachineBasicBlock *MBB,
                                                          bool InElseRegion) {
-    BranchSet *Branches;
-
-    if (InElseRegion) {
-      Branches = &ElseBranchMap[MBB];
-    } else {
-      Branches = &IfBranchMap[MBB];
-    }
+    BranchSet *Branches = &BranchMap[MBB];
 
     return make_range(Branches->begin(), Branches->end());
   }
 
-  void insertBranchInBlockMap(MachineBasicBlock *MBB, SensitiveBranch &Branch,
-                              bool InElseRegion) {
-    if (!InElseRegion) {
-      IfBranchMap[MBB].push_back(Branch);
-    } else {
-      ElseBranchMap[MBB].push_back(Branch);
+  void insertBranchInBlockMap(MachineBasicBlock *MBB, SensitiveBranch &Branch) {
+    BranchMap[MBB].push_back(Branch);
+    for (auto *Region : Branch.Regions) {
+      if (Region->contains(MBB))
+        RegionMap[MBB].insert(Region);
     }
   }
 
@@ -145,17 +166,10 @@ public:
     MachineRegion *Current = nullptr;
     unsigned int CurrentDepth = 0;
 
-    for (auto &Branch : ElseBranchMap[MBB]) {
-      if (Branch.ElseRegion->getDepth() > CurrentDepth) {
-        CurrentDepth = Branch.ElseRegion->getDepth();
-        Current = Branch.ElseRegion;
-      }
-    }
-
-    for (auto &Branch : IfBranchMap[MBB]) {
-      if (Branch.IfRegion->getDepth() > CurrentDepth) {
-        CurrentDepth = Branch.IfRegion->getDepth();
-        Current = Branch.IfRegion;
+    for (auto *Region : RegionMap[MBB]) {
+      if (Region->getDepth() > CurrentDepth) {
+        CurrentDepth = Region->getDepth();
+        Current = Region;
       }
     }
 
@@ -174,8 +188,10 @@ public:
     return SensitiveBlocks.test(MBB->getNumber());
   }
 
-  iterator_range<region_domtree_iterator> regionDomTreeIterator(MachineRegion *MR) {
-    return iterator_range<region_domtree_iterator>(region_domtree_iterator(MDT, MR), region_domtree_iterator());
+  iterator_range<region_domtree_iterator>
+  regionDomTreeIterator(MachineRegion *MR) {
+    return iterator_range<region_domtree_iterator>(
+        region_domtree_iterator(MDT, MR), region_domtree_iterator());
   }
 
   SensitiveRegionAnalysis(bool IsSSA = true);
@@ -184,6 +200,7 @@ public:
   void removeBranch(MachineBasicBlock *MBB);
   void handleRegion(MachineRegion *MR);
   void handleBranch(MachineBasicBlock *MBB, MachineRegion *Parent = nullptr);
+  void handleIndirectBranch(MachineBasicBlock *MBB, MachineRegion *Parent = nullptr);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 

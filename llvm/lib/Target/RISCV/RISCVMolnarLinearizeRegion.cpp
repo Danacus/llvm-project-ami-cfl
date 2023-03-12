@@ -101,9 +101,9 @@ Register RISCVMolnarLinearizeRegion::loadTakenReg(MachineFunction &MF) {
 void RISCVMolnarLinearizeRegion::replacePHIInstructions() {
   for (auto &Branch : ActivatingBranches) {
     // Replace PHI instructions with conditional selection
-    MachineBasicBlock *Exit = Branch.IfRegion->getExit();
-    if (Branch.ElseRegion)
-      Exit = Branch.ElseRegion->getExit();
+    MachineBasicBlock *Exit = Branch.ifRegion()->getExit();
+    if (Branch.elseRegion())
+      Exit = Branch.elseRegion()->getExit();
     SmallPtrSet<MachineInstr *, 8> ToRemove;
 
     for (MachineBasicBlock::iterator I = Exit->begin();
@@ -207,17 +207,17 @@ void RISCVMolnarLinearizeRegion::linearizeBranches(MachineFunction &MF) {
         .addReg(IncomingTaken);
 
     // Harden branch regions: remove branches and make stores conditional
-    if (Branch.IfRegion) {
-      TakenRegMap.insert({Branch.IfRegion, TakenReg});
-      handleRegion(Branch.MBB, Branch.IfRegion, TakenReg);
+    if (Branch.ifRegion()) {
+      TakenRegMap.insert({Branch.ifRegion(), TakenReg});
+      handleRegion(Branch.MBB, Branch.ifRegion(), TakenReg);
     }
 
-    if (Branch.ElseRegion) {
+    if (Branch.elseRegion()) {
       assert(Branch.FlowBlock && "Expected flow block");
       Register InvCondReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
       Register InvTakenReg =
           RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
-      TakenRegMap.insert({Branch.ElseRegion, InvTakenReg});
+      TakenRegMap.insert({Branch.elseRegion(), InvTakenReg});
       // XOR with -1 for NOT operation, inverts mask
       BuildMI(*Branch.FlowBlock, Branch.FlowBlock->getFirstTerminator(),
               DebugLoc(), TII->get(RISCV::XORI), InvCondReg)
@@ -227,7 +227,7 @@ void RISCVMolnarLinearizeRegion::linearizeBranches(MachineFunction &MF) {
               DebugLoc(), TII->get(RISCV::AND), InvTakenReg)
           .addReg(InvCondReg)
           .addReg(IncomingTaken);
-      handleRegion(Branch.FlowBlock, Branch.ElseRegion, InvTakenReg);
+      handleRegion(Branch.FlowBlock, Branch.elseRegion(), InvTakenReg);
     }
   }
 

@@ -27,8 +27,8 @@ public:
   AddMimicryConstraints();
   
   void insertGhostLoad(MachineInstr *StoreMI);
-  void addConstraintsToIfRegions(MachineInstr *MI);
-  void addConstraintsToElseRegions(MachineInstr *MI);
+  void addConstraintsToPreRegions(MachineInstr *MI);
+  void addConstraintsToPostRegions(MachineInstr *MI);
   void addConstraintsToRegions(MachineInstr *MI);
   void insertPersistentDefs(MachineRegion *MR);
 

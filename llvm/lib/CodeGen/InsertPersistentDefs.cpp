@@ -60,7 +60,7 @@ void InsertPersistentDefs::insertPersistentDefEnd(MachineInstr *MI) {
   for (auto &Branch : SRA.sensitive_branches(MBB, true)) {
     for (auto &Def : MI->defs()) {
       if (Def.isReg())
-        insertPersistentDefEnd(*MBB->getParent(), *Branch.IfRegion,
+        insertPersistentDefEnd(*MBB->getParent(), *Branch.ifRegion(),
                                Def.getReg());
     }
   }
@@ -103,11 +103,11 @@ void InsertPersistentDefs::insertPersistentDefStart(MachineInstr *MI) {
   auto *MBB = MI->getParent();
 
   for (auto &Branch : SRA.sensitive_branches(MBB, false)) {
-    if (!Branch.ElseRegion)
+    if (!Branch.elseRegion())
       continue;
     for (auto &Def : MI->defs()) {
       if (Def.isReg()) {
-        insertPersistentDefStart(*MBB->getParent(), *Branch.ElseRegion,
+        insertPersistentDefStart(*MBB->getParent(), *Branch.elseRegion(),
                                  Def.getReg());
       }
     }
@@ -191,30 +191,30 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
 
   for (auto &B : SRA.sensitive_branches()) {
-    if (B.ElseRegion) {
-      auto ElsePersistentInstrs = PA.getPersistentInstructions(B.ElseRegion);
+    if (B.elseRegion()) {
+      auto ElsePersistentInstrs = PA.getPersistentInstructions(B.elseRegion());
 
       for (auto *MI : ElsePersistentInstrs) {
         for (auto &Def : MI->defs()) {
           if (Def.isReg())
-            insertPersistentDefEnd(MF, *B.IfRegion, Def.getReg());
+            insertPersistentDefEnd(MF, *B.ifRegion(), Def.getReg());
         }
       }
 
-      for (auto *MI : PA.getPersistentStores(B.ElseRegion)) {
+      for (auto *MI : PA.getPersistentStores(B.elseRegion())) {
         insertGhostLoad(MI);
       }
 
-      auto IfPersistentInstrs = PA.getPersistentInstructions(B.IfRegion);
+      auto IfPersistentInstrs = PA.getPersistentInstructions(B.ifRegion());
 
       for (auto *MI : IfPersistentInstrs) {
         for (auto &Def : MI->defs()) {
           if (Def.isReg())
-            insertPersistentDefStart(MF, *B.ElseRegion, Def.getReg());
+            insertPersistentDefStart(MF, *B.elseRegion(), Def.getReg());
         }
       }
 
-      for (auto *MI : PA.getPersistentStores(B.IfRegion)) {
+      for (auto *MI : PA.getPersistentStores(B.ifRegion())) {
         insertGhostLoad(MI);
       }
     }
@@ -238,7 +238,7 @@ bool InsertPersistentDefs::runOnMachineFunction(MachineFunction &MF) {
     }
 
     SmallVector<MachineBasicBlock *> Exitings;
-    B.IfRegion->getExitingBlocks(Exitings);
+    B.ifRegion()->getExitingBlocks(Exitings);
 
     for (auto &Exiting : Exitings) {
       auto InsertPoint = Exiting->getFirstTerminator();

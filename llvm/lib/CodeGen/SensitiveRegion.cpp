@@ -1,6 +1,7 @@
 
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/GraphTraits.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
@@ -37,21 +38,14 @@ void SensitiveRegionAnalysis::removeBranch(MachineBasicBlock *MBB) {
 
 void SensitiveRegionAnalysis::addBranch(SensitiveBranch Branch) {
   SensitiveBranches.push_back(Branch);
-  SensitiveRegions.insert(Branch.IfRegion);
 
-  if (Branch.ElseRegion)
-    SensitiveRegions.insert(Branch.ElseRegion);
-
-  if (Branch.ElseRegion) {
-    for (auto *MBB : Branch.ElseRegion->blocks()) {
+  for (auto *Region : Branch.Regions) {
+    SensitiveRegions.insert(Region);
+    for (auto *MBB : Region->blocks()) {
       SensitiveBlocks.set(MBB->getNumber());
-      ElseBranchMap[MBB].push_back(Branch);
+      RegionMap[MBB].insert(Region);
+      BranchMap[MBB].push_back(Branch);
     }
-  }
-
-  for (auto *MBB : Branch.IfRegion->blocks()) {
-    SensitiveBlocks.set(MBB->getNumber());
-    IfBranchMap[MBB].push_back(Branch);
   }
 }
 
@@ -60,7 +54,7 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion
   const auto *TII = ST.getInstrInfo();
   LLVM_DEBUG(errs() << "handleBranch entry\n");
 
-  removeBranch(MBB);
+  // removeBranch(MBB);
 
   MachineBasicBlock *TBB;
   MachineBasicBlock *FBB;
@@ -110,6 +104,31 @@ void SensitiveRegionAnalysis::handleBranch(MachineBasicBlock *MBB, MachineRegion
   LLVM_DEBUG(errs() << "handleBranch exit\n");
 }
 
+void SensitiveRegionAnalysis::handleIndirectBranch(MachineBasicBlock *MBB, MachineRegion *Parent) {
+  auto MI = MBB->getFirstTerminator();
+  int JTIdx = -1;
+  for (auto Op : MI->operands()) 
+    if (Op.isJTI())
+      JTIdx = Op.getIndex();
+
+  auto *MF = MBB->getParent();
+  auto &JTInfo = *MF->getJumpTableInfo();
+  const MachineJumpTableEntry &JT = JTInfo.getJumpTables()[JTIdx];
+
+  MachineBasicBlock *Exit = MPDT->findNearestCommonDominator(JT.MBBs);
+  SmallVector<MachineRegion *> Regions;
+  for (auto &MBB : *MF) {
+    if (std::find(JT.MBBs.begin(), JT.MBBs.end(), &MBB) == JT.MBBs.end())
+      continue;
+    auto *Region = new MachineRegion(&MBB, Exit, MRI, MDT);
+    MRI->setRegionFor(&MBB, Region);
+    Parent->addSubRegion(Region);
+    handleRegion(Region);
+  }
+
+  addBranch(SensitiveBranch(MBB, Regions));
+}
+
 void SensitiveRegionAnalysis::handleRegion(MachineRegion *MR) {
   LLVM_DEBUG(MDT->dump());
   LLVM_DEBUG(MR->dump());
@@ -125,8 +144,12 @@ void SensitiveRegionAnalysis::handleRegion(MachineRegion *MR) {
     LLVM_DEBUG(MBB->dump());
 
     if (SensitiveBranchBlocks.test(MBB->getNumber())) {
-      handleBranch(MBB, MR);
-    }
+      if (MBB->getFirstTerminator()->isIndirectBranch()) {
+        handleIndirectBranch(MBB, MR);
+      } else {
+        handleBranch(MBB, MR);
+      }
+    }    
   }
 }
 
@@ -146,6 +169,8 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   SensitiveBranchBlocks.clear();
   IfBranchMap.clear();
   ElseBranchMap.clear();
+  BranchMap.clear();
+  RegionMap.clear();
   SensitiveBranches.clear();
 
   auto &Secrets = TSA->SecretUses;
@@ -166,7 +191,7 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
         MO.setIsKill(false);
     }
 
-    if (User->isConditionalBranch()) {
+    if (User->isConditionalBranch() || User->isIndirectBranch()) {
       SensitiveBranchBlocks.set(User->getParent()->getNumber());
     }
   }
@@ -186,12 +211,11 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto &B : SensitiveBranches) {
     LLVM_DEBUG(errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n");
-    LLVM_DEBUG(errs() << "if region:\n");
-    LLVM_DEBUG(B.IfRegion->dump());
+    LLVM_DEBUG(errs() << "Regions:\n");
 
-    if (B.ElseRegion) {
-      LLVM_DEBUG(errs() << "else region:\n");
-      LLVM_DEBUG(B.ElseRegion->dump());
+    for (auto *Region : B.Regions) {
+      LLVM_DEBUG(Region->dump());
+      LLVM_DEBUG(errs() << "-----------\n");
     }
   }
 

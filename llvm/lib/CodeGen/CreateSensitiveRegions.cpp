@@ -28,18 +28,18 @@ bool CreateSensitiveRegions::runOnMachineFunction(MachineFunction &MF) {
   SmallVector<MachineBasicBlock *> ToUpdate;
 
   for (auto &Branch : SRA->sensitive_branches()) {
-    auto *Exit = Branch.IfRegion->getExit();
+    auto *Exit = Branch.ifRegion()->getExit();
 
-    if (!Branch.ElseRegion) {
+    if (!Branch.elseRegion()) {
       LLVM_DEBUG(errs() << "Creating else region for \n");
-      Branch.IfRegion->dump();
+      LLVM_DEBUG(Branch.ifRegion()->dump());
 
       auto *ElseMBB = MF.CreateMachineBasicBlock();
       TII->removeBranch(*Branch.MBB);
-      TII->insertBranch(*Branch.MBB, ElseMBB, Branch.IfRegion->getEntry(), Branch.Cond, DebugLoc());
+      TII->insertBranch(*Branch.MBB, ElseMBB, Branch.ifRegion()->getEntry(), Branch.Cond, DebugLoc());
       Branch.MBB->removeSuccessor(Exit);
       Branch.MBB->addSuccessor(ElseMBB);
-      TII->insertUnconditionalBranch(*ElseMBB, Branch.IfRegion->getExit(), DebugLoc());
+      TII->insertUnconditionalBranch(*ElseMBB, Branch.ifRegion()->getExit(), DebugLoc());
       ElseMBB->addSuccessor(Exit);
       MF.insert(MF.end(), ElseMBB);
       MadeChange = true;

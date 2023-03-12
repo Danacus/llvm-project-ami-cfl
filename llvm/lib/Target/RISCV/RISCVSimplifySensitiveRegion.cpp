@@ -199,16 +199,10 @@ void RISCVSimplifySensitiveRegion::updatePHIs(MachineFunction &MF, MachineBasicB
 
 void RISCVSimplifySensitiveRegion::createExitingBlocks(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
-    auto *NewExiting = createExitingBlock(MF, Branch->IfRegion);
-    if (NewExiting) {
-      SRA->insertBranchInBlockMap(NewExiting, *Branch, false);
-      updatePHIs(MF, NewExiting);
-    }
-
-    if (Branch->ElseRegion) {
-      auto *NewExiting = createExitingBlock(MF, Branch->ElseRegion);
+    for (auto *Region : Branch->Regions) {
+      auto *NewExiting = createExitingBlock(MF, Region);
       if (NewExiting) {
-        SRA->insertBranchInBlockMap(NewExiting, *Branch, true);
+        SRA->insertBranchInBlockMap(NewExiting, *Branch);
         updatePHIs(MF, NewExiting);
       }
     }

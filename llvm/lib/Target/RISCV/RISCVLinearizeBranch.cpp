@@ -153,8 +153,8 @@ MachineBasicBlock *RISCVLinearizeBranch::createFlowBlock(MachineFunction &MF,
 
 void RISCVLinearizeBranch::createFlowBlocks(MachineFunction &MF) {
   for (auto &Branch : ActivatingBranches) {
-    if (Branch->ElseRegion) {
-      createFlowBlock(MF, Branch->IfRegion, true);
+    if (Branch->elseRegion()) {
+      createFlowBlock(MF, Branch->ifRegion(), true);
     }
   }
 }
@@ -167,8 +167,8 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
     auto &Branch = *B;
     ToActivate.insert(Branch.MBB);
 
-    auto *OldBranchExit = Branch.IfRegion->getExit();
-    if (Branch.ElseRegion)
+    auto *OldBranchExit = Branch.ifRegion()->getExit();
+    if (Branch.elseRegion())
       OldBranchExit = OldBranchExit->getSingleSuccessor();
     LLVM_DEBUG(errs() << "Old exit:\n");
     LLVM_DEBUG(OldBranchExit->dump());
@@ -190,43 +190,43 @@ void RISCVLinearizeBranch::linearizeBranches(MachineFunction &MF) {
 
     TII->removeBranch(*BranchBlock);
     for (auto *Succ : BranchBlock->successors())
-      if (Succ != Branch.IfRegion->getEntry())
+      if (Succ != Branch.ifRegion()->getEntry())
         BranchBlock->removeSuccessor(Succ);
 
-    MachineBasicBlock *Entry = Branch.IfRegion->getEntry();
+    MachineBasicBlock *Entry = Branch.ifRegion()->getEntry();
     MachineBasicBlock *Target = nullptr;
     if (Entry != BranchBlock->getFallThrough(true))
       Target = Entry;
-    TII->insertBranch(*BranchBlock, Branch.IfRegion->getExit(), Target, NewCond,
+    TII->insertBranch(*BranchBlock, Branch.ifRegion()->getExit(), Target, NewCond,
                       DL);
-    BranchBlock->addSuccessor(Branch.IfRegion->getExit());
+    BranchBlock->addSuccessor(Branch.ifRegion()->getExit());
 
-    if (Branch.ElseRegion) {
-      LLVM_DEBUG(Branch.ElseRegion->dump());
-      LLVM_DEBUG(Branch.ElseRegion->getExit()->dump());
+    if (Branch.elseRegion()) {
+      LLVM_DEBUG(Branch.elseRegion()->dump());
+      LLVM_DEBUG(Branch.elseRegion()->getExit()->dump());
 
       for (auto OP : Branch.Cond) {
         if (OP.isReg() && OP.isUse() && OP.getReg().isPhysical()) {
-          Branch.IfRegion->getExit()->addLiveIn(OP.getReg().asMCReg());
+          Branch.ifRegion()->getExit()->addLiveIn(OP.getReg().asMCReg());
         }
       }
 
-      Branch.IfRegion->getExit()->removeSuccessor(OldBranchExit);
-      TII->removeBranch(*Branch.IfRegion->getExit());
+      Branch.ifRegion()->getExit()->removeSuccessor(OldBranchExit);
+      TII->removeBranch(*Branch.ifRegion()->getExit());
 
-      MachineBasicBlock *Entry = Branch.ElseRegion->getEntry();
-      Branch.IfRegion->getExit()->addSuccessor(Entry);
+      MachineBasicBlock *Entry = Branch.elseRegion()->getEntry();
+      Branch.ifRegion()->getExit()->addSuccessor(Entry);
 
       MachineBasicBlock *Target = nullptr;
-      if (Entry != Branch.IfRegion->getExit()->getFallThrough(true))
+      if (Entry != Branch.ifRegion()->getExit()->getFallThrough(true))
         Target = Entry;
-      TII->insertBranch(*Branch.IfRegion->getExit(),
+      TII->insertBranch(*Branch.ifRegion()->getExit(),
                         OldBranchExit, Target, CondReversed, DL);
-      Branch.IfRegion->getExit()->addSuccessor(OldBranchExit);
-      ToActivate.insert(Branch.IfRegion->getExit());
+      Branch.ifRegion()->getExit()->addSuccessor(OldBranchExit);
+      ToActivate.insert(Branch.ifRegion()->getExit());
     }
 
-    Branch.FlowBlock = Branch.IfRegion->getExit();
+    Branch.FlowBlock = Branch.ifRegion()->getExit();
   }
 
   LLVM_DEBUG(MF.dump());

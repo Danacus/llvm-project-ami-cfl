@@ -19,28 +19,36 @@ using namespace llvm;
 char AddMimicryConstraints::ID = 0;
 char &llvm::AddMimicryConstraintsPassID = AddMimicryConstraints::ID;
 
-void AddMimicryConstraints::addConstraintsToIfRegions(MachineInstr *MI) {
+void AddMimicryConstraints::addConstraintsToPreRegions(MachineInstr *MI) {
   auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
   auto *MBB = MI->getParent();
 
   MachineFunction &MF = *MBB->getParent();
   LLVM_DEBUG(MI->dump());
 
+  // MachineRegion *CurrentRegion = SRA.getSensitiveRegion(MBB);
+
   for (auto &Branch : SRA.sensitive_branches(MBB, true)) {
-    if (!Branch.ElseRegion->contains(MI))
-      continue;
+    // if (!Branch.ElseRegion->contains(MI))
+    //   continue;
 
-    MachineRegion &MR = *Branch.IfRegion;
-    SmallVector<MachineBasicBlock *> Exitings;
-    MR.getExitingBlocks(Exitings);
+    // MachineRegion &MR = *Branch.IfRegion;
 
-    for (auto &Exiting : Exitings) {
-      for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
-        Register OtherReg = Register::index2VirtReg(RegI);
-        if (LIS->hasInterval(OtherReg)) {
-          LiveInterval &OtherI = LIS->getInterval(OtherReg);
-          if (LIS->isLiveOutOfMBB(OtherI, Exiting)) {
-            addConstraint(OtherI, LIS->getMBBEndIdx(Exiting).getPrevIndex(), MI);
+    for (auto *MR : Branch.Regions) {
+      if (MR->contains(MBB))
+        break;
+      
+      SmallVector<MachineBasicBlock *> Exitings;
+      MR->getExitingBlocks(Exitings);
+
+      for (auto &Exiting : Exitings) {
+        for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
+          Register OtherReg = Register::index2VirtReg(RegI);
+          if (LIS->hasInterval(OtherReg)) {
+            LiveInterval &OtherI = LIS->getInterval(OtherReg);
+            if (LIS->isLiveOutOfMBB(OtherI, Exiting)) {
+              addConstraint(OtherI, LIS->getMBBEndIdx(Exiting).getPrevIndex(), MI);
+            }
           }
         }
       }
@@ -48,7 +56,7 @@ void AddMimicryConstraints::addConstraintsToIfRegions(MachineInstr *MI) {
   }
 }
 
-void AddMimicryConstraints::addConstraintsToElseRegions(MachineInstr *MI) {
+void AddMimicryConstraints::addConstraintsToPostRegions(MachineInstr *MI) {
   auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
   auto *MBB = MI->getParent();
 
@@ -56,21 +64,27 @@ void AddMimicryConstraints::addConstraintsToElseRegions(MachineInstr *MI) {
   LLVM_DEBUG(MI->dump());
 
   for (auto &Branch : SRA.sensitive_branches(MBB, false)) {
-    if (!Branch.ElseRegion)
-      continue;
+    // if (!Branch.ElseRegion)
+    //   continue;
 
-    if (!Branch.IfRegion->contains(MI))
-      continue;
+    // if (!Branch.IfRegion->contains(MI))
+    //   continue;
 
-    MachineRegion &MR = *Branch.ElseRegion;
-    auto *Entry = MR.getEntry();
+    // MachineRegion &MR = *Branch.ElseRegion;
 
-    for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
-      Register OtherReg = Register::index2VirtReg(RegI);
-      if (LIS->hasInterval(OtherReg)) {
-        LiveInterval &OtherI = LIS->getInterval(OtherReg);
-        if (LIS->isLiveInToMBB(OtherI, Entry)) {
-          addConstraint(OtherI, LIS->getMBBStartIdx(Entry), MI);
+    for (auto *MR : reverse(Branch.Regions)) {
+      if (MR->contains(MBB))
+        break;
+
+      auto *Entry = MR->getEntry();
+
+      for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
+        Register OtherReg = Register::index2VirtReg(RegI);
+        if (LIS->hasInterval(OtherReg)) {
+          LiveInterval &OtherI = LIS->getInterval(OtherReg);
+          if (LIS->isLiveInToMBB(OtherI, Entry)) {
+            addConstraint(OtherI, LIS->getMBBStartIdx(Entry), MI);
+          }
         }
       }
     }
@@ -78,8 +92,8 @@ void AddMimicryConstraints::addConstraintsToElseRegions(MachineInstr *MI) {
 }
 
 void AddMimicryConstraints::addConstraintsToRegions(MachineInstr *MI) {
-  addConstraintsToElseRegions(MI);
-  addConstraintsToIfRegions(MI);
+  addConstraintsToPostRegions(MI);
+  addConstraintsToPreRegions(MI);
 }
 
 void AddMimicryConstraints::addConstraint(LiveInterval &LI, SlotIndex SI, MachineInstr *ConflictingMI) {
@@ -132,21 +146,34 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
     insertGhostLoad(MI);
 
   for (auto &B : SRA.sensitive_branches()) {
+    for (auto *Region : B.Regions) {
+      auto PersistentInstrs = PA.getPersistentInstructions(Region);
+      for (auto *MI : PersistentInstrs) {
+        addConstraintsToPreRegions(MI);
+        addConstraintsToPostRegions(MI);
+      }
+      for (auto *MI : PA.getPersistentStores(Region))
+        insertGhostLoad(MI);
+    }
+    
+    /*
     if (B.ElseRegion) {
       auto ElsePersistentInstrs = PA.getPersistentInstructions(B.ElseRegion);
       for (auto *MI : ElsePersistentInstrs)
-        addConstraintsToIfRegions(MI);
+        addConstraintsToPreRegions(MI);
       for (auto *MI : PA.getPersistentStores(B.ElseRegion))
         insertGhostLoad(MI);
 
       auto IfPersistentInstrs = PA.getPersistentInstructions(B.IfRegion);
       for (auto *MI : IfPersistentInstrs)
-        addConstraintsToElseRegions(MI);
+        addConstraintsToPostRegions(MI);
       for (auto *MI : PA.getPersistentStores(B.IfRegion))
         insertGhostLoad(MI);
     }
+    */
   }
 
+  /*
   for (auto &B : SRA.sensitive_branches()) {
     SmallVector<MachineBasicBlock *> Exitings;
     B.IfRegion->getExitingBlocks(Exitings);
@@ -175,6 +202,7 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
       }
     }
   }
+  */
 
   LLVM_DEBUG(MF.dump());
   LLVM_DEBUG(LIS->dump());

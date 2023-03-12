@@ -136,13 +136,13 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   for (auto &B : SRA->sensitive_branches()) {
     LLVM_DEBUG(errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n");
     LLVM_DEBUG(errs() << "if region:\n");
-    LLVM_DEBUG(errs() << B.IfRegion << "\n");
-    LLVM_DEBUG(B.IfRegion->dump());
+    LLVM_DEBUG(errs() << B.ifRegion() << "\n");
+    LLVM_DEBUG(B.ifRegion()->dump());
 
-    if (B.ElseRegion) {
+    if (B.elseRegion()) {
       LLVM_DEBUG(errs() << "else region:\n");
-      LLVM_DEBUG(errs() << B.ElseRegion << "\n");
-      LLVM_DEBUG(B.ElseRegion->dump());
+      LLVM_DEBUG(errs() << B.elseRegion() << "\n");
+      LLVM_DEBUG(B.elseRegion()->dump());
     }
   }
   auto Branches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
@@ -153,9 +153,14 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   analyzeRegion(MF, MRI->getTopLevelRegion());
 
   for (auto &Branch : Branches) {
+    /*
     analyzeRegion(MF, Branch.IfRegion);
     if (Branch.ElseRegion) {
       analyzeRegion(MF, Branch.ElseRegion);
+    }
+    */
+    for (auto *Region : Branch.Regions) {
+      analyzeRegion(MF, Region);
     }
   }
 
