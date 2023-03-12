@@ -349,11 +349,11 @@ bool RISCVPassConfig::addGlobalInstructionSelect() {
 
 void RISCVPassConfig::addPreSched2() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
-    addPass(createTrackSecretsAnalysisPass(false));
-    addPass(createSensitiveRegionAnalysisPass(false));
-    addPass(createPersistencyAnalysisPass(false));
-    addPass(createRISCVLinearizeBranchPass());
-    addPass(createRISCVAMiLinearizeRegionPass());
+    // addPass(createTrackSecretsAnalysisPass(false));
+    // addPass(createSensitiveRegionAnalysisPass(false));
+    // addPass(createPersistencyAnalysisPass(false));
+    // // addPass(createRISCVLinearizeBranchPass());
+    // addPass(createRISCVAMiLinearizeRegionPass());
   }
 }
 
@@ -370,6 +370,11 @@ void RISCVPassConfig::addPreEmitPass2() {
   addPass(createRISCVExpandAtomicPseudoPass());
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
+    addPass(createTrackSecretsAnalysisPass(false));
+    addPass(createSensitiveRegionAnalysisPass(false));
+    addPass(createPersistencyAnalysisPass(false));
+    // addPass(createRISCVLinearizeBranchPass());
+    addPass(createRISCVAMiLinearizeRegionPass());
     addPass(&RemoveBranchPseudosPassID);
   }
 

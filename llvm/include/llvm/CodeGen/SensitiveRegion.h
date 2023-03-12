@@ -22,18 +22,23 @@ struct SensitiveBranch {
   MachineRegion *ElseRegion = nullptr;
   MachineRegion *IfRegion = nullptr;
 
+  SmallVector<MachineRegion *> Regions;
+
   SensitiveBranch(MachineBasicBlock *MBB) : MBB(MBB) {}
 
   SensitiveBranch(MachineBasicBlock *MBB, SmallVector<MachineOperand> Cond,
                   MachineRegion *TR, MachineRegion *FR)
-      : MBB(MBB), Cond(Cond), ElseRegion(TR), IfRegion(FR) {}
+      : MBB(MBB), Cond(Cond), ElseRegion(TR), IfRegion(FR) {
+    Regions.push_back(TR);
+    Regions.push_back(FR);
+  }
 
   bool operator<(const SensitiveBranch &Other) const {
-    return IfRegion->getDepth() < Other.IfRegion->getDepth();
+    return (*Regions.begin())->getDepth() < (*Other.Regions.begin())->getDepth();
   }
 
   bool operator>(const SensitiveBranch &Other) const {
-    return IfRegion->getDepth() > Other.IfRegion->getDepth();
+    return (*Regions.begin())->getDepth() > (*Other.Regions.begin())->getDepth();
   }
 
   bool operator==(const SensitiveBranch &Other) const {

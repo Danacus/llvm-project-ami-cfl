@@ -55,7 +55,7 @@ void RISCVAMiLinearizeRegion::setQualifier(MachineInstr *I) {
   }
 }
 
-bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
+bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB, MachineBasicBlock *Target) {
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
   if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
@@ -84,26 +84,43 @@ bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB) {
 
   // Handle a single unconditional branch.
   if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    setBranchInstrActivating(&*I, Target);
     return false;
   }
 
   // Handle a single conditional branch.
   if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
-    setQualifier<llvm::RISCV::AMi::Activating>(&*I);
+    setBranchInstrActivating(&*I, Target);
     return false;
   }
 
   // Handle a conditional branch followed by an unconditional branch.
   if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
       I->getDesc().isUnconditionalBranch()) {
-    // setQualifier<llvm::RISCV::AMi::Activating>(&*I);
-    setQualifier<llvm::RISCV::AMi::Activating>(&*std::prev(I));
+    setBranchInstrActivating(&*I, Target);
+    setBranchInstrActivating(&*std::prev(I), Target);
     return false;
   }
 
   // Otherwise, we can't handle this.
   return true;
+}
+
+void RISCVAMiLinearizeRegion::setBranchInstrActivating(MachineInstr *I, MachineBasicBlock *Target) {
+  MachineBasicBlock *Dest = TII->getBranchDestBlock(*I);
+  if (!Target || Target == Dest) {
+    if (I->getDesc().isConditionalBranch())
+      setQualifier<llvm::RISCV::AMi::Activating>(I);
+
+    if (I->getDesc().isUnconditionalBranch()) {
+      // HACK: Since a.jal doesn't behave like a call, we need to use a.beq zero, zero
+      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::ABEQ))
+        .addReg(RISCV::X0)
+        .addReg(RISCV::X0)
+        .addMBB(Dest);
+      I->eraseFromParent();
+    }
+  }
 }
 
 void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
@@ -169,13 +186,21 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto &Branch : ActivatingBranches) {
     setBranchActivating(*Branch.MBB);
-    if (Branch.FlowBlock)
-      setBranchActivating(*Branch.FlowBlock);
+    // if (Branch.FlowBlock)
+    //   setBranchActivating(*Branch.FlowBlock);
 
     if (Branch.IfRegion) {
+      SmallVector<MachineBasicBlock *> Exitings;
+      Branch.IfRegion->getExitingBlocks(Exitings);
+      for (auto *Exiting : Exitings)
+        setBranchActivating(*Exiting, Branch.IfRegion->getExit());
       handleRegion(Branch.IfRegion);
     }
     if (Branch.ElseRegion) {
+      SmallVector<MachineBasicBlock *> Exitings;
+      Branch.ElseRegion->getExitingBlocks(Exitings);
+      for (auto *Exiting : Exitings)
+        setBranchActivating(*Exiting, Branch.ElseRegion->getExit());
       handleRegion(Branch.ElseRegion);
     }
   }
