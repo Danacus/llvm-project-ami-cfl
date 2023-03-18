@@ -58,13 +58,9 @@ public:
   using EdgeSet = SmallSet<Edge, 16>;
 
 private:
-  RegionSet SensitiveRegions;
-  SparseBitVector<128> HandledBlocks;
-  SparseBitVector<128> SensitiveBlocks;
   SparseBitVector<128> SensitiveBranchBlocks;
-
-  DenseMap<MachineBasicBlock *, RegionSet> RegionMap;
   EdgeSet GhostEdges;
+  EdgeSet UncondEdges;
   EdgeSet ActivatingEdges;
   DenseMap<Edge, ActivatingRegion> ActivatingRegions;
 
@@ -73,44 +69,31 @@ private:
   MachinePostDominatorTree *MPDT;
   MachineDominanceFrontier *MDF;
   MachineFunction *MF;
-  bool IsSSA;
+  bool AnalysisOnly;
 
 public:
   static char ID;
 
   AMiLinearizationAnalysis(bool IsSSA = true);
 
+  void undoCFGChanges();
+  void findSecretDependentBranches();
+  void createActivatingRegions();
   void findActivatingRegionExitings(
       MachineBasicBlock *Entry, MachineBasicBlock *Target,
-      SmallVectorImpl<MachineBasicBlock *> &Exitings,
-      SmallPtrSetImpl<MachineBasicBlock *> &RegionBlocks);
+      SmallVectorImpl<MachineBasicBlock *> &Exitings);
   MachineBasicBlock *chooseUnconditionalSuccessor(
       MachineBasicBlock *MBB,
       iterator_range<std::vector<MachineBasicBlock *>::iterator> Choices);
   void linearizeBranch(MachineBasicBlock *MBB, MachineBasicBlock *UncondSucc);
-
-  bool isRealSuccessor(MachineBasicBlock *From, MachineBasicBlock *To) {
-    return (From->isSuccessor(To) && !ActivatingEdges.contains({From, To})) ||
-           GhostEdges.contains({From, To});
-  }
-
-  void realSuccessors(MachineBasicBlock *MBB, SmallVectorImpl<MachineBasicBlock *> &Succs) {
-    for (auto *Succ : MBB->successors()) {
-      if (!ActivatingEdges.contains({MBB, Succ}))
-        Succs.push_back(Succ);
-    }
-
-    for (auto &Ghost : GhostEdges) {
-      if (Ghost.first == MBB)
-        Succs.push_back(Ghost.second);
-    }
-  }
 
   iterator_range<region_domtree_iterator>
   regionDomTreeIterator(MachineBasicBlock *Entry, MachineBasicBlock *Exit) {
     return iterator_range<region_domtree_iterator>(
         region_domtree_iterator(MDT, Entry, Exit), region_domtree_iterator());
   }
+
+  void print(raw_ostream &OS, const Module *) const override;
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -123,9 +106,12 @@ public:
     AU.addPreserved<MachinePostDominatorTree>();
     AU.addRequired<MachineDominanceFrontier>();
     AU.addPreserved<MachineDominanceFrontier>();
+    if (AnalysisOnly)
+      AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
+
 
 } // namespace llvm
 
