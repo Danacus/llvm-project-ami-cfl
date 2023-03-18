@@ -26,6 +26,7 @@ add_llvm_component_library(LLVMCodeGen
   AddMimicryConstraints.cpp
   AggressiveAntiDepBreaker.cpp
   AllocationOrder.cpp
+  AMiLinearizationAnalysis.cpp
   Analysis.cpp
   AssignmentTrackingAnalysis.cpp
   AtomicExpandPass.cpp

@@ -189,6 +189,7 @@ namespace llvm {
   // extern char &SensitiveRegionAnalysisVirtRegID;
   // extern char &SensitiveRegionAnalysisPhysRegID;
   extern char &AddMimicryConstraintsPassID;
+  extern char &AMiLinearizationAnalysisID;
   extern char &InsertPersistentDefsPassID;
   extern char &RemovePersistentDefsPassID;
   extern char &PersistencyAnalysisPassID;
@@ -201,6 +202,7 @@ namespace llvm {
   FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA = true);
   FunctionPass *createSensitiveRegionAnalysisPass(bool IsSSA = true);
   FunctionPass *createPersistencyAnalysisPass(bool IsSSA = true);
+  FunctionPass *createAMiLinearizationAnalysisPass(bool IsSSA = true);
 
   /// FastRegisterAllocation Pass - This pass register allocates as fast as
   /// possible. It is best suited for debug code where live ranges are short.
