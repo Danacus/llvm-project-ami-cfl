@@ -30,7 +30,7 @@ struct SensitiveBranch {
   SensitiveBranch(MachineBasicBlock *MBB, SmallVector<MachineOperand> Cond,
                   MachineRegion *TR, MachineRegion *FR)
       : MBB(MBB), Cond(Cond), IsIndirect(false) {
-    assert(FR && "Expected at least one region\n");
+    assert(FR && "Expected at least one region");
     Regions.push_back(FR);
     if (TR)
       Regions.push_back(TR);

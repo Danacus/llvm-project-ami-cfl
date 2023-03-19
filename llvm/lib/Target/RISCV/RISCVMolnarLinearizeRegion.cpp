@@ -54,8 +54,7 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
           *BranchBlock, BranchBlock->getSingleSuccessor(), DebugLoc());
   }
 
-  /*
-  for (MachineInstr *I : PA->getPersistentStores(Region)) {
+  for (MachineInstr *I : PersistentStores[Region]) {
     Register LoadedReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
     Register StoredReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
     auto NewMI = BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(TII->getMatchingLoad(*I)),
@@ -69,13 +68,12 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
     I->getOperand(0).setReg(StoredReg);
   }
 
-  for (MachineInstr *I : PA->getCallInstrs(Region)) {
+  for (MachineInstr *I : CallInstructions[Region]) {
     BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::SW))
         .addReg(TakenReg)
         .addReg(GlobalTakenAddrReg)
         .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
   }
-  */
 }
 
 Register RISCVMolnarLinearizeRegion::loadTakenReg(MachineFunction &MF) {
@@ -243,13 +241,26 @@ void RISCVMolnarLinearizeRegion::linearizeBranches(MachineFunction &MF) {
   }
 }
 
+void RISCVMolnarLinearizeRegion::findStoresAndCalls(MachineRegion *MR) {  
+  for (auto *MBB : MR->blocks()) {
+    for (MachineInstr &MI : *MBB) {
+      if (TII->isPersistentStore(MI)) {
+        PersistentStores[MR].insert(&MI);
+      }
+      if (MI.isCall()) {
+        CallInstructions[MR].insert(&MI);
+      }
+    }
+  }
+}
+
 bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG(errs() << "Molnar Linearize Region Pass\n");
+  LLVM_DEBUG(MF.dump());
 
   const auto &ST = MF.getSubtarget<RISCVSubtarget>();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
-  PA = &getAnalysis<PersistencyAnalysisPass>();
 
   RegInfo = &MF.getRegInfo();
 
@@ -259,6 +270,12 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
 
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
+
+  for (auto &Branch : ActivatingBranches) {
+    for (auto *Region : Branch.Regions) {
+      findStoresAndCalls(Region);
+    }
+  }
 
   linearizeBranches(MF);
   replacePHIInstructions();
@@ -276,7 +293,6 @@ RISCVMolnarLinearizeRegion::RISCVMolnarLinearizeRegion()
 INITIALIZE_PASS_BEGIN(RISCVMolnarLinearizeRegion, DEBUG_TYPE,
                       "Molnar Linearize Region", false, false)
 INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
-INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_END(RISCVMolnarLinearizeRegion, DEBUG_TYPE,
                     "Molnar Linearize Region", false, false)
 

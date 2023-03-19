@@ -83,16 +83,15 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
   for (auto *MBB : MR->blocks()) {
     SmallVector<MachineOperand, 4> LeakedOperands;
     for (MachineInstr &MI : *MBB) {
-      LeakedOperands.clear();
-      TII->constantTimeLeakage(MI, LeakedOperands);
-
-      // TODO: Create alternative for Molnar linearization
       if (TII->isPersistentStore(MI)) {
         PersistentStores[MR].insert(&MI);
       }
       if (MI.isCall()) {
         CallInstructions[MR].insert(&MI);
       }
+
+      LeakedOperands.clear();
+      TII->constantTimeLeakage(MI, LeakedOperands);
 
       for (auto &MO : LeakedOperands) {
         propagatePersistency(MF, MI, MO, MR);

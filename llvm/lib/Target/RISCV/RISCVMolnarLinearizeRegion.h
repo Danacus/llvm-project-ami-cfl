@@ -10,7 +10,6 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
-#include "llvm/CodeGen/PersistencyAnalysis.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
@@ -27,19 +26,26 @@ namespace {
 
 class RISCVMolnarLinearizeRegion : public MachineFunctionPass {
 public:
-  static char ID;
+  using RegionInstrMap =
+      DenseMap<const MachineRegion *, SmallPtrSet<MachineInstr *, 16>>;
 
+private:
   const RISCVInstrInfo *TII;
   const RISCVRegisterInfo *TRI;
   MachineRegionInfo *MRI;
   MachineRegisterInfo *RegInfo;
   SensitiveRegionAnalysis *SRA;
-  PersistencyAnalysisPass *PA;
   SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
   SmallVector<SensitiveBranch, 16> ActivatingBranches;
   DenseMap<MachineRegion *, Register> TakenRegMap;
   GlobalVariable *GlobalTaken = nullptr;
   Register GlobalTakenAddrReg;
+
+  RegionInstrMap PersistentStores;
+  RegionInstrMap CallInstructions;
+
+public:
+  static char ID;
 
   RISCVMolnarLinearizeRegion();
 
@@ -47,6 +53,7 @@ public:
   Register loadTakenReg(MachineFunction &MF);
   void linearizeBranches(MachineFunction &MF);
   void replacePHIInstructions();
+  void findStoresAndCalls(MachineRegion *MR);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -56,7 +63,7 @@ public:
     AU.addRequired<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
     AU.addRequired<SensitiveRegionAnalysis>();
-    AU.addRequired<PersistencyAnalysisPass>();
+    // AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
