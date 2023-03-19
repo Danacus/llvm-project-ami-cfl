@@ -258,6 +258,9 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG(errs() << "Molnar Linearize Region Pass\n");
   LLVM_DEBUG(MF.dump());
 
+  PersistentStores.clear();
+  CallInstructions.clear();
+
   const auto &ST = MF.getSubtarget<RISCVSubtarget>();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
@@ -271,6 +274,8 @@ bool RISCVMolnarLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
   std::sort(ActivatingBranches.begin(), ActivatingBranches.end());
 
+  findStoresAndCalls(SRA->getRegionInfo()->getTopLevelRegion());
+  
   for (auto &Branch : ActivatingBranches) {
     for (auto *Region : Branch.Regions) {
       findStoresAndCalls(Region);

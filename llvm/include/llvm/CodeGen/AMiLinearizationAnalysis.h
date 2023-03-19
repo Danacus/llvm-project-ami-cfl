@@ -52,11 +52,19 @@ struct ActivatingRegion {
 
   void print(raw_ostream &OS) const {
     OS << "<";
-    Entry->printAsOperand(OS);
-    OS << " " << Entry->getName();
+    if (Branch) {
+      Branch->printAsOperand(OS);
+      OS << " " << Branch->getName();
+    } else {
+      OS << "entry";
+    }
     OS << ", ";
-    Exit->printAsOperand(OS);
-    OS << " " << Exit->getName();
+    if (Exit) {
+      Exit->printAsOperand(OS);
+      OS << " " << Exit->getName();
+    } else {
+      OS << "exit";
+    }
     OS << ">\n";
 
     for (auto *Block : Blocks) {
@@ -134,7 +142,7 @@ public:
   MachineBasicBlock *chooseUnconditionalSuccessor(
       MachineBasicBlock *MBB,
       iterator_range<std::vector<MachineBasicBlock *>::iterator> Choices);
-  void linearizeBranch(MachineBasicBlock *MBB, MachineBasicBlock *UncondSucc);
+  void linearizeBranch(MachineBasicBlock *MBB, MachineBasicBlock *UncondSucc, MachineBasicBlock *Target);
 
   iterator_range<bounded_domtree_iterator>
   regionDomTreeIterator(MachineBasicBlock *Entry, MachineBasicBlock *Exit) {

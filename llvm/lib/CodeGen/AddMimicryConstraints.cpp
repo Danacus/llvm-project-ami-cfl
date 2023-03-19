@@ -28,6 +28,10 @@ void AddMimicryConstraints::addConstraints(MachineInstr *MI) {
 
   // For each activating region that contains this instruction
   for (auto *AR : ALA.RegionMap[MBB]) {
+    if (!AR->Branch || !AR->Exit) {
+      // Top level region, no need to add constraints
+      continue;
+    }
     for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
       Register OtherReg = Register::index2VirtReg(RegI);
       if (LIS->hasInterval(OtherReg)) {
@@ -104,9 +108,11 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto &Pair : ALA.ActivatingRegions) {
     auto &Region = Pair.getSecond();
-    auto PersistentInstrs = PA.getPersistentInstructions(&Region);
-    for (auto *MI : PersistentInstrs) {
-      addConstraints(MI);
+    if (Region.Branch && Region.Exit) {
+      auto PersistentInstrs = PA.getPersistentInstructions(&Region);
+      for (auto *MI : PersistentInstrs) {
+        addConstraints(MI);
+      }
     }
     for (auto *MI : PA.getPersistentStores(&Region))
       insertGhostLoad(MI);    

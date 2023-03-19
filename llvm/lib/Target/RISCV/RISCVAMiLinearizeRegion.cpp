@@ -139,7 +139,15 @@ void RISCVAMiLinearizeRegion::handleRegion(ActivatingRegion *Region) {
 
   LLVM_DEBUG(errs() << "Stores\n");
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
-    MachineInstr &GhostLoad = *std::prev(I->getIterator());
+    MachineBasicBlock::iterator GhostIter = I->getIterator();
+    do {
+      if (GhostIter == I->getParent()->begin())
+        break;
+      GhostIter = std::prev(GhostIter);
+    } while (GhostIter->getOpcode() != TargetOpcode::GHOST_LOAD ||
+             GhostIter->getOperand(0).getReg() != I->getOperand(0).getReg());
+    // MachineInstr &GhostLoad = *std::prev(I->getIterator());
+    MachineInstr &GhostLoad = *GhostIter;
 
     // TODO: fix this to only allow writing to stack in mimicry mode
     // if this instruction originates from calling convention lowering.
@@ -187,16 +195,16 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
   for (auto &Pair : ALA->ActivatingRegions) {
     auto &Region = Pair.getSecond();
+    if (Region.Branch && Region.Exit) {
+      // Make fallthrough explicit if we need to make it activating
+      if (Region.Branch->succ_size() == 1 &&
+          Region.Branch->getFirstTerminator() == Region.Branch->end() &&
+          Region.Branch->getFallThrough() == Region.Exit)
+        TII->insertUnconditionalBranch(
+            *Region.Branch, Region.Branch->getFallThrough(), DebugLoc());
 
-    // Make fallthrough explicit if we need to make it activating
-    if (Region.Branch->succ_size() == 1 &&
-        Region.Branch->getFirstTerminator() == Region.Branch->end() &&
-        Region.Branch->getFallThrough() == Region.Exit)
-      TII->insertUnconditionalBranch(
-          *Region.Branch, Region.Branch->getFallThrough(), DebugLoc());
-
-    
-    setBranchActivating(*Region.Branch, Region.Exit);
+      setBranchActivating(*Region.Branch, Region.Exit);
+    }
     // for (auto *Succ : Region.Branch->successors()) {
     //   if (Succ != Region.Entry) {
     //     Region.Branch->removeSuccessor(Succ);
