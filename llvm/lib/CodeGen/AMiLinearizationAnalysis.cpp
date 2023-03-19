@@ -200,22 +200,6 @@ void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
       ToLinearize.insert(
           ToLinearize.begin(),
           {Exiting, {std::move(InternalSuccessors), std::move(Exits)}});
-      // Only add successors if exiting block is linearized with
-      // Target as unconditional successor. Since one of the existing
-      // branches will always be taken, and linearization makes all those
-      // branches activating, the newly added edge will be a ghost edge,
-      // and program correctness is maintained.
-      // if (!Exiting->isSuccessor(Target) &&
-      //     !GhostEdges.contains({Exiting, Target})) {
-      //   GhostEdges.insert({Exiting, Target});
-      //   Exiting->addSuccessor(Target);
-      // }
-      // MBB->removeSuccessor(Target);
-      // MDT->calculate(*MF);
-      // MPDT->getBase().recalculate(*MF);
-      // for (auto *E : Exits)
-      //   linearizeBranch(Exiting, Target, E);
-      // CreatedExit = true;
     }
   }
 
@@ -223,19 +207,8 @@ void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
   SmallVector<MachineBasicBlock *, 8> Choices;
 
   for (auto &Pair : ToLinearize) {
-    // bool Skip = false;
-    // for (auto &PSucc : Pair.first->successors()) {
-    //   if (UncondEdges.contains({Pair.first, PSucc})) {
-    //     assert(MPDT->dominates(Target, PSucc) && "Failed to linearize");
-    //     Skip = true;
-    //   }
-    // }
-    // if (Skip) {
-    //   FinishedExitings.push_back(Pair.first);
-    //   CreatedExit = true;
-    //   continue;
-    // }
-    if (Pair.first == Target) {
+    auto *Exiting = Pair.first;
+    if (Exiting == Target) {
       CreatedExit = true;
       continue;
     }
@@ -244,35 +217,30 @@ void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
 
     if (CreatedExit) {
       for (auto *MBB : FinishedExitings)
-        if (Pair.first->isSuccessor(MBB))
+        if (Exiting->isSuccessor(MBB))
           Choices.push_back(MBB);
     }
 
     if (Choices.size() > 0) {
-      // If we already created another exit point, we need to jump to
-      // another internal block of the region instead of to the target
-      // Choices.clear();
-      // for (auto *MBB : Pair.second.first)
-      //   Choices.push_back(MBB);
-      Succ = chooseUnconditionalSuccessor(Pair.first, Choices);
+      Succ = chooseUnconditionalSuccessor(Exiting, Choices);
       assert(Succ &&
              "Cannot linearize branch: no valid unconditional successor");
     } else {
-      if (!Pair.first->isSuccessor(Target) &&
-          !GhostEdges.contains({Pair.first, Target})) {
-        GhostEdges.insert({Pair.first, Target});
-        Pair.first->addSuccessor(Target);
+      if (!Exiting->isSuccessor(Target) &&
+          !GhostEdges.contains({Exiting, Target})) {
+        GhostEdges.insert({Exiting, Target});
+        Exiting->addSuccessor(Target);
       }
       if (MBB->isSuccessor(Target))
         MBB->removeSuccessor(Target);
       MDT->calculate(*MF);
       MPDT->getBase().recalculate(*MF);
-      FinishedExitings.push_back(Pair.first);
+      FinishedExitings.push_back(Exiting);
       CreatedExit = true;
     }
     for (auto *E : Pair.second.second)
-      if (!MPDT->dominates(Succ, Pair.first))
-        linearizeBranch(Pair.first, Succ, E);
+      if (!MPDT->dominates(Succ, Exiting))
+        linearizeBranch(Exiting, Succ, E);
   }
 
   assert(CreatedExit && "Unable to exit activating region");
@@ -282,7 +250,6 @@ void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
     MDT->calculate(*MF);
     MPDT->getBase().recalculate(*MF);
   }
-  // }
 
   UncondEdges.insert({MBB, UncondSucc});
 
@@ -315,6 +282,9 @@ void AMiLinearizationAnalysis::findSecretDependentBranches() {
 }
 
 void AMiLinearizationAnalysis::createActivatingRegions() {
+  LLVM_DEBUG(MDT->dump());
+  LLVM_DEBUG(MPDT->dump());
+  
   SmallPtrSet<MachineBasicBlock *, 8> Blocks;
   for (auto &MBB : *MF)
     Blocks.insert(&MBB);
