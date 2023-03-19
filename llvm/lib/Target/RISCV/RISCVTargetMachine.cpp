@@ -371,7 +371,8 @@ void RISCVPassConfig::addPreEmitPass2() {
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(createTrackSecretsAnalysisPass(false));
-    addPass(createSensitiveRegionAnalysisPass(false));
+    addPass(createAMiLinearizationAnalysisPass(true));
+    // addPass(createSensitiveRegionAnalysisPass(false));
     addPass(createPersistencyAnalysisPass(false));
     // addPass(createRISCVLinearizeBranchPass());
     addPass(createRISCVAMiLinearizeRegionPass());

@@ -31,10 +31,8 @@ public:
 
   const RISCVInstrInfo *TII;
   const RISCVRegisterInfo *TRI;
-  SensitiveRegionAnalysis *SRA;
+  AMiLinearizationAnalysis *ALA;
   PersistencyAnalysisPass *PA;
-  SmallPtrSet<MachineRegion *, 16> ActivatingRegions;
-  SmallVector<SensitiveBranch, 16> ActivatingBranches;
 
   RISCVAMiLinearizeRegion();
 
@@ -45,7 +43,7 @@ public:
   bool isActivatingBranch(MachineBasicBlock &MBB);
   void findActivatingRegions();
   void handlePersistentInstr(MachineInstr *I);
-  void handleRegion(MachineRegion *Region);
+  void handleRegion(ActivatingRegion *Region);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -54,8 +52,7 @@ public:
     AU.addRequiredTransitive<MachineDominatorTree>();
     AU.addRequiredTransitive<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
-    // AU.addRequiredTransitive<MachineRegionInfoPass>();
-    AU.addRequired<SensitiveRegionAnalysis>();
+    AU.addRequired<AMiLinearizationAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

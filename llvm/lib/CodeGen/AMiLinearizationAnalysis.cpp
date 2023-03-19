@@ -10,6 +10,7 @@
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/PassRegistry.h"
+#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
@@ -139,6 +140,13 @@ void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
     LLVM_DEBUG(Target->printAsOperand(errs()));
     LLVM_DEBUG(errs() << "\n");
 
+    // // Make fallthrough explicit if we need to make it activating
+    // if (!AnalysisOnly && MBB->succ_size() == 1 &&
+    //     MBB->getFirstTerminator() == MBB->end() && MBB->getFallThrough() &&
+    //     MBB->getFallThrough() != Target)
+    //   MF->getSubtarget().getInstrInfo()->insertUnconditionalBranch(
+    //       *MBB, MBB->getFallThrough(), DebugLoc());
+
     SmallVector<MachineBasicBlock *, 4> Exitings;
     findActivatingRegionExitings(UncondSucc, Target, Exitings);
 
@@ -165,7 +173,8 @@ void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
       }
 
       if (!IsUnconditionalExiting) {
-        // Postpone linearization until after all other exiting blocks have been considered.
+        // Postpone linearization until after all other exiting blocks have been
+        // considered.
         ToLinearize.push_back({Exiting, std::move(InternalSuccessors)});
       } else {
         // Only add successors if exiting block is linearized with
@@ -250,7 +259,8 @@ void AMiLinearizationAnalysis::createActivatingRegions() {
       Blocks.insert(Node->getBlock());
     }
 
-    ActivatingRegions.insert({Edge, ActivatingRegion(Branch, Entry, Exit, Blocks)});
+    ActivatingRegions.insert(
+        {Edge, ActivatingRegion(Branch, Entry, Exit, Blocks)});
     ActivatingRegion *AR = &ActivatingRegions.find(Edge)->getSecond();
     for (auto *MBB : Blocks) {
       RegionMap[MBB].insert(AR);

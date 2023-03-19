@@ -53,7 +53,7 @@ class AMiAlwaysPersistent : QualifiedInst<1> {
 //===----------------------------------------------------------------------===//
 
 multiclass AMiBranchCC_rri<bits<3> funct3, string opcodestr> {
-let AMiClass = Activatable, hasSideEffects = 1 in {
+let AMiClass = Activatable, hasSideEffects = 1, isBranch = 0 in {
   let Opcode = OPC_ABRANCH.Value in
   def A#NAME : BranchCC_rri<funct3, "a."#opcodestr>, QualifiedInst;
   let Opcode = OPC_CTBRANCH.Value in

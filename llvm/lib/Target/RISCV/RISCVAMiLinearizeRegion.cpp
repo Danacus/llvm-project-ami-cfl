@@ -55,7 +55,8 @@ void RISCVAMiLinearizeRegion::setQualifier(MachineInstr *I) {
   }
 }
 
-bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB, MachineBasicBlock *Target) {
+bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB,
+                                                  MachineBasicBlock *Target) {
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
   if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
@@ -107,33 +108,36 @@ bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB, Machin
   return true;
 }
 
-void RISCVAMiLinearizeRegion::setBranchInstrActivating(MachineInstr *I, MachineBasicBlock *Target) {
+void RISCVAMiLinearizeRegion::setBranchInstrActivating(
+    MachineInstr *I, MachineBasicBlock *Target) {
   MachineBasicBlock *Dest = TII->getBranchDestBlock(*I);
   if (!Target || Target == Dest) {
     if (I->getDesc().isConditionalBranch())
       setQualifier<llvm::RISCV::AMi::Activating>(I);
 
     if (I->getDesc().isUnconditionalBranch()) {
-      // HACK: Since a.jal doesn't behave like a call, we need to use a.beq zero, zero
-      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(RISCV::ABEQ))
-        .addReg(RISCV::X0)
-        .addReg(RISCV::X0)
-        .addMBB(Dest);
+      // HACK: Since a.jal doesn't behave like a call, we need to use a.beq
+      // zero, zero I might fix this in Proteus instead
+      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
+              TII->get(RISCV::ABEQ))
+          .addReg(RISCV::X0)
+          .addReg(RISCV::X0)
+          .addMBB(Dest);
       I->eraseFromParent();
     }
   }
 }
 
-void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
-  LLVM_DEBUG(errs() << "Handling region " << *Region << "\n");
-  /*
+void RISCVAMiLinearizeRegion::handleRegion(ActivatingRegion *Region) {
+  LLVM_DEBUG(errs() << "Handling region");
+  LLVM_DEBUG(Region->dump());
+  LLVM_DEBUG(errs() << "\n");
+
   for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
     setQualifier<RISCV::AMi::Persistent>(MI);
   }
-  */
 
   LLVM_DEBUG(errs() << "Stores\n");
-  /*
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
@@ -158,8 +162,8 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
       Op1.setIsKill(false);
       MachineOperand Op2 = I->getOperand(2);
 
-      auto Opcode = RISCV::AMi::getQualified<RISCV::AMi::Ghost>(
-          TII->getMatchingLoad(*I));
+      auto Opcode =
+          RISCV::AMi::getQualified<RISCV::AMi::Ghost>(TII->getMatchingLoad(*I));
       BuildMI(*I->getParent(), I->getIterator(), DebugLoc(), TII->get(Opcode),
               I->getOperand(0).getReg().asMCReg())
           .add(Op1)
@@ -169,56 +173,46 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
                        "mimicry mode!");
     }
   }
-  */
 }
 
 bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG(errs() << "AMi Linearize Region Pass\n");
+  LLVM_DEBUG(MF.dump());
 
   const auto &ST = MF.getSubtarget<RISCVSubtarget>();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
   PA = &getAnalysis<PersistencyAnalysisPass>();
+  ALA = &getAnalysis<AMiLinearizationAnalysis>();
 
-  SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  const auto *MRI = SRA->getRegionInfo();
-  ActivatingBranches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
+  for (auto &Pair : ALA->ActivatingRegions) {
+    auto &Region = Pair.getSecond();
 
-  std::sort(ActivatingBranches.begin(), ActivatingBranches.end(),
-            std::greater<SensitiveBranch>());
+    // Make fallthrough explicit if we need to make it activating
+    if (Region.Branch->succ_size() == 1 &&
+        Region.Branch->getFirstTerminator() == Region.Branch->end() &&
+        Region.Branch->getFallThrough() == Region.Exit)
+      TII->insertUnconditionalBranch(
+          *Region.Branch, Region.Branch->getFallThrough(), DebugLoc());
 
-  handleRegion(MRI->getTopLevelRegion());
-
-  for (auto &Branch : ActivatingBranches) {
-    setBranchActivating(*Branch.MBB);
-    // if (Branch.FlowBlock)
-    //   setBranchActivating(*Branch.FlowBlock);
-
-    for (auto *Region : Branch.Regions) {
-      SmallVector<MachineBasicBlock *> Exitings;
-      Region->getExitingBlocks(Exitings);
-      for (auto *Exiting : Exitings)
-        setBranchActivating(*Exiting, Region->getExit());
-      handleRegion(Region);
-    }
-    /*
-    if (Branch.IfRegion) {
-      SmallVector<MachineBasicBlock *> Exitings;
-      Branch.IfRegion->getExitingBlocks(Exitings);
-      for (auto *Exiting : Exitings)
-        setBranchActivating(*Exiting, Branch.IfRegion->getExit());
-      handleRegion(Branch.IfRegion);
-    }
-    if (Branch.ElseRegion) {
-      SmallVector<MachineBasicBlock *> Exitings;
-      Branch.ElseRegion->getExitingBlocks(Exitings);
-      for (auto *Exiting : Exitings)
-        setBranchActivating(*Exiting, Branch.ElseRegion->getExit());
-      handleRegion(Branch.ElseRegion);
-    }
-    */
+    
+    setBranchActivating(*Region.Branch, Region.Exit);
+    // for (auto *Succ : Region.Branch->successors()) {
+    //   if (Succ != Region.Entry) {
+    //     Region.Branch->removeSuccessor(Succ);
+    //   }
+    // }
+    handleRegion(&Region);
   }
 
+  for (auto &Edge : ALA->GhostEdges) {
+    if (!Edge.first->isSuccessor(Edge.second)) {
+      TII->insertUnconditionalBranch(*Edge.first, Edge.second, DebugLoc());
+      Edge.first->addSuccessor(Edge.second);
+    }
+  }
+
+  LLVM_DEBUG(MF.dump());
   return true;
 }
 
