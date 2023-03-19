@@ -399,7 +399,7 @@ void RISCVPassConfig::addPostSSADestruction() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(createTrackSecretsAnalysisPass(true));
     addPass(createAMiLinearizationAnalysisPass(true));
-    addPass(createSensitiveRegionAnalysisPass(true));
+    // addPass(createSensitiveRegionAnalysisPass(true));
     // addPass(&CreateSensitiveRegionsID);
     // addPass(&InsertPersistentDefsPassID);
     addPass(&AddMimicryConstraintsPassID);

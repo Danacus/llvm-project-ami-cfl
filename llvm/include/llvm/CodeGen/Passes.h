@@ -190,7 +190,6 @@ namespace llvm {
   // extern char &SensitiveRegionAnalysisPhysRegID;
   extern char &AddMimicryConstraintsPassID;
   extern char &AMiLinearizationAnalysisID;
-  extern char &InsertPersistentDefsPassID;
   extern char &RemovePersistentDefsPassID;
   extern char &PersistencyAnalysisPassID;
   extern char &RemoveBranchPseudosPassID;

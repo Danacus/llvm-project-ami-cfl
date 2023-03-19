@@ -148,7 +148,6 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeCreateSensitiveRegionsPass(Registry);
   initializePersistencyAnalysisPassPass(Registry);
   initializeAddMimicryConstraintsPass(Registry);
-  initializeInsertPersistentDefsPass(Registry);
   initializeRemovePersistentDefsPass(Registry);
   initializeRemoveBranchPseudosPass(Registry);
   initializeRemoveSecretPseudosPass(Registry);

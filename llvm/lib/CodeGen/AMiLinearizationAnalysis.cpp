@@ -241,6 +241,7 @@ void AMiLinearizationAnalysis::findSecretDependentBranches() {
 
 void AMiLinearizationAnalysis::createActivatingRegions() {
   for (auto &Edge : ActivatingEdges) {
+    auto *Branch = Edge.first;
     auto *Entry = Edge.first->getSingleSuccessor();
     auto *Exit = Edge.second;
 
@@ -249,7 +250,11 @@ void AMiLinearizationAnalysis::createActivatingRegions() {
       Blocks.insert(Node->getBlock());
     }
 
-    ActivatingRegions.insert({Edge, ActivatingRegion(Entry, Exit, Blocks)});
+    ActivatingRegions.insert({Edge, ActivatingRegion(Branch, Entry, Exit, Blocks)});
+    ActivatingRegion *AR = &ActivatingRegions.find(Edge)->getSecond();
+    for (auto *MBB : Blocks) {
+      RegionMap[MBB].insert(AR);
+    }
 
     // Check that activating region is SESE
     // - Entry dominates exiting block by construction
@@ -288,6 +293,7 @@ bool AMiLinearizationAnalysis::runOnMachineFunction(MachineFunction &MF) {
   UncondEdges.clear();
   ActivatingEdges.clear();
   ActivatingRegions.clear();
+  RegionMap.clear();
 
   findSecretDependentBranches();
 
@@ -337,23 +343,8 @@ void AMiLinearizationAnalysis::print(raw_ostream &OS, const Module *) const {
 
   OS << "Activating regions:\n";
 
-  for (auto &Region : ActivatingRegions) {
-    OS << "<";
-    Region.getFirst().first->printAsOperand(OS);
-    OS << " " << Region.getFirst().first->getName();
-    OS << ", ";
-    Region.getFirst().second->printAsOperand(OS);
-    OS << " " << Region.getFirst().second->getName();
-    OS << ">\n";
-
-    OS << "Region blocks:\n";
-
-    for (auto *Block : Region.getSecond().Blocks) {
-      Block->printAsOperand(OS);
-      OS << " " << Block->getName();
-      OS << "\n";
-    }
-
+  for (auto &Pair : ActivatingRegions) {
+    Pair.getSecond().print(OS);
     OS << "------------\n";
   }
 }

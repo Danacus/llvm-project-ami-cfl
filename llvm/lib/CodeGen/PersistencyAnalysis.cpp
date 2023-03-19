@@ -15,12 +15,10 @@ using namespace llvm;
 
 void PersistencyAnalysisPass::propagatePersistency(
     const MachineFunction &MF, MachineInstr &MI, const MachineOperand &MO,
-    const MachineRegion *MR,
-    SmallPtrSet<MachineInstr *, 16> &PersistentDefs) {
+    const ActivatingRegion *MR) {
   LLVM_DEBUG(errs() << "propagatePersistency\n");
   LLVM_DEBUG(MI.dump());
   LLVM_DEBUG(MO.dump());
-  LLVM_DEBUG(MR->dump());
   LLVM_DEBUG(errs() << "\n");
 
   if (!MO.isReg())
@@ -45,9 +43,9 @@ void PersistencyAnalysisPass::propagatePersistency(
     auto *I = WorkSet.pop_back_val();
     LLVM_DEBUG(I->dump());
 
-    if (PersistentDefs.contains(I))
+    if (PersistentInstructions[MR].contains(I))
       continue;
-    PersistentDefs.insert(I);
+    PersistentInstructions[MR].insert(I);
 
     for (auto &Op : I->operands()) {
       if (!Op.isReg() || !Op.isUse())
@@ -78,39 +76,26 @@ void PersistencyAnalysisPass::propagatePersistency(
 }
 
 void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
-                                            const MachineRegion *MR,
-                                            const MachineRegion *Scope) {
+                                            const ActivatingRegion *MR) {
   LLVM_DEBUG(errs() << "Analyze region: \n");
   LLVM_DEBUG(MR->dump());
-  LLVM_DEBUG(errs() << "in scope\n");
-  LLVM_DEBUG(Scope->dump());
-  LLVM_DEBUG(errs() << "\n");
 
-  SmallPtrSet<MachineInstr *, 16> *LocalPersistentDefs =
-      &PersistentInstructions[Scope];
+  for (auto *MBB : MR->blocks()) {
+    SmallVector<MachineOperand, 4> LeakedOperands;
+    for (MachineInstr &MI : *MBB) {
+      LeakedOperands.clear();
+      TII->constantTimeLeakage(MI, LeakedOperands);
 
-  for (const auto *Node : MR->elements()) {
-    if (Node->isSubRegion()) {
-      analyzeRegion(MF, Node->getNodeAs<MachineRegion>(), Scope);
-    } else {
-      MachineBasicBlock *MBB = Node->getNodeAs<MachineBasicBlock>();
-      SmallVector<MachineOperand, 4> LeakedOperands;
-      for (MachineInstr &MI : *MBB) {
-        LeakedOperands.clear();
-        TII->constantTimeLeakage(MI, LeakedOperands);
+      // TODO: Create alternative for Molnar linearization
+      if (TII->isPersistentStore(MI)) {
+        PersistentStores[MR].insert(&MI);
+      }
+      if (MI.isCall()) {
+        CallInstructions[MR].insert(&MI);
+      }
 
-        if (Scope == MR) {
-          if (TII->isPersistentStore(MI)) {
-            PersistentStores[Scope].insert(&MI);
-          }
-          if (MI.isCall()) {
-            CallInstructions[Scope].insert(&MI);
-          }
-        }
-
-        for (auto &MO : LeakedOperands) {
-          propagatePersistency(MF, MI, MO, Scope, *LocalPersistentDefs);
-        }
+      for (auto &MO : LeakedOperands) {
+        propagatePersistency(MF, MI, MO, MR);
       }
     }
   }
@@ -121,8 +106,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  SRA = &getAnalysis<SensitiveRegionAnalysis>();
-  const auto *MRI = SRA->getRegionInfo();
+  ALA = &getAnalysis<AMiLinearizationAnalysis>();
 
   if (!IsSSA) {
     RDA = &getAnalysis<ReachingDefAnalysis>();
@@ -133,35 +117,8 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   CallInstructions.clear();
   PersistentRegionInputMap.clear();
 
-  for (auto &B : SRA->sensitive_branches()) {
-    LLVM_DEBUG(errs() << "Sensitive branch: " << B.MBB->getFullName() << "\n");
-    LLVM_DEBUG(errs() << "if region:\n");
-    LLVM_DEBUG(errs() << B.ifRegion() << "\n");
-    LLVM_DEBUG(B.ifRegion()->dump());
-
-    if (B.elseRegion()) {
-      LLVM_DEBUG(errs() << "else region:\n");
-      LLVM_DEBUG(errs() << B.elseRegion() << "\n");
-      LLVM_DEBUG(B.elseRegion()->dump());
-    }
-  }
-  auto Branches = SmallVector<SensitiveBranch>(SRA->sensitive_branches());
-  std::sort(Branches.begin(), Branches.end());
-
-  // Entire function can be called in mimicry mode, so treat the top level
-  // region as an activating region.
-  analyzeRegion(MF, MRI->getTopLevelRegion());
-
-  for (auto &Branch : Branches) {
-    /*
-    analyzeRegion(MF, Branch.IfRegion);
-    if (Branch.ElseRegion) {
-      analyzeRegion(MF, Branch.ElseRegion);
-    }
-    */
-    for (auto *Region : Branch.Regions) {
-      analyzeRegion(MF, Region);
-    }
+  for (auto &Pair : ALA->ActivatingRegions) {
+    analyzeRegion(MF, &Pair.getSecond());
   }
 
   LLVM_DEBUG(errs() << "Persistent instructions: \n");
@@ -176,9 +133,9 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 
   LLVM_DEBUG(errs() << "Persistent stores: \n");
 
-  for (const auto &Pair : PersistentStores)  {
+  for (const auto &Pair : PersistentStores) {
     LLVM_DEBUG(Pair.first->dump());
-    
+
     for (const auto *MI : Pair.second) {
       LLVM_DEBUG(MI->dump());
     }
@@ -190,13 +147,14 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
 char PersistencyAnalysisPass::ID = 0;
 char &llvm::PersistencyAnalysisPassID = PersistencyAnalysisPass::ID;
 
-PersistencyAnalysisPass::PersistencyAnalysisPass(bool IsSSA) : MachineFunctionPass(ID), IsSSA(IsSSA) {
+PersistencyAnalysisPass::PersistencyAnalysisPass(bool IsSSA)
+    : MachineFunctionPass(ID), IsSSA(IsSSA) {
   initializePersistencyAnalysisPassPass(*PassRegistry::getPassRegistry());
 }
 
 INITIALIZE_PASS_BEGIN(PersistencyAnalysisPass, DEBUG_TYPE,
                       "Persistency Analysis", true, true)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
+INITIALIZE_PASS_DEPENDENCY(AMiLinearizationAnalysis)
 INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
 INITIALIZE_PASS_END(PersistencyAnalysisPass, DEBUG_TYPE, "Persistency Analysis",
                     true, true)

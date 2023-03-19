@@ -69,7 +69,6 @@ add_llvm_component_library(LLVMCodeGen
   FindSecrets.cpp
   SensitiveRegion.cpp
   PersistencyAnalysis.cpp
-  InsertPersistentDefs.cpp
   RemovePersistentDefs.cpp
   RemoveSecretPseudos.cpp
   RemoveBranchPseudos.cpp

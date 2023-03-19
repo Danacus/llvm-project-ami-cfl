@@ -33,7 +33,6 @@
 #include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
 #include "llvm/CodeGen/EdgeBundles.h"
-#include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervalUnion.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -221,6 +220,8 @@ void RAGreedy::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LiveRegMatrix>();
   AU.addUsedIfAvailable<SensitiveRegionAnalysis>();
   AU.addPreserved<SensitiveRegionAnalysis>();
+  AU.addUsedIfAvailable<AMiLinearizationAnalysis>();
+  AU.addPreserved<AMiLinearizationAnalysis>();
   AU.addUsedIfAvailable<AddMimicryConstraints>();
   AU.addPreserved<AddMimicryConstraints>();
   AU.addRequired<EdgeBundles>();

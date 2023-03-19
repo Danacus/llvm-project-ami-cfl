@@ -21,8 +21,8 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
-#include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -245,7 +245,7 @@ void MachineScheduler::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<LiveIntervals>();
   AU.addPreserved<LiveIntervals>();
   AU.addPreserved<SensitiveRegionAnalysis>();
-  AU.addPreserved<InsertPersistentDefs>();
+  AU.addPreserved<AMiLinearizationAnalysis>();
   AU.addPreserved<AddMimicryConstraints>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }

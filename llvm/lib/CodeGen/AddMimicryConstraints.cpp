@@ -19,84 +19,36 @@ using namespace llvm;
 char AddMimicryConstraints::ID = 0;
 char &llvm::AddMimicryConstraintsPassID = AddMimicryConstraints::ID;
 
-void AddMimicryConstraints::addConstraintsToPreRegions(MachineInstr *MI) {
-  auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
+void AddMimicryConstraints::addConstraints(MachineInstr *MI) {
+  auto &ALA = getAnalysis<AMiLinearizationAnalysis>();
   auto *MBB = MI->getParent();
 
   MachineFunction &MF = *MBB->getParent();
   LLVM_DEBUG(MI->dump());
 
-  // MachineRegion *CurrentRegion = SRA.getSensitiveRegion(MBB);
-
-  for (auto &Branch : SRA.sensitive_branches(MBB, true)) {
-    // if (!Branch.ElseRegion->contains(MI))
-    //   continue;
-
-    // MachineRegion &MR = *Branch.IfRegion;
-
-    for (auto *MR : Branch.Regions) {
-      if (MR->contains(MBB))
-        break;
-      
-      SmallVector<MachineBasicBlock *> Exitings;
-      MR->getExitingBlocks(Exitings);
-
-      for (auto &Exiting : Exitings) {
-        for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
-          Register OtherReg = Register::index2VirtReg(RegI);
-          if (LIS->hasInterval(OtherReg)) {
-            LiveInterval &OtherI = LIS->getInterval(OtherReg);
-            if (LIS->isLiveOutOfMBB(OtherI, Exiting)) {
-              addConstraint(OtherI, LIS->getMBBEndIdx(Exiting).getPrevIndex(), MI);
-            }
-          }
+  // For each activating region that contains this instruction
+  for (auto *AR : ALA.RegionMap[MBB]) {
+    for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
+      Register OtherReg = Register::index2VirtReg(RegI);
+      if (LIS->hasInterval(OtherReg)) {
+        LiveInterval &OtherI = LIS->getInterval(OtherReg);
+        if (LIS->isLiveInToMBB(OtherI, AR->Exit) && LIS->isLiveOutOfMBB(OtherI, AR->Branch)) {
+          // Add a constraint for each register that is live on the activating edge,
+          // by adding a live segment of MI at the start of the exit.
+          // That way, a segment of the persistent instruction is within a segment
+          // of each register that lives through the activating region.
+          addConstraint(OtherI, LIS->getMBBStartIdx(AR->Exit), MI);
         }
       }
     }
   }
-}
-
-void AddMimicryConstraints::addConstraintsToPostRegions(MachineInstr *MI) {
-  auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
-  auto *MBB = MI->getParent();
-
-  MachineFunction &MF = *MBB->getParent();
-  LLVM_DEBUG(MI->dump());
-
-  for (auto &Branch : SRA.sensitive_branches(MBB, false)) {
-    // if (!Branch.ElseRegion)
-    //   continue;
-
-    // if (!Branch.IfRegion->contains(MI))
-    //   continue;
-
-    // MachineRegion &MR = *Branch.ElseRegion;
-
-    for (auto *MR : reverse(Branch.Regions)) {
-      if (MR->contains(MBB))
-        break;
-
-      auto *Entry = MR->getEntry();
-
-      for (unsigned RegI = 0; RegI < MF.getRegInfo().getNumVirtRegs(); RegI++) {
-        Register OtherReg = Register::index2VirtReg(RegI);
-        if (LIS->hasInterval(OtherReg)) {
-          LiveInterval &OtherI = LIS->getInterval(OtherReg);
-          if (LIS->isLiveInToMBB(OtherI, Entry)) {
-            addConstraint(OtherI, LIS->getMBBStartIdx(Entry), MI);
-          }
-        }
-      }
-    }
-  }
-}
-
-void AddMimicryConstraints::addConstraintsToRegions(MachineInstr *MI) {
-  addConstraintsToPostRegions(MI);
-  addConstraintsToPreRegions(MI);
 }
 
 void AddMimicryConstraints::addConstraint(LiveInterval &LI, SlotIndex SI, MachineInstr *ConflictingMI) {
+  LLVM_DEBUG(errs() << "--- addConstraint ---\n");
+  LLVM_DEBUG(LI.dump());
+  LLVM_DEBUG(ConflictingMI->dump());
+  LLVM_DEBUG(SI.dump());
   // SlotIndex Start =
   //     LIS->getSlotIndexes()->getInstructionIndex(*ConflictingMI).getRegSlot();
   SlotIndex End =
@@ -105,6 +57,8 @@ void AddMimicryConstraints::addConstraint(LiveInterval &LI, SlotIndex SI, Machin
   VNInfo *VNI = LI.getVNInfoAt(SI);
   if (!LI.liveAt(Start))
     LI.addSegment(LiveRange::Segment(Start, End, VNI));
+  LLVM_DEBUG(LI.dump());
+  LLVM_DEBUG(errs() << "-------------\n");
 }
 
 void AddMimicryConstraints::insertGhostLoad(MachineInstr *StoreMI) {
@@ -127,8 +81,11 @@ void AddMimicryConstraints::insertGhostLoad(MachineInstr *StoreMI) {
                      .addReg(Reg);
   StoreMI->getOperand(0).setReg(NewReg);
   LIS->InsertMachineInstrInMaps(*GhostMI);
+  auto &LI = LIS->getInterval(NewReg);
+  LLVM_DEBUG(errs() << "Created interval for ghost load\n");
+  LLVM_DEBUG(LI.dump());
 
-  addConstraintsToRegions(&*GhostMI);
+  addConstraints(&*GhostMI);
 }
 
 bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
@@ -136,73 +93,24 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
 
-  auto &SRA = getAnalysis<SensitiveRegionAnalysis>();
-  const auto *MRI = SRA.getRegionInfo();
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
+  auto &ALA = getAnalysis<AMiLinearizationAnalysis>();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
   assert(LIS && "LIS must be available");
 
-  for (auto *MI : PA.getPersistentStores(MRI->getTopLevelRegion()))
-    insertGhostLoad(MI);
+  // TODO: AMiLinearizationAnalysis should detect top level region as an activating region
+  // for (auto *MI : PA.getPersistentStores(MRI->getTopLevelRegion()))
+    // insertGhostLoad(MI);
 
-  for (auto &B : SRA.sensitive_branches()) {
-    for (auto *Region : B.Regions) {
-      auto PersistentInstrs = PA.getPersistentInstructions(Region);
-      for (auto *MI : PersistentInstrs) {
-        addConstraintsToPreRegions(MI);
-        addConstraintsToPostRegions(MI);
-      }
-      for (auto *MI : PA.getPersistentStores(Region))
-        insertGhostLoad(MI);
+  for (auto &Pair : ALA.ActivatingRegions) {
+    auto &Region = Pair.getSecond();
+    auto PersistentInstrs = PA.getPersistentInstructions(&Region);
+    for (auto *MI : PersistentInstrs) {
+      addConstraints(MI);
     }
-    
-    /*
-    if (B.ElseRegion) {
-      auto ElsePersistentInstrs = PA.getPersistentInstructions(B.ElseRegion);
-      for (auto *MI : ElsePersistentInstrs)
-        addConstraintsToPreRegions(MI);
-      for (auto *MI : PA.getPersistentStores(B.ElseRegion))
-        insertGhostLoad(MI);
-
-      auto IfPersistentInstrs = PA.getPersistentInstructions(B.IfRegion);
-      for (auto *MI : IfPersistentInstrs)
-        addConstraintsToPostRegions(MI);
-      for (auto *MI : PA.getPersistentStores(B.IfRegion))
-        insertGhostLoad(MI);
-    }
-    */
+    for (auto *MI : PA.getPersistentStores(&Region))
+      insertGhostLoad(MI);    
   }
-
-  /*
-  for (auto &B : SRA.sensitive_branches()) {
-    SmallVector<MachineBasicBlock *> Exitings;
-    B.IfRegion->getExitingBlocks(Exitings);
-
-    if (!B.ElseRegion)
-      continue;
-
-    MachineBasicBlock::iterator I = B.MBB->getLastNonDebugInstr();
-    if (I != B.MBB->end()) {
-      for (auto J = I.getReverse(); J != B.MBB->rend() && J->isTerminator();
-           J++) {
-        if (J->getDesc().isConditionalBranch()) {
-          for (auto &MO : J->operands()) {
-            if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual()) {
-              LiveInterval &IncomingLI = LIS->getInterval(MO.getReg());
-              for (auto &Exiting : Exitings) {
-                SlotIndex End = LIS->getMBBEndIdx(Exiting)
-                                    .getRegSlot()
-                                    .getPrevIndex()
-                                    .getRegSlot();
-                LIS->extendToIndices(IncomingLI, End);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  */
 
   LLVM_DEBUG(MF.dump());
   LLVM_DEBUG(LIS->dump());
@@ -216,7 +124,7 @@ AddMimicryConstraints::AddMimicryConstraints() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(AddMimicryConstraints, DEBUG_TYPE,
                       "Add Mimicry Constraints", false, false)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
+INITIALIZE_PASS_DEPENDENCY(AMiLinearizationAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
 INITIALIZE_PASS_END(AddMimicryConstraints, DEBUG_TYPE,

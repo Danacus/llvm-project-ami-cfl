@@ -54,6 +54,7 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
           *BranchBlock, BranchBlock->getSingleSuccessor(), DebugLoc());
   }
 
+  /*
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
     Register LoadedReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
     Register StoredReg = RegInfo->createVirtualRegister(&RISCV::GPRRegClass);
@@ -74,6 +75,7 @@ void RISCVMolnarLinearizeRegion::handleRegion(MachineBasicBlock *BranchBlock,
         .addReg(GlobalTakenAddrReg)
         .addGlobalAddress(GlobalTaken, 0, RISCVII::MO_LO);
   }
+  */
 }
 
 Register RISCVMolnarLinearizeRegion::loadTakenReg(MachineFunction &MF) {

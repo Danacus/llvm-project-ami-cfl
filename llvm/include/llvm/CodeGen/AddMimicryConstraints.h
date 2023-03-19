@@ -1,6 +1,7 @@
 #ifndef LLVM_CODEGEN_ADD_MIMICRY_CONSTRAINTS
 #define LLVM_CODEGEN_ADD_MIMICRY_CONSTRAINTS
 
+#include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -27,18 +28,14 @@ public:
   AddMimicryConstraints();
   
   void insertGhostLoad(MachineInstr *StoreMI);
-  void addConstraintsToPreRegions(MachineInstr *MI);
-  void addConstraintsToPostRegions(MachineInstr *MI);
-  void addConstraintsToRegions(MachineInstr *MI);
-  void insertPersistentDefs(MachineRegion *MR);
-
+  void addConstraints(MachineInstr *MI);
   void addConstraint(LiveInterval &LI, SlotIndex SI, MachineInstr *ConflictingMI);
   
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysis>();
-    AU.addPreserved<SensitiveRegionAnalysis>();
+    AU.addRequired<AMiLinearizationAnalysis>();
+    AU.addPreserved<AMiLinearizationAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     // AU.addRequiredTransitive<MachineRegionInfoPass>();

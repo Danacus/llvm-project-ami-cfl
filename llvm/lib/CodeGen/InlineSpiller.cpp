@@ -22,7 +22,6 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
-#include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveRangeEdit.h"
@@ -163,7 +162,7 @@ class InlineSpiller : public Spiller {
   MachineLoopInfo &Loops;
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
-  SensitiveRegionAnalysis *SRA;
+  AMiLinearizationAnalysis *ALA;
   AddMimicryConstraints *AMC;
   const TargetInstrInfo &TII;
   const TargetRegisterInfo &TRI;
@@ -203,7 +202,7 @@ public:
         LSS(Pass.getAnalysis<LiveStacks>()),
         MDT(Pass.getAnalysis<MachineDominatorTree>()),
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
-        MRI(MF.getRegInfo()), SRA(Pass.getAnalysisIfAvailable<SensitiveRegionAnalysis>()),
+        MRI(MF.getRegInfo()), ALA(Pass.getAnalysisIfAvailable<AMiLinearizationAnalysis>()),
         AMC(Pass.getAnalysisIfAvailable<AddMimicryConstraints>()),
         TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
@@ -1048,7 +1047,7 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   assert(!MI->isTerminator() && "Inserting a spill after a terminator");
   MachineBasicBlock &MBB = *MI->getParent();
 
-  if (SRA && SRA->isSensitive(&MBB)) {
+  if (ALA && ALA->RegionMap[&MBB].empty()) {
     Register GhostReg = Edit->createFrom(Original);
 
     BuildMI(MBB, std::next(MI), DebugLoc(),
@@ -1078,14 +1077,14 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   for (const MachineInstr &MI : make_range(Spill, MIS.end()))
     getVDefInterval(MI, LIS);
 
-  if (SRA && SRA->isSensitive(&MBB)) {    
+  if (ALA && !ALA->RegionMap[&MBB].empty()) {
     MachineBasicBlock::iterator GhostMI = MI;
     MachineInstrSpan GhostMIS(GhostMI, &MBB);
     LIS.InsertMachineInstrRangeInMaps(GhostMI, GhostMIS.end());
     for (const MachineInstr &MI : make_range(GhostMI, GhostMIS.end()))
       getVDefInterval(MI, LIS);
 
-    AMC->addConstraintsToRegions(&*GhostMI);
+    AMC->addConstraints(&*GhostMI);
   }
 
   LLVM_DEBUG(

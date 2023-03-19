@@ -16,25 +16,72 @@ using namespace llvm;
 namespace llvm {
 
 struct ActivatingRegion {
+  using BlockSet = SmallPtrSet<MachineBasicBlock *, 8>;
+  using iterator = BlockSet::iterator;
+  using const_iterator = BlockSet::const_iterator;
+
+  MachineBasicBlock *Branch;
   MachineBasicBlock *Entry;
   MachineBasicBlock *Exit;
-  SmallPtrSet<MachineBasicBlock *, 8> Blocks;
+  BlockSet Blocks;
 
-  ActivatingRegion(MachineBasicBlock *Entry, MachineBasicBlock *Exit,
+  ActivatingRegion(const ActivatingRegion &) = delete;
+  ActivatingRegion(ActivatingRegion &&) = default;
+  ActivatingRegion &operator=(const ActivatingRegion &) = delete;
+  ActivatingRegion &operator=(ActivatingRegion &&) = delete;
+  ActivatingRegion(MachineBasicBlock *Branch, MachineBasicBlock *Entry,
+                   MachineBasicBlock *Exit,
                    SmallPtrSet<MachineBasicBlock *, 8> Blocks)
-      : Entry(Entry), Exit(Exit), Blocks(std::move(Blocks)) {}
+      : Branch(Branch), Entry(Entry), Exit(Exit), Blocks(std::move(Blocks)) {}
+
+  iterator blocks_begin() { return Blocks.begin(); }
+  iterator blocks_end() { return Blocks.end(); }
+  iterator_range<iterator> blocks() {
+    return make_range(blocks_begin(), blocks_end());
+  }
+
+  const_iterator blocks_begin() const { return Blocks.begin(); }
+  const_iterator blocks_end() const { return Blocks.end(); }
+  iterator_range<const_iterator> blocks() const {
+    return make_range(blocks_begin(), blocks_end());
+  }
+
+  bool contains(MachineBasicBlock *MBB) const { return Blocks.contains(MBB); }
+
+  bool contains(MachineInstr *MI) const { return contains(MI->getParent()); }
+
+  void print(raw_ostream &OS) const {
+    OS << "<";
+    Entry->printAsOperand(OS);
+    OS << " " << Entry->getName();
+    OS << ", ";
+    Exit->printAsOperand(OS);
+    OS << " " << Exit->getName();
+    OS << ">\n";
+
+    for (auto *Block : Blocks) {
+      Block->printAsOperand(OS);
+      OS << " " << Block->getName();
+      OS << "\n";
+    }
+  }
+
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  void dump() const { print(dbgs()); }
+#endif
 };
 
-class region_domtree_iterator
+class bounded_domtree_iterator
     : public df_iterator<DomTreeNodeBase<MachineBasicBlock> *> {
   using super = df_iterator<DomTreeNodeBase<MachineBasicBlock> *>;
 
 public:
-  using Self = region_domtree_iterator;
+  using Self = bounded_domtree_iterator;
   using value_type = typename super::value_type;
 
   // Construct the begin iterator.
-  region_domtree_iterator(MachineDominatorTree *MDT, MachineBasicBlock *Entry, MachineBasicBlock *Exit)
+  bounded_domtree_iterator(MachineDominatorTree *MDT, MachineBasicBlock *Entry,
+                           MachineBasicBlock *Exit)
       : super(df_begin(MDT->getNode(Entry))) {
     // Mark the exit of the region as visited, so that the children of the
     // exit and the exit itself, i.e. the block outside the region will never
@@ -43,27 +90,21 @@ public:
   }
 
   // Construct the end iterator.
-  region_domtree_iterator()
+  bounded_domtree_iterator()
       : super(
             df_end<value_type>((DomTreeNodeBase<MachineBasicBlock> *)nullptr)) {
   }
 
-  /*implicit*/ region_domtree_iterator(super I) : super(I) {}
+  /*implicit*/ bounded_domtree_iterator(super I) : super(I) {}
 };
 
 class AMiLinearizationAnalysis : public MachineFunctionPass {
 public:
-  using RegionSet = SmallPtrSet<MachineRegion *, 16>;
+  using RegionSet = SmallPtrSet<ActivatingRegion *, 16>;
   using Edge = std::pair<MachineBasicBlock *, MachineBasicBlock *>;
   using EdgeSet = SmallSet<Edge, 16>;
 
 private:
-  SparseBitVector<128> SensitiveBranchBlocks;
-  EdgeSet GhostEdges;
-  EdgeSet UncondEdges;
-  EdgeSet ActivatingEdges;
-  DenseMap<Edge, ActivatingRegion> ActivatingRegions;
-
   TrackSecretsAnalysis *TSA;
   MachineDominatorTree *MDT;
   MachinePostDominatorTree *MPDT;
@@ -72,6 +113,13 @@ private:
   bool AnalysisOnly;
 
 public:
+  SparseBitVector<128> SensitiveBranchBlocks;
+  EdgeSet GhostEdges;
+  EdgeSet UncondEdges;
+  EdgeSet ActivatingEdges;
+  DenseMap<Edge, ActivatingRegion> ActivatingRegions;
+  DenseMap<MachineBasicBlock *, RegionSet> RegionMap;
+
   static char ID;
 
   AMiLinearizationAnalysis(bool IsSSA = true);
@@ -79,18 +127,19 @@ public:
   void undoCFGChanges();
   void findSecretDependentBranches();
   void createActivatingRegions();
-  void findActivatingRegionExitings(
-      MachineBasicBlock *Entry, MachineBasicBlock *Target,
-      SmallVectorImpl<MachineBasicBlock *> &Exitings);
+  void
+  findActivatingRegionExitings(MachineBasicBlock *Entry,
+                               MachineBasicBlock *Target,
+                               SmallVectorImpl<MachineBasicBlock *> &Exitings);
   MachineBasicBlock *chooseUnconditionalSuccessor(
       MachineBasicBlock *MBB,
       iterator_range<std::vector<MachineBasicBlock *>::iterator> Choices);
   void linearizeBranch(MachineBasicBlock *MBB, MachineBasicBlock *UncondSucc);
 
-  iterator_range<region_domtree_iterator>
+  iterator_range<bounded_domtree_iterator>
   regionDomTreeIterator(MachineBasicBlock *Entry, MachineBasicBlock *Exit) {
-    return iterator_range<region_domtree_iterator>(
-        region_domtree_iterator(MDT, Entry, Exit), region_domtree_iterator());
+    return iterator_range<bounded_domtree_iterator>(
+        bounded_domtree_iterator(MDT, Entry, Exit), bounded_domtree_iterator());
   }
 
   void print(raw_ostream &OS, const Module *) const override;
@@ -111,7 +160,6 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
-
 
 } // namespace llvm
 

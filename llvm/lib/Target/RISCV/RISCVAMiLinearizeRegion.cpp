@@ -126,11 +126,14 @@ void RISCVAMiLinearizeRegion::setBranchInstrActivating(MachineInstr *I, MachineB
 
 void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
   LLVM_DEBUG(errs() << "Handling region " << *Region << "\n");
+  /*
   for (MachineInstr *MI : PA->getPersistentInstructions(Region)) {
     setQualifier<RISCV::AMi::Persistent>(MI);
   }
+  */
 
   LLVM_DEBUG(errs() << "Stores\n");
+  /*
   for (MachineInstr *I : PA->getPersistentStores(Region)) {
     MachineInstr &GhostLoad = *std::prev(I->getIterator());
 
@@ -166,6 +169,7 @@ void RISCVAMiLinearizeRegion::handleRegion(MachineRegion *Region) {
                        "mimicry mode!");
     }
   }
+  */
 }
 
 bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {

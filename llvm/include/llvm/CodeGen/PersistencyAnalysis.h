@@ -1,6 +1,7 @@
 #ifndef LLVM_CODEGEN_PERSISTENCY_ANALYSIS_H
 #define LLVM_CODEGEN_PERSISTENCY_ANALYSIS_H
 
+#include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -15,12 +16,12 @@ namespace llvm {
 class PersistencyAnalysisPass : public MachineFunctionPass {
 public:
   using RegionInstrMap =
-      DenseMap<const MachineRegion *, SmallPtrSet<MachineInstr *, 16>>;
+      DenseMap<const ActivatingRegion *, SmallPtrSet<MachineInstr *, 16>>;
 
 private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  SensitiveRegionAnalysis *SRA;
+  AMiLinearizationAnalysis *ALA;
   ReachingDefAnalysis *RDA;
 
   RegionInstrMap PersistentStores;
@@ -36,34 +37,27 @@ public:
   PersistencyAnalysisPass(bool IsSSA = true);
 
   SmallPtrSet<MachineInstr *, 16>
-  getPersistentInstructions(const MachineRegion *MR) {
+  getPersistentInstructions(const ActivatingRegion *MR) {
     return PersistentInstructions[MR];
   }
 
-  SmallPtrSet<MachineInstr *, 16>
-  getPersistentStores(const MachineRegion *MR) {
+  SmallPtrSet<MachineInstr *, 16> getPersistentStores(const ActivatingRegion *MR) {
     return PersistentStores[MR];
   }
 
-  SmallPtrSet<MachineInstr *, 16>
-  getCallInstrs(const MachineRegion *MR) {
+  SmallPtrSet<MachineInstr *, 16> getCallInstrs(const ActivatingRegion *MR) {
     return CallInstructions[MR];
   }
 
-  void
-  propagatePersistency(const MachineFunction &MF, MachineInstr &MI,
-                       const MachineOperand &MO, const MachineRegion *MR,
-                       SmallPtrSet<MachineInstr *, 16> &PersistentDefs);
-  void analyzeRegion(const MachineFunction &MF, const MachineRegion *MR,
-                     const MachineRegion *Scope);
-  void analyzeRegion(const MachineFunction &MF, const MachineRegion *MR) {
-    analyzeRegion(MF, MR, MR);
-  }
+  void propagatePersistency(const MachineFunction &MF, MachineInstr &MI,
+                            const MachineOperand &MO,
+                            const ActivatingRegion *MR);
+  void analyzeRegion(const MachineFunction &MF, const ActivatingRegion *MR);
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<SensitiveRegionAnalysis>();
+    AU.addRequired<AMiLinearizationAnalysis>();
     if (!IsSSA) {
       AU.addRequired<ReachingDefAnalysis>();
     }

@@ -29,7 +29,6 @@
 #include "LiveRangeUtils.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/PHIEliminationUtils.h"
-#include "llvm/CodeGen/InsertPersistentDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -62,7 +61,7 @@ public:
     AU.addRequired<SlotIndexes>();
     AU.addPreserved<SlotIndexes>();
     AU.addPreserved<SensitiveRegionAnalysis>();
-    AU.addPreserved<InsertPersistentDefs>();
+    AU.addPreserved<AMiLinearizationAnalysis>();
     AU.addPreserved<AddMimicryConstraints>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
