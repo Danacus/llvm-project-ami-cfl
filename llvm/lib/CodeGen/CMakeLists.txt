@@ -69,7 +69,7 @@ add_llvm_component_library(LLVMCodeGen
   FindSecrets.cpp
   SensitiveRegion.cpp
   PersistencyAnalysis.cpp
-  RemovePersistentDefs.cpp
+  RemoveConflictingDefs.cpp
   RemoveSecretPseudos.cpp
   RemoveBranchPseudos.cpp
   FixupStatepointCallerSaved.cpp
@@ -87,6 +87,7 @@ add_llvm_component_library(LLVMCodeGen
   InterleavedAccessPass.cpp
   InterleavedLoadCombinePass.cpp
   IntrinsicLowering.cpp
+  InsertConflictingDefs.cpp
   JMCInstrumenter.cpp
   LatencyPriorityQueue.cpp
   LazyMachineBlockFrequencyInfo.cpp

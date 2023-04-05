@@ -28,6 +28,7 @@
 
 #include "LiveRangeUtils.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
+#include "llvm/CodeGen/InsertConflictingDefs.h"
 #include "llvm/CodeGen/PHIEliminationUtils.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -63,6 +64,7 @@ public:
     AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addPreserved<AMiLinearizationAnalysis>();
     AU.addPreserved<AddMimicryConstraints>();
+    AU.addPreserved<InsertConflictingDefs>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 

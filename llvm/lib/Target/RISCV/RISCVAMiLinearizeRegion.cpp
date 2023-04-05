@@ -231,7 +231,7 @@ RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion() : MachineFunctionPass(ID) {
 INITIALIZE_PASS_BEGIN(RISCVAMiLinearizeRegion, DEBUG_TYPE,
                       "AMi Linearize Region", false, false)
 // INITIALIZE_PASS_DEPENDENCY(MachineRegionInfoPass)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
+// INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_DEPENDENCY(PersistencyAnalysisPass)
 INITIALIZE_PASS_END(RISCVAMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
                     false, false)

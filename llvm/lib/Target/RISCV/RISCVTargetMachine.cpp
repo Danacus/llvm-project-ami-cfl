@@ -403,7 +403,8 @@ void RISCVPassConfig::addPostSSADestruction() {
     // addPass(createSensitiveRegionAnalysisPass(true));
     // addPass(&CreateSensitiveRegionsID);
     // addPass(&InsertPersistentDefsPassID);
-    addPass(&AddMimicryConstraintsPassID);
+    // addPass(&AddMimicryConstraintsPassID);
+    addPass(&InsertConflictingDefsPassID);
   }
 }
 
@@ -428,9 +429,9 @@ void RISCVPassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
     addPass(createRISCVRedundantCopyEliminationPass());
 
-  // if (EnableAMiLinearization == cl::BOU_TRUE) {
-  //   addPass(&RemovePersistentDefsPassID);
-  // }
+  if (EnableAMiLinearization == cl::BOU_TRUE) {
+    addPass(&RemoveConflictingDefsPassID);
+  }
   // addPass(createAMiLinearizeRegionPass());
 }
 

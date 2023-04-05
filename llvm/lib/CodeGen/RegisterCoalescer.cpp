@@ -23,6 +23,7 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
+#include "llvm/CodeGen/InsertConflictingDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveRangeEdit.h"
@@ -599,6 +600,7 @@ void RegisterCoalescer::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<SensitiveRegionAnalysis>();
   AU.addPreserved<AMiLinearizationAnalysis>();
   AU.addPreserved<AddMimicryConstraints>();
+  AU.addPreserved<InsertConflictingDefs>();
   AU.addPreservedID(MachineDominatorsID);
   MachineFunctionPass::getAnalysisUsage(AU);
 }

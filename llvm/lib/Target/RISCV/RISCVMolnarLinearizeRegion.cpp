@@ -132,7 +132,7 @@ void RISCVMolnarLinearizeRegion::replacePHIInstructions() {
 
         if (ParentRegion && ParentRegion->getDepth() > CurrentDepth) {
           // Only replace the condition register if the parent region is deeper
-          ParentRegion->dump();
+          LLVM_DEBUG(ParentRegion->dump());
           CondReg = TakenRegMap[ParentRegion];
           CurrentDepth = ParentRegion->getDepth();
 

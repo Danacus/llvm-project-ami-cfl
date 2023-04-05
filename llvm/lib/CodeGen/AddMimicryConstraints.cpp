@@ -102,10 +102,6 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
   LIS = getAnalysisIfAvailable<LiveIntervals>();
   assert(LIS && "LIS must be available");
 
-  // TODO: AMiLinearizationAnalysis should detect top level region as an activating region
-  // for (auto *MI : PA.getPersistentStores(MRI->getTopLevelRegion()))
-    // insertGhostLoad(MI);
-
   for (auto &Pair : ALA.ActivatingRegions) {
     auto &Region = Pair.getSecond();
     if (Region.Branch && Region.Exit) {

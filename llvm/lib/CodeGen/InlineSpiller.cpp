@@ -22,6 +22,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
+#include "llvm/CodeGen/InsertConflictingDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveRangeEdit.h"
@@ -164,6 +165,7 @@ class InlineSpiller : public Spiller {
   MachineRegisterInfo &MRI;
   AMiLinearizationAnalysis *ALA;
   AddMimicryConstraints *AMC;
+  InsertConflictingDefs *ICD;
   const TargetInstrInfo &TII;
   const TargetRegisterInfo &TRI;
   const MachineBlockFrequencyInfo &MBFI;
@@ -204,6 +206,7 @@ public:
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
         MRI(MF.getRegInfo()), ALA(Pass.getAnalysisIfAvailable<AMiLinearizationAnalysis>()),
         AMC(Pass.getAnalysisIfAvailable<AddMimicryConstraints>()),
+        ICD(Pass.getAnalysisIfAvailable<InsertConflictingDefs>()),
         TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
         MBFI(Pass.getAnalysis<MachineBlockFrequencyInfo>()),
@@ -1047,6 +1050,7 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   assert(!MI->isTerminator() && "Inserting a spill after a terminator");
   MachineBasicBlock &MBB = *MI->getParent();
 
+  assert(ALA && "Expected ALA to be available");
   if (ALA && ALA->RegionMap[&MBB].empty()) {
     Register GhostReg = Edit->createFrom(Original);
 
@@ -1084,7 +1088,12 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
     for (const MachineInstr &MI : make_range(GhostMI, GhostMIS.end()))
       getVDefInterval(MI, LIS);
 
-    AMC->addConstraints(&*GhostMI);
+    if (AMC)
+      AMC->addConstraints(&*GhostMI);
+    else if (ICD)
+      ICD->addConstraints(&*GhostMI);
+    else
+      llvm_unreachable("Unable to add constraints for spill");
   }
 
   LLVM_DEBUG(

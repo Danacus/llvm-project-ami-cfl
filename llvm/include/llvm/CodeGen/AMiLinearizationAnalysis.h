@@ -130,7 +130,7 @@ public:
 
   static char ID;
 
-  AMiLinearizationAnalysis(bool IsSSA = true);
+  AMiLinearizationAnalysis(bool AnalysisOnly = true);
 
   void undoCFGChanges();
   void findSecretDependentBranches();

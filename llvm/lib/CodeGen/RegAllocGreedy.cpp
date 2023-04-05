@@ -33,6 +33,7 @@
 #include "llvm/CodeGen/AddMimicryConstraints.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
 #include "llvm/CodeGen/EdgeBundles.h"
+#include "llvm/CodeGen/InsertConflictingDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervalUnion.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -224,6 +225,8 @@ void RAGreedy::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<AMiLinearizationAnalysis>();
   AU.addUsedIfAvailable<AddMimicryConstraints>();
   AU.addPreserved<AddMimicryConstraints>();
+  AU.addUsedIfAvailable<InsertConflictingDefs>();
+  AU.addPreserved<InsertConflictingDefs>();
   AU.addRequired<EdgeBundles>();
   AU.addRequired<SpillPlacement>();
   AU.addRequired<MachineOptimizationRemarkEmitterPass>();

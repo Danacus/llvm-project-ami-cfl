@@ -3,7 +3,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/PHIEliminationUtils.h"
-#include "llvm/CodeGen/RemovePersistentDefs.h"
+#include "llvm/CodeGen/RemoveConflictingDefs.h"
 #include "llvm/CodeGen/SensitiveRegion.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
@@ -15,10 +15,10 @@ using namespace llvm;
 
 #define DEBUG_TYPE "remove-persistent-defs"
 
-char RemovePersistentDefs::ID = 0;
-char &llvm::RemovePersistentDefsPassID = RemovePersistentDefs::ID;
+char RemoveConflictingDefs::ID = 0;
+char &llvm::RemoveConflictingDefsPassID = RemoveConflictingDefs::ID;
 
-bool RemovePersistentDefs::runOnMachineFunction(MachineFunction &MF) {
+bool RemoveConflictingDefs::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
 
@@ -67,23 +67,23 @@ bool RemovePersistentDefs::runOnMachineFunction(MachineFunction &MF) {
     MBB->eraseFromParent();
   }
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   return true;
 }
 
-RemovePersistentDefs::RemovePersistentDefs() : MachineFunctionPass(ID) {
-  initializeRemovePersistentDefsPass(*PassRegistry::getPassRegistry());
+RemoveConflictingDefs::RemoveConflictingDefs() : MachineFunctionPass(ID) {
+  initializeRemoveConflictingDefsPass(*PassRegistry::getPassRegistry());
 }
 
-INITIALIZE_PASS_BEGIN(RemovePersistentDefs, DEBUG_TYPE,
-                      "Remove Persistent Defs", false, false)
-INITIALIZE_PASS_END(RemovePersistentDefs, DEBUG_TYPE, "Remove Persistent Defs",
+INITIALIZE_PASS_BEGIN(RemoveConflictingDefs, DEBUG_TYPE,
+                      "Remove Conflicting Defs", false, false)
+INITIALIZE_PASS_END(RemoveConflictingDefs, DEBUG_TYPE, "Remove Conflicting Defs",
                     false, false)
 
 namespace llvm {
 
-FunctionPass *createRemovePersistentDefsPass() {
-  return new RemovePersistentDefs();
+FunctionPass *createRemoveConflictingDefsPass() {
+  return new RemoveConflictingDefs();
 }
 
 } // namespace llvm

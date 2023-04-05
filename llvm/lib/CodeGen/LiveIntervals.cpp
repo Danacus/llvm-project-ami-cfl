@@ -20,6 +20,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/CodeGen/AMiLinearizationAnalysis.h"
+#include "llvm/CodeGen/InsertConflictingDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervalCalc.h"
 #include "llvm/CodeGen/LiveVariables.h"
@@ -95,6 +96,7 @@ void LiveIntervals::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<SlotIndexes>();
   AU.addPreserved<SensitiveRegionAnalysis>();
   AU.addPreserved<AMiLinearizationAnalysis>();
+  AU.addPreserved<InsertConflictingDefs>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 

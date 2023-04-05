@@ -270,7 +270,7 @@ RISCVLinearizeBranch::RISCVLinearizeBranch() : MachineFunctionPass(ID) {
 
 INITIALIZE_PASS_BEGIN(RISCVLinearizeBranch, DEBUG_TYPE, "RISCV Linearize Branch",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
+// INITIALIZE_PASS_DEPENDENCY(SensitiveRegionAnalysis)
 INITIALIZE_PASS_END(RISCVLinearizeBranch, DEBUG_TYPE, "RISCV Linearize Branch",
                     false, false)
 

@@ -34,6 +34,7 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/AddMimicryConstraints.h"
+#include "llvm/CodeGen/InsertConflictingDefs.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveVariables.h"
@@ -183,6 +184,7 @@ public:
     AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addPreserved<AMiLinearizationAnalysis>();
     AU.addPreserved<AddMimicryConstraints>();
+    AU.addPreserved<InsertConflictingDefs>();
     AU.addPreservedID(MachineLoopInfoID);
     AU.addPreservedID(MachineDominatorsID);
     MachineFunctionPass::getAnalysisUsage(AU);

@@ -411,8 +411,8 @@ void AMiLinearizationAnalysis::print(raw_ostream &OS, const Module *) const {
 char AMiLinearizationAnalysis::ID = 0;
 char &llvm::AMiLinearizationAnalysisID = AMiLinearizationAnalysis::ID;
 
-AMiLinearizationAnalysis::AMiLinearizationAnalysis(bool IsSSA)
-    : MachineFunctionPass(ID), AnalysisOnly(IsSSA) {
+AMiLinearizationAnalysis::AMiLinearizationAnalysis(bool AnalysisOnly)
+    : MachineFunctionPass(ID), AnalysisOnly(AnalysisOnly) {
   initializeAMiLinearizationAnalysisPass(*PassRegistry::getPassRegistry());
 }
 
@@ -425,8 +425,8 @@ INITIALIZE_PASS_END(AMiLinearizationAnalysis, DEBUG_TYPE,
 
 namespace llvm {
 
-FunctionPass *createAMiLinearizationAnalysisPass(bool IsSSA) {
-  return new AMiLinearizationAnalysis(IsSSA);
+FunctionPass *createAMiLinearizationAnalysisPass(bool AnalysisOnly) {
+  return new AMiLinearizationAnalysis(AnalysisOnly);
 }
 
 } // namespace llvm

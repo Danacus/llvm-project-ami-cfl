@@ -1,5 +1,5 @@
-#ifndef LLVM_CODEGEN_REMOVE_PERSISTENT_DEFS
-#define LLVM_CODEGEN_REMOVE_PERSISTENT_DEFS
+#ifndef LLVM_CODEGEN_REMOVE_CONFLICTING_DEFS
+#define LLVM_CODEGEN_REMOVE_CONFLICTING_DEFS
 
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
@@ -13,14 +13,14 @@ using namespace llvm;
 
 namespace llvm {
 
-class RemovePersistentDefs : public MachineFunctionPass {
+class RemoveConflictingDefs : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
 public:
   static char ID;
 
-  RemovePersistentDefs();
+  RemoveConflictingDefs();
     
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -32,5 +32,5 @@ public:
 
 } // namespace llvm
 
-#endif // LLVM_CODEGEN_REMOVE_PERSISTENT_DEFS
+#endif // LLVM_CODEGEN_REMOVE_CONFLICTING_DEFS
 

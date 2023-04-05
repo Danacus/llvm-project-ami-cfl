@@ -189,8 +189,9 @@ namespace llvm {
   // extern char &SensitiveRegionAnalysisVirtRegID;
   // extern char &SensitiveRegionAnalysisPhysRegID;
   extern char &AddMimicryConstraintsPassID;
+  extern char &InsertConflictingDefsPassID;
   extern char &AMiLinearizationAnalysisID;
-  extern char &RemovePersistentDefsPassID;
+  extern char &RemoveConflictingDefsPassID;
   extern char &PersistencyAnalysisPassID;
   extern char &RemoveBranchPseudosPassID;
   extern char &RemoveSecretPseudosPassID;
