@@ -1540,8 +1540,10 @@ SDValue SelectionDAGBuilder::getCopyFromRegs(const Value *V, Type *Ty) {
     SDValue Chain = DAG.getEntryNode();
     Result = RFV.getCopyFromRegs(DAG, FuncInfo, getCurSDLoc(), Chain, nullptr,
                                  V);
-    if (auto Entry = FuncInfo.SecretRegisters.find(InReg); Entry != FuncInfo.SecretRegisters.end())
+    if (auto Entry = FuncInfo.SecretRegisters.find(InReg); Entry != FuncInfo.SecretRegisters.end()) {
       Result = DAG.getSecret(DAG.getEntryNode(), getCurSDLoc(), Result, Result.getValueType(), Entry->second);
+      PendingExports.push_back(Result);
+    }
     resolveDanglingDebugInfo(V, Result);
   }
 
@@ -10764,6 +10766,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
   SmallVector<SDValue, 4> Chains;
   DenseMap<int, int> ArgCopyElisionFrameIndexMap;
   for (const Argument &Arg : F.args()) {
+    Arg.dump();
     SmallVector<SDValue, 4> ArgValues;
     SmallVector<EVT, 4> ValueVTs;
     ComputeValueVTs(*TLI, DAG.getDataLayout(), Arg.getType(), ValueVTs);
@@ -10785,7 +10788,9 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     uint64_t SecretMask = 0;
     if (Arg.hasAttribute(Attribute::Secret))
       SecretMask = Arg.getAttribute(Attribute::Secret).getValueAsInt();
-    InVals[i] = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretMask);
+    auto SecretNode = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretMask);
+    InVals[i] = SecretNode;
+    SDB->PendingExports.push_back(SecretNode);
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.

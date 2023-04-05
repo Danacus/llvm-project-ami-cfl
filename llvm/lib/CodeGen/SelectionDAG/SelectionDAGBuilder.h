@@ -181,17 +181,17 @@ public:
   /// disambiguation between loads without worrying about alias analysis.
   SmallVector<SDValue, 8> PendingLoads;
 
-  /// State used while lowering a statepoint sequence (gc_statepoint,
-  /// gc_relocate, and gc_result).  See StatepointLowering.hpp/cpp for details.
-  StatepointLoweringState StatepointLowering;
-
-private:
   /// CopyToReg nodes that copy values to virtual registers for export to other
   /// blocks need to be emitted before any terminator instruction, but they have
   /// no other ordering requirements. We bunch them up and the emit a single
   /// tokenfactor for them just before terminator instructions.
   SmallVector<SDValue, 8> PendingExports;
 
+  /// State used while lowering a statepoint sequence (gc_statepoint,
+  /// gc_relocate, and gc_result).  See StatepointLowering.hpp/cpp for details.
+  StatepointLoweringState StatepointLowering;
+
+private:
   /// Similar to loads, nodes corresponding to constrained FP intrinsics are
   /// bunched up and emitted when necessary.  These can be moved across each
   /// other and any (normal) memory operation (load or store), but not across
