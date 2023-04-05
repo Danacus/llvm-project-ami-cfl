@@ -44,6 +44,7 @@ public:
     AU.addPreserved<PersistencyAnalysisPass>();
     AU.addUsedIfAvailable<LiveIntervals>();
     AU.addPreserved<LiveIntervals>();
+    AU.addPreserved<MachineDominatorTree>();
     // AU.addRequiredTransitive<MachineRegionInfoPass>();
     // AU.addUsedIfAvailable<LiveVariables>();
     // AU.addRequired<SlotIndexes>();
@@ -51,7 +52,7 @@ public:
     // AU.addRequired<LiveIntervals>();
     // AU.addPreserved<LiveIntervals>();
     // AU.addPreserved<LiveVariables>();
-    AU.setPreservesCFG();
+    // AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };

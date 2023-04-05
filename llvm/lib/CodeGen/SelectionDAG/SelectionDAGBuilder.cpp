@@ -10766,7 +10766,6 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
   SmallVector<SDValue, 4> Chains;
   DenseMap<int, int> ArgCopyElisionFrameIndexMap;
   for (const Argument &Arg : F.args()) {
-    Arg.dump();
     SmallVector<SDValue, 4> ArgValues;
     SmallVector<EVT, 4> ValueVTs;
     ComputeValueVTs(*TLI, DAG.getDataLayout(), Arg.getType(), ValueVTs);

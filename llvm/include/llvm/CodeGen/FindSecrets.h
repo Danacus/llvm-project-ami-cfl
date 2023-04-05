@@ -2,6 +2,7 @@
 #define LLVM_CODEGEN_FINDSECRETS_H
 
 #include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -162,12 +163,13 @@ template <> struct DenseMapInfo<SecretDef> {
 
 class FlowGraph {
   MachineFunction &MF;
+  MachineDominatorTree *MDT;
   ReachingDefAnalysis *RDA;
   MachineRegisterInfo &MRI;
 
 public:
-  FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA = nullptr)
-      : MF(MF), RDA(RDA), MRI(MF.getRegInfo()) {}
+  FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA = nullptr, MachineDominatorTree *MDT = nullptr)
+      : MF(MF), MDT(MDT), RDA(RDA), MRI(MF.getRegInfo()) {}
   void getSources(SmallSet<SecretDef, 8> &Defs,
                   DenseMap<SecretDef, uint64_t> &Secrets) const;
   void getUses(SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses) const;
@@ -230,8 +232,10 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    if (!IsSSA)
+    if (!IsSSA) {
       AU.addRequired<ReachingDefAnalysis>();
+      AU.addRequired<MachineDominatorTree>();
+    }
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

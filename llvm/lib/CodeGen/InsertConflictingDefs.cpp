@@ -99,6 +99,11 @@ MachineBasicBlock *InsertConflictingDefs::createConstraintMBB(
   TII->insertBranch(*From, TBB, FBB, Cond, DebugLoc());
   TII->insertUnconditionalBranch(*MBB, To, DebugLoc());
 
+  auto *MDT = getAnalysisIfAvailable<MachineDominatorTree>();
+  if (MDT) {
+    MDT->addNewBlock(MBB, From);
+  }
+  
   return MBB;
 }
 

@@ -187,11 +187,13 @@ void FlowGraph::getUses(SecretDef &SD,
                              return O.isReg() && O.getReg() == SD.getReg();
                            }) != MI.uses().end()) {
             SmallPtrSet<MachineInstr *, 8> Defs;
-            RDA->getGlobalReachingDefs(&MI, SD.getReg().asMCReg(), Defs);
+            // RDA->getGlobalReachingDefs(&MI, SD.getReg().asMCReg(), Defs);
+            auto Def = RDA->getReachingDef(&MI, SD.getReg().asMCReg());
 
             // If there is no closer reaching def, the argument is the reaching
             // def
-            if (Defs.empty()) {
+            // if (Defs.empty()) {
+            if (Def < 0) {
               Uses.insert(&MI);
             }
           }
@@ -284,7 +286,7 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   if (IsSSA) {
     Graph = new FlowGraph(MF);
   } else {
-    Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>());
+    Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>(), &getAnalysis<MachineDominatorTree>());
   }
 
   LLVM_DEBUG(MF.dump());
