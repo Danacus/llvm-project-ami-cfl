@@ -10187,7 +10187,8 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
 
   uint64_t SecretMask = 0;
   if (CLI.CB->hasRetAttr(Attribute::Secret)) {
-    SecretMask = CLI.CB->getParamAttr(0, Attribute::Secret).getValueAsInt();
+    SecretMask = CLI.CB->getAttributes().getRetAttrs()
+      .getAttribute(Attribute::Secret).getValueAsInt();
   }
 
   for (unsigned I = 0, E = InVals.size(); I != E; ++I) {
