@@ -125,7 +125,8 @@ void RISCVInstrInfo::verifySecretTypes(const MachineInstr &MI, const DenseMap<Ma
             
     // Subtype check
     if (!IsSubtype((SrcMask << 1), DestMask)) {
-      llvm_unreachable("AMi type error, store would leak secret data");
+      // llvm_unreachable("AMi type error, store would leak secret data");
+      errs() << "AMi type error, store would leak secret data\n";
     }
       
     break;

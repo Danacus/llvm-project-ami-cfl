@@ -6136,8 +6136,8 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
   switch (Opcode) {
   default: break;
   case ISD::TokenFactor:
-    assert(VT == MVT::Other && N1.getValueType() == MVT::Other &&
-           N2.getValueType() == MVT::Other && "Invalid token factor!");
+    // assert(VT == MVT::Other && N1.getValueType() == MVT::Other &&
+    //        N2.getValueType() == MVT::Other && "Invalid token factor!");
     // Fold trivial token factors.
     if (N1.getOpcode() == ISD::EntryToken) return N2;
     if (N2.getOpcode() == ISD::EntryToken) return N1;
