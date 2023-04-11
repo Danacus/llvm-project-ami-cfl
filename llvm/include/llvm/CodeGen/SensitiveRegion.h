@@ -148,7 +148,7 @@ public:
   }
 
   iterator_range<BranchSet::iterator> sensitive_branches(MachineBasicBlock *MBB,
-                                                         bool InElseRegion) {
+                                                         bool InElseRegion = false) {
     BranchSet *Branches = &BranchMap[MBB];
 
     return make_range(Branches->begin(), Branches->end());

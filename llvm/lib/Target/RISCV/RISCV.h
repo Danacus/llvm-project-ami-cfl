@@ -71,7 +71,7 @@ void initializeRISCVInsertVSETVLIPass(PassRegistry &);
 FunctionPass *createRISCVRedundantCopyEliminationPass();
 void initializeRISCVRedundantCopyEliminationPass(PassRegistry &);
 
-FunctionPass *createRISCVAMiLinearizeRegionPass();
+FunctionPass *createRISCVAMiLinearizeRegionPass(bool SimpleSESE);
 void initializeRISCVAMiLinearizeRegionPass(PassRegistry &);
 
 FunctionPass *createRISCVMolnarLinearizeRegionPass();

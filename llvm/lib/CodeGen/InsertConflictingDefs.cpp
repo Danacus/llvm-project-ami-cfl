@@ -1,4 +1,5 @@
 #include "llvm/CodeGen/InsertConflictingDefs.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -21,13 +22,18 @@ char InsertConflictingDefs::ID = 0;
 char &llvm::InsertConflictingDefsPassID = InsertConflictingDefs::ID;
 
 void InsertConflictingDefs::addConstraints(MachineInstr *MI) {
-  auto &ALA = getAnalysis<AMiLinearizationAnalysis>();
+  DenseMap<MachineBasicBlock *, AMiLinearizationAnalysis::RegionSet> *RegionMap = nullptr;
+  if (SimpleSESE) {
+    RegionMap = &getAnalysis<AMiLinearizationAnalysisSESE>().RegionMap;
+  } else {
+    RegionMap = &getAnalysis<AMiLinearizationAnalysis>().RegionMap;
+  }
   auto *MBB = MI->getParent();
 
   LLVM_DEBUG(MI->dump());
 
   // For each activating region that contains this instruction
-  for (auto *AR : ALA.RegionMap[MBB]) {
+  for (auto *AR : (*RegionMap)[MBB]) {
     MachineBasicBlock *ConstraintMBB = ConstraintMBBMap[AR];
     if (!ConstraintMBB) {
       // Top level region, no need to add constraints
@@ -115,11 +121,20 @@ bool InsertConflictingDefs::runOnMachineFunction(MachineFunction &MF) {
   ConstraintMBBMap.clear();
 
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
-  auto &ALA = getAnalysis<AMiLinearizationAnalysis>();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
   // assert(LIS && "LIS must be available");
+  DenseMap<AMiLinearizationAnalysis::Edge, ActivatingRegion>
+      *ActivatingRegions = nullptr;
 
-  for (auto &Pair : ALA.ActivatingRegions) {
+  if (SimpleSESE) {
+    ActivatingRegions =
+        &getAnalysis<AMiLinearizationAnalysisSESE>().ActivatingRegions;
+  } else {
+    ActivatingRegions =
+        &getAnalysis<AMiLinearizationAnalysis>().ActivatingRegions;
+  }
+
+  for (auto &Pair : *ActivatingRegions) {
     auto &Region = Pair.getSecond();
     if (!Region.Branch || !Region.Exit) {
       // Top level region, no need to add constraints
@@ -129,7 +144,7 @@ bool InsertConflictingDefs::runOnMachineFunction(MachineFunction &MF) {
         {&Region, createConstraintMBB(MF, Region.Branch, Region.Exit)});
   }
 
-  for (auto &Pair : ALA.ActivatingRegions) {
+  for (auto &Pair : *ActivatingRegions) {
     auto &Region = Pair.getSecond();
     if (Region.Branch && Region.Exit) {
       auto PersistentInstrs = PA.getPersistentInstructions(&Region);
@@ -146,7 +161,7 @@ bool InsertConflictingDefs::runOnMachineFunction(MachineFunction &MF) {
   return true;
 }
 
-InsertConflictingDefs::InsertConflictingDefs() : MachineFunctionPass(ID) {
+InsertConflictingDefs::InsertConflictingDefs(bool SimpleSESE) : MachineFunctionPass(ID), SimpleSESE(SimpleSESE) {
   initializeInsertConflictingDefsPass(*PassRegistry::getPassRegistry());
 }
 
@@ -160,8 +175,8 @@ INITIALIZE_PASS_END(InsertConflictingDefs, DEBUG_TYPE,
 
 namespace llvm {
 
-FunctionPass *createInsertConflictingDefsPass() {
-  return new InsertConflictingDefs();
+FunctionPass *createInsertConflictingDefsPass(bool SimpleSESE) {
+  return new InsertConflictingDefs(SimpleSESE);
 }
 
 } // namespace llvm

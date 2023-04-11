@@ -1542,7 +1542,7 @@ SDValue SelectionDAGBuilder::getCopyFromRegs(const Value *V, Type *Ty) {
                                  V);
     if (auto Entry = FuncInfo.SecretRegisters.find(InReg); Entry != FuncInfo.SecretRegisters.end()) {
       Result = DAG.getSecret(DAG.getEntryNode(), getCurSDLoc(), Result, Result.getValueType(), Entry->second);
-      PendingExports.push_back(Result);
+      // PendingExports.push_back(Result);
     }
     resolveDanglingDebugInfo(V, Result);
   }
@@ -10790,7 +10790,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
       SecretMask = Arg.getAttribute(Attribute::Secret).getValueAsInt();
     auto SecretNode = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretMask);
     InVals[i] = SecretNode;
-    SDB->PendingExports.push_back(SecretNode);
+    // SDB->PendingExports.push_back(SecretNode);
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.

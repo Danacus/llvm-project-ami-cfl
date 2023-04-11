@@ -2,6 +2,7 @@
 #define LLVM_CODEGEN_AMI_LINEARIZE_REGION_H
 
 #include "RISCVInstrInfo.h"
+#include "llvm/CodeGen/AMiLinearizationAnalysisSESE.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
@@ -33,8 +34,9 @@ public:
   const RISCVRegisterInfo *TRI;
   AMiLinearizationAnalysis *ALA;
   PersistencyAnalysisPass *PA;
+  bool SimpleSESE;
 
-  RISCVAMiLinearizeRegion();
+  RISCVAMiLinearizeRegion(bool SimpleSESE);
 
   template <RISCV::AMi::Qualifier Q>
   void setQualifier(MachineInstr *I);
@@ -52,7 +54,11 @@ public:
     AU.addRequiredTransitive<MachineDominatorTree>();
     AU.addRequiredTransitive<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
-    AU.addRequired<AMiLinearizationAnalysis>();
+    if (SimpleSESE) {
+      AU.addRequired<AMiLinearizationAnalysisSESE>();
+    } else {
+      AU.addRequired<AMiLinearizationAnalysis>();
+    }
     AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

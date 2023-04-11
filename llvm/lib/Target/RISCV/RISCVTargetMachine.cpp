@@ -76,9 +76,15 @@ static cl::opt<bool>
                            cl::Hidden);
 
 static cl::opt<bool>
+    AMiGeneralLinearization("riscv-ami-general-linearization",
+                            cl::desc("Enable experimental AMi linearization of "
+                                     "more general control flow graphs"),
+                            cl::init(false), cl::Hidden);
+
+static cl::opt<bool>
     EnableMolnarLinearization("riscv-enable-molnar-linearization",
-                           cl::desc("Enable Molnar linearization"), cl::init(false),
-                           cl::Hidden);
+                              cl::desc("Enable Molnar linearization"),
+                              cl::init(false), cl::Hidden);
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCVTargetMachine> X(getTheRISCV32Target());
@@ -371,11 +377,19 @@ void RISCVPassConfig::addPreEmitPass2() {
   
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(createTrackSecretsAnalysisPass(false));
-    addPass(createAMiLinearizationAnalysisPass(true));
+
+    if (!AMiGeneralLinearization) {
+      addPass(createRISCVSimplifySensitiveRegionPass());
+      addPass(createSensitiveRegionAnalysisPass(false));
+      addPass(createAMiLinearizationAnalysisSESEPass(true));
+    } else {
+      addPass(createAMiLinearizationAnalysisPass(true));
+    }
+    // addPass(createAMiLinearizationAnalysisPass(true));
     // addPass(createSensitiveRegionAnalysisPass(false));
     addPass(createPersistencyAnalysisPass(false));
     // addPass(createRISCVLinearizeBranchPass());
-    addPass(createRISCVAMiLinearizeRegionPass());
+    addPass(createRISCVAMiLinearizeRegionPass(!AMiGeneralLinearization));
     addPass(&RemoveBranchPseudosPassID);
   }
 
@@ -399,12 +413,20 @@ void RISCVPassConfig::addPreSSADestruction() {
 void RISCVPassConfig::addPostSSADestruction() {
   if (EnableAMiLinearization == cl::BOU_TRUE) {
     addPass(createTrackSecretsAnalysisPass(true));
-    addPass(createAMiLinearizationAnalysisPass(true));
+
+    if (!AMiGeneralLinearization) {
+      addPass(createRISCVSimplifySensitiveRegionPass());
+      addPass(createSensitiveRegionAnalysisPass(true));
+      addPass(createAMiLinearizationAnalysisSESEPass(true));
+    } else {
+      addPass(createAMiLinearizationAnalysisPass(true));
+    }
+    // addPass(createAMiLinearizationAnalysisPass(true));
     // addPass(createSensitiveRegionAnalysisPass(true));
     // addPass(&CreateSensitiveRegionsID);
     // addPass(&InsertPersistentDefsPassID);
     // addPass(&AddMimicryConstraintsPassID);
-    addPass(&InsertConflictingDefsPassID);
+    addPass(createInsertConflictingDefsPass(!AMiGeneralLinearization));
   }
 }
 

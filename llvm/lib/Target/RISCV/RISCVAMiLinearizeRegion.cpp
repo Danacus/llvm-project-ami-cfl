@@ -191,9 +191,19 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
   PA = &getAnalysis<PersistencyAnalysisPass>();
-  ALA = &getAnalysis<AMiLinearizationAnalysis>();
 
-  for (auto &Pair : ALA->ActivatingRegions) {
+  DenseMap<AMiLinearizationAnalysis::Edge, ActivatingRegion>
+      *ActivatingRegions = nullptr;
+
+  if (SimpleSESE) {
+    ActivatingRegions =
+        &getAnalysis<AMiLinearizationAnalysisSESE>().ActivatingRegions;
+  } else {
+    ActivatingRegions =
+        &getAnalysis<AMiLinearizationAnalysis>().ActivatingRegions;
+  }
+
+  for (auto &Pair : *ActivatingRegions) {
     auto &Region = Pair.getSecond();
     if (Region.Branch && Region.Exit) {
       // Make fallthrough explicit if we need to make it activating
@@ -213,7 +223,15 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     handleRegion(&Region);
   }
 
-  for (auto &Edge : ALA->GhostEdges) {
+  AMiLinearizationAnalysis::EdgeSet *GhostEdges = nullptr;
+
+  if (SimpleSESE) {
+    GhostEdges = &getAnalysis<AMiLinearizationAnalysisSESE>().GhostEdges;
+  } else {
+    GhostEdges = &getAnalysis<AMiLinearizationAnalysis>().GhostEdges;
+  }
+
+  for (auto &Edge : *GhostEdges) {
     if (!Edge.first->isSuccessor(Edge.second)) {
       TII->insertUnconditionalBranch(*Edge.first, Edge.second, DebugLoc());
       Edge.first->addSuccessor(Edge.second);
@@ -224,7 +242,8 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   return true;
 }
 
-RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion() : MachineFunctionPass(ID) {
+RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion(bool SimpleSESE)
+    : MachineFunctionPass(ID), SimpleSESE(SimpleSESE) {
   initializeRISCVAMiLinearizeRegionPass(*PassRegistry::getPassRegistry());
 }
 
@@ -238,8 +257,8 @@ INITIALIZE_PASS_END(RISCVAMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
 
 namespace llvm {
 
-FunctionPass *createRISCVAMiLinearizeRegionPass() {
-  return new RISCVAMiLinearizeRegion();
+FunctionPass *createRISCVAMiLinearizeRegionPass(bool SimpleSESE) {
+  return new RISCVAMiLinearizeRegion(SimpleSESE);
 }
 
 } // namespace llvm

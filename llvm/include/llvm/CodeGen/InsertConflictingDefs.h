@@ -2,6 +2,7 @@
 #define LLVM_CODEGEN_INSERT_CONFLICTING_DEFS
 
 #include "llvm/CodeGen/AMiLinearizationAnalysis.h"
+#include "llvm/CodeGen/AMiLinearizationAnalysisSESE.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -24,10 +25,12 @@ class InsertConflictingDefs : public MachineFunctionPass {
 
   DenseMap<ActivatingRegion *, MachineBasicBlock *> ConstraintMBBMap;
 
+  bool SimpleSESE;
+
 public:
   static char ID;
 
-  InsertConflictingDefs();
+  InsertConflictingDefs(bool SimpleSESE);
 
   MachineBasicBlock *createConstraintMBB(MachineFunction &MF,
                                          MachineBasicBlock *From,
@@ -38,8 +41,13 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<AMiLinearizationAnalysis>();
-    AU.addPreserved<AMiLinearizationAnalysis>();
+    if (SimpleSESE) {
+      AU.addRequired<AMiLinearizationAnalysisSESE>();
+      AU.addPreserved<AMiLinearizationAnalysisSESE>();
+    } else {
+      AU.addRequired<AMiLinearizationAnalysis>();
+      AU.addPreserved<AMiLinearizationAnalysis>();
+    }
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     AU.addUsedIfAvailable<LiveIntervals>();
