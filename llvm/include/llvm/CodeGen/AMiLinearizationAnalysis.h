@@ -119,10 +119,13 @@ private:
   MachineDominanceFrontier *MDF;
   MachineFunction *MF;
   bool AnalysisOnly;
+  DenseMap<MachineBasicBlock *, unsigned int> BlockIndex;
+  SmallVector<MachineBasicBlock *> Blocks;
 
 public:
   SparseBitVector<128> SensitiveBranchBlocks;
   EdgeSet GhostEdges;
+  EdgeSet DeferralEdges;
   EdgeSet UncondEdges;
   EdgeSet ActivatingEdges;
   DenseMap<Edge, ActivatingRegion> ActivatingRegions;
@@ -143,6 +146,9 @@ public:
       MachineBasicBlock *MBB,
       iterator_range<std::vector<MachineBasicBlock *>::iterator> Choices);
   void linearizeBranch(MachineBasicBlock *MBB, MachineBasicBlock *UncondSucc, MachineBasicBlock *Target);
+  void linearize();
+  MachineBasicBlock *nearestSuccessor(MachineBasicBlock *MBB);
+  MachineBasicBlock *nearestDeferral(MachineBasicBlock *MBB);
 
   iterator_range<bounded_domtree_iterator>
   regionDomTreeIterator(MachineBasicBlock *Entry, MachineBasicBlock *Exit) {

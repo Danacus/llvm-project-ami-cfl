@@ -16,244 +16,98 @@ using namespace llvm;
 
 #define DEBUG_TYPE "ami-linearization-analysis"
 
-void AMiLinearizationAnalysis::findActivatingRegionExitings(
-    MachineBasicBlock *Entry, MachineBasicBlock *Target,
-    SmallVectorImpl<MachineBasicBlock *> &Exitings) {
-  auto *EntryNode = MDT->getNode(Entry);
-  SmallVector<MachineDomTreeNode *, 8> WorkList;
-  WorkList.push_back(EntryNode);
+MachineBasicBlock *AMiLinearizationAnalysis::nearestDeferral(MachineBasicBlock *MBB) {
+  unsigned int ClosestIndex = Blocks.size();
+  MachineBasicBlock *Closest = nullptr;
 
-  while (!WorkList.empty()) {
-    auto *Node = WorkList.pop_back_val();
-
-    bool IsExiting = false;
-
-    for (auto *Succ : Node->getBlock()->successors()) {
-      // TODO: This is not very precise, but might be good enough
-      if (!MDT->dominates(EntryNode->getBlock(), Succ)) {
-        IsExiting = true;
+  for (auto &Pair : DeferralEdges) {
+    if (Pair.first == MBB) {
+      if (BlockIndex[Pair.second] < ClosestIndex) {
+        Closest = Pair.second;
+        ClosestIndex = BlockIndex[Pair.second];
       }
     }
-
-    for (auto *Child : Node->children()) {
-      if (Child->getBlock() == Target) {
-        IsExiting = true;
-        continue;
-      }
-      LLVM_DEBUG(errs() << "Child ");
-      LLVM_DEBUG(Child->getBlock()->printAsOperand(errs()));
-      LLVM_DEBUG(errs() << "\n");
-      WorkList.push_back(Child);
-    }
-
-    if (IsExiting)
-      Exitings.push_back(Node->getBlock());
   }
+  
+  return Closest;
 }
 
-MachineBasicBlock *AMiLinearizationAnalysis::chooseUnconditionalSuccessor(
-    MachineBasicBlock *MBB,
-    iterator_range<std::vector<MachineBasicBlock *>::iterator> Choices) {
-  // 1. Always use ghost edges if possible
-  // 2. Don't pick a post-dominator
-  // 3. Use the fallthrough if possible
-  // 4. Prefer blocks with lower number
-
-  SmallVector<MachineBasicBlock *> FilteredChoices;
-
-  for (MachineBasicBlock *Choice : Choices) {
-    if (GhostEdges.contains({MBB, Choice})) {
-      // Always pick the ghost edge if possible, it's already linearized in that
-      // case, so we don't need to do anything else
-      return Choice;
-    }
-
-    // Never pick a post-dominator as unconditional successor,
-    // unless this block only has a single successor (should never happen, but
-    // would be fine)
-    if (MPDT->dominates(Choice, MBB) && MBB->succ_size() > 1)
-      continue;
-
-    FilteredChoices.push_back(Choice);
-  }
-
-  if (FilteredChoices.size() == 0)
-    return nullptr;
-
-  // Check if we can use the fallthrough
-  auto *Fallthrough = MBB->getFallThrough(true);
-  if (MBB->canFallThrough() && Fallthrough) {
-    if (std::find(FilteredChoices.begin(), FilteredChoices.end(),
-                  Fallthrough) != FilteredChoices.end()) {
-      return Fallthrough;
-    }
-  }
-
-  // Basic heuristic
-  std::sort(FilteredChoices.begin(), FilteredChoices.end(),
-            [](MachineBasicBlock *A, MachineBasicBlock *B) {
-              return A->getNumber() < B->getNumber();
-            });
-
-  return *FilteredChoices.begin();
-}
-
-void AMiLinearizationAnalysis::linearizeBranch(MachineBasicBlock *MBB,
-                                               MachineBasicBlock *UncondSucc,
-                                               MachineBasicBlock *Target) {
-  LLVM_DEBUG(errs() << "Linearize Branch ");
-  LLVM_DEBUG(MBB->printAsOperand(errs()));
-  LLVM_DEBUG(errs() << "\n");
-
-  LLVM_DEBUG(errs() << "  UncondSucc ");
-  LLVM_DEBUG(UncondSucc->printAsOperand(errs()));
-  LLVM_DEBUG(errs() << "\n");
-
-  assert(MBB->isSuccessor(UncondSucc) &&
-         "Expected UncondSucc to be a successor of MBB");
-
-  // If there is only one successor, this branch has likely
-  // been linearized before.
-  if (MBB->succ_size() == 1) {
-    if (MBB->getSingleSuccessor() == UncondSucc) {
-      // If it was previously linearized with the same unconditional successor,
-      // there is no need to do anything.
-      return;
-    }
-
-    if (!MPDT->dominates(MBB->getSingleSuccessor(), UncondSucc)) {
-      // If the original unconditional successor post-dominates the new one,
-      // we can safely relinearize to the new one, otherwise we give up.
-      llvm_unreachable("Failed to linearize");
-    } else {
-      if (GhostEdges.contains({MBB, MBB->getSingleSuccessor()})) {
-        GhostEdges.erase({MBB, MBB->getSingleSuccessor()});
-      }
-    }
-  }
+MachineBasicBlock *AMiLinearizationAnalysis::nearestSuccessor(MachineBasicBlock *MBB) {
+  unsigned int ClosestIndex = Blocks.size();
+  MachineBasicBlock *Closest = nullptr;
 
   for (auto *Succ : MBB->successors()) {
-    if (Succ != UncondSucc) {
-      if (GhostEdges.contains({MBB, Succ})) {
-        GhostEdges.erase({MBB, Succ});
-        MBB->removeSuccessor(Succ);
-        MDT->calculate(*MF);
-        MPDT->getBase().recalculate(*MF);
-
-        if (Target == Succ)
-          // This was a ghost edge, so don't turn it into an activating edge
-          return;
-      }
-
-      if (GhostEdges.contains({MBB, Succ}) || UncondEdges.contains({MBB, Succ}))
-        assert(MPDT->dominates(Succ, UncondSucc) &&
-               "Cannot relinearize to new UncondSucc");
+    if (BlockIndex[Succ] < ClosestIndex) {
+      Closest = Succ;
+      ClosestIndex = BlockIndex[Succ];
     }
   }
+  
+  return Closest;
+}
 
-  if (!ActivatingEdges.contains({MBB, Target}))
-    ActivatingEdges.insert({MBB, Target});
+void AMiLinearizationAnalysis::linearize() {
+  for (auto *MBB : Blocks) {
+    LLVM_DEBUG(MBB->dump());
+    
+    if (!SensitiveBranchBlocks.test(MBB->getNumber())) {
+      // Not a secret-dependent branch
+      for (auto *Succ : MBB->successors()) {
+        auto *Next = Succ;
+        auto *NextD = nearestDeferral(MBB);
+        if (NextD && BlockIndex[NextD] < BlockIndex[Next]) {
+          Next = NextD;
+          GhostEdges.insert({ MBB, Next });
+          ActivatingEdges.insert({ MBB, Succ });
+        }
 
-  // for (auto *Target : TargetsToLinearize) {
-  LLVM_DEBUG(errs() << "  Target ");
-  LLVM_DEBUG(Target->printAsOperand(errs()));
-  LLVM_DEBUG(errs() << "\n");
+        if (Succ != Next) {
+          DeferralEdges.insert({ Next, Succ });
+        }
 
-  SmallVector<MachineBasicBlock *, 4> Exitings;
-  findActivatingRegionExitings(UncondSucc, Target, Exitings);
-
-  SmallVector<std::pair<MachineBasicBlock *,
-                        std::pair<SmallPtrSet<MachineBasicBlock *, 4>,
-                                  SmallPtrSet<MachineBasicBlock *, 4>>>,
-              4>
-      ToLinearize;
-
-  bool CreatedExit = false;
-
-  for (auto *Exiting : Exitings) {
-    LLVM_DEBUG(errs() << "  Exiting ");
-    LLVM_DEBUG(Exiting->printAsOperand(errs()));
-    LLVM_DEBUG(errs() << "\n");
-
-    SmallPtrSet<MachineBasicBlock *, 4> Exits;
-    SmallPtrSet<MachineBasicBlock *, 4> InternalSuccessors;
-
-    for (auto *ESucc : Exiting->successors()) {
-      if (MDT->dominates(UncondSucc, ESucc)) {
-        // ESucc is not an exit of the activating region
-        LLVM_DEBUG(errs() << "    Internal ");
-        InternalSuccessors.insert(ESucc);
-      } else {
-        LLVM_DEBUG(errs() << "    Exit ");
-        Exits.insert(ESucc);
+        for (auto &Pair : DeferralEdges) {
+          if (Pair.first == MBB && Pair.second != Next) {
+            DeferralEdges.insert({ Next, Pair.second });
+          }
+        }
       }
-      LLVM_DEBUG(ESucc->printAsOperand(errs()));
-      LLVM_DEBUG(errs() << "\n");
-    }
-
-    if (InternalSuccessors.size() > 0) {
-      // Postpone linearization until after all other exiting blocks have been
-      // considered.
-      ToLinearize.push_back(
-          {Exiting, {std::move(InternalSuccessors), std::move(Exits)}});
     } else {
-      ToLinearize.insert(
-          ToLinearize.begin(),
-          {Exiting, {std::move(InternalSuccessors), std::move(Exits)}});
-    }
-  }
-
-  SmallVector<MachineBasicBlock *, 8> FinishedExitings;
-  SmallVector<MachineBasicBlock *, 8> Choices;
-
-  for (auto &Pair : ToLinearize) {
-    auto *Exiting = Pair.first;
-    if (Exiting == Target) {
-      CreatedExit = true;
-      continue;
-    }
-    auto *Succ = Target;
-    Choices.clear();
-
-    if (CreatedExit) {
-      for (auto *MBB : FinishedExitings)
-        if (Exiting->isSuccessor(MBB))
-          Choices.push_back(MBB);
-    }
-
-    if (Choices.size() > 0) {
-      Succ = chooseUnconditionalSuccessor(Exiting, Choices);
-      assert(Succ &&
-             "Cannot linearize branch: no valid unconditional successor");
-    } else {
-      if (!Exiting->isSuccessor(Target) &&
-          !GhostEdges.contains({Exiting, Target})) {
-        GhostEdges.insert({Exiting, Target});
-        Exiting->addSuccessor(Target);
+      // Secret-dependent branch
+      auto *Next = nearestSuccessor(MBB);
+      auto *NextD = nearestDeferral(MBB);
+      if (NextD && BlockIndex[NextD] < BlockIndex[Next]) {
+        Next = NextD;
+        GhostEdges.insert({ MBB, Next });
       }
-      if (MBB->isSuccessor(Target))
-        MBB->removeSuccessor(Target);
-      MDT->calculate(*MF);
-      MPDT->getBase().recalculate(*MF);
-      FinishedExitings.push_back(Exiting);
-      CreatedExit = true;
+      assert(Next && "Expected successor");
+      LLVM_DEBUG(Next->dump());
+
+      for (auto *Succ : MBB->successors()) {
+        if (Succ != Next) {
+          ActivatingEdges.insert({ MBB, Succ });
+          DeferralEdges.insert({ Next, Succ });
+        }
+      }
+
+      for (auto &Pair : DeferralEdges) {
+        if (Pair.first == MBB && Pair.second != Next) {
+          DeferralEdges.insert({ Next, Pair.second });
+        }
+      }
     }
-    for (auto *E : Pair.second.second)
-      if (!MPDT->dominates(Succ, Exiting))
-        linearizeBranch(Exiting, Succ, E);
+
+    SmallSet<Edge, 4> ToRemove;
+    for (auto &Pair : DeferralEdges) {
+      if (Pair.first == MBB)
+        ToRemove.insert(Pair);
+    }
+    for (auto &Pair : ToRemove)
+      DeferralEdges.erase(Pair);
+
+    LLVM_DEBUG(dump());
   }
 
-  assert(CreatedExit && "Unable to exit activating region");
-
-  if (MBB->isSuccessor(Target)) {
-    MBB->removeSuccessor(Target);
-    MDT->calculate(*MF);
-    MPDT->getBase().recalculate(*MF);
-  }
-
-  UncondEdges.insert({MBB, UncondSucc});
-
-  LLVM_DEBUG(errs() << "Linearize Branch end\n");
+  assert(DeferralEdges.empty() && "Unexpected failure");
 }
 
 void AMiLinearizationAnalysis::findSecretDependentBranches() {
@@ -284,6 +138,17 @@ void AMiLinearizationAnalysis::findSecretDependentBranches() {
 void AMiLinearizationAnalysis::createActivatingRegions() {
   LLVM_DEBUG(MDT->dump());
   LLVM_DEBUG(MPDT->dump());
+
+  for (auto &Edge : GhostEdges) {
+    Edge.first->addSuccessor(Edge.second);
+  }
+
+  for (auto &Edge : ActivatingEdges) {
+    Edge.first->removeSuccessor(Edge.second);
+  }
+
+  MDT->calculate(*MF);
+  MPDT->getBase().recalculate(*MF);
   
   SmallPtrSet<MachineBasicBlock *, 8> Blocks;
   for (auto &MBB : *MF)
@@ -294,7 +159,13 @@ void AMiLinearizationAnalysis::createActivatingRegions() {
 
   for (auto &Edge : ActivatingEdges) {
     auto *Branch = Edge.first;
-    auto *Entry = Edge.first->getSingleSuccessor();
+    MachineBasicBlock *Entry = nullptr;
+    for (auto *Succ : Branch->successors()) {
+      if (!ActivatingEdges.contains({ Edge.first, Succ })) {
+        Entry = Succ;
+      }
+    }
+    assert(Entry && "Expected an entry");
     auto *Exit = Edge.second;
 
     Blocks.clear();
@@ -347,29 +218,26 @@ bool AMiLinearizationAnalysis::runOnMachineFunction(MachineFunction &MF) {
   GhostEdges.clear();
   UncondEdges.clear();
   ActivatingEdges.clear();
+  DeferralEdges.clear();
   ActivatingRegions.clear();
   RegionMap.clear();
+  Blocks.clear();
+  BlockIndex.clear();
+
+  unsigned int Index = 0;
+  // for (auto &Node : make_range(df_begin(MDT), df_end(MDT))) {
+  // TODO: use proper compact order
+  for (auto &MBB : MF) {
+    // auto *MBB = Node->getBlock();
+    BlockIndex.insert({ &MBB, Index++ });
+    Blocks.push_back(&MBB);
+  }
 
   findSecretDependentBranches();
 
-  SmallVector<MachineBasicBlock *> ToLinearize;
+  linearize();
 
-  for (auto &Node : make_range(df_begin(MDT), df_end(MDT))) {
-    auto *MBB = Node->getBlock();
-    if (SensitiveBranchBlocks.test(MBB->getNumber())) {
-      ToLinearize.push_back(MBB);
-    }
-  }
-
-  for (auto *MBB : ToLinearize) {
-    auto *UncondSucc = chooseUnconditionalSuccessor(MBB, MBB->successors());
-    assert(UncondSucc &&
-           "Cannot linearize branch: no valid unconditional successor");
-    for (auto *Succ : MBB->successors()) {
-      if (Succ != UncondSucc)
-        linearizeBranch(MBB, UncondSucc, Succ);
-    }
-  }
+  LLVM_DEBUG(dump());
 
   createActivatingRegions();
 
@@ -389,6 +257,30 @@ void AMiLinearizationAnalysis::print(raw_ostream &OS, const Module *) const {
   OS << "Ghost edges:\n";
 
   for (auto &Edge : GhostEdges) {
+    OS << "<";
+    Edge.first->printAsOperand(OS);
+    OS << " " << Edge.first->getName();
+    OS << ", ";
+    Edge.second->printAsOperand(OS);
+    OS << " " << Edge.second->getName();
+    OS << ">\n";
+  }
+
+  OS << "Activating edges:\n";
+
+  for (auto &Edge : ActivatingEdges) {
+    OS << "<";
+    Edge.first->printAsOperand(OS);
+    OS << " " << Edge.first->getName();
+    OS << ", ";
+    Edge.second->printAsOperand(OS);
+    OS << " " << Edge.second->getName();
+    OS << ">\n";
+  }
+
+  OS << "Deferral edges:\n";
+
+  for (auto &Edge : DeferralEdges) {
     OS << "<";
     Edge.first->printAsOperand(OS);
     OS << " " << Edge.first->getName();

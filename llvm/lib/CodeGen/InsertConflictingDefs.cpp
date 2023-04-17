@@ -68,7 +68,7 @@ void InsertConflictingDefs::insertGhostLoad(MachineInstr *StoreMI) {
   MachineBasicBlock::iterator Iter = std::prev(StoreMI->getIterator());
 
   // Don't insert duplicate GHOST_LOAD
-  if (Iter.isValid() && Iter->getOpcode() == TargetOpcode::GHOST_LOAD &&
+  if (StoreMI->getIterator() != MBB->begin() && Iter.isValid() && Iter->getOpcode() == TargetOpcode::GHOST_LOAD &&
       Iter->getOperand(0).getReg() == StoreMI->getOperand(0).getReg())
     return;
 
