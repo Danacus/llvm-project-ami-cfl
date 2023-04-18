@@ -199,6 +199,7 @@ namespace llvm {
   //extern char &TrackSecretsPrinterID;
   extern char &PrintSecretsPassID;
   extern char &CreateSensitiveRegionsID;
+  extern char &CompactOrderPassID;
 
   FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA = true);
   FunctionPass *createSensitiveRegionAnalysisPass(bool IsSSA = true);
@@ -206,6 +207,7 @@ namespace llvm {
   FunctionPass *createAMiLinearizationAnalysisPass(bool AnalysisOnly = true);
   FunctionPass *createAMiLinearizationAnalysisSESEPass(bool AnalysisOnly = true);
   FunctionPass *createInsertConflictingDefsPass(bool SimpleSESE);
+  FunctionPass *createCompactOrderPass();
 
   /// FastRegisterAllocation Pass - This pass register allocates as fast as
   /// possible. It is best suited for debug code where live ranges are short.

@@ -383,6 +383,7 @@ void RISCVPassConfig::addPreEmitPass2() {
       addPass(createSensitiveRegionAnalysisPass(false));
       addPass(createAMiLinearizationAnalysisSESEPass(true));
     } else {
+      addPass(createCompactOrderPass());
       addPass(createAMiLinearizationAnalysisPass(true));
     }
     // addPass(createAMiLinearizationAnalysisPass(true));
@@ -419,6 +420,7 @@ void RISCVPassConfig::addPostSSADestruction() {
       addPass(createSensitiveRegionAnalysisPass(true));
       addPass(createAMiLinearizationAnalysisSESEPass(true));
     } else {
+      addPass(createCompactOrderPass());
       addPass(createAMiLinearizationAnalysisPass(true));
     }
     // addPass(createAMiLinearizationAnalysisPass(true));

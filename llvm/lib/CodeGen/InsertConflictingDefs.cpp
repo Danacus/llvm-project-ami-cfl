@@ -97,7 +97,19 @@ MachineBasicBlock *InsertConflictingDefs::createConstraintMBB(
   MachineBasicBlock *FBB;
   SmallVector<MachineOperand> Cond;
   TII->analyzeBranch(*From, TBB, FBB, Cond);
-  if (TBB == To)
+  // LLVM_DEBUG(errs() << "From: ");
+  // LLVM_DEBUG(From->printAsOperand(errs()));
+  // LLVM_DEBUG(errs() << "\n");
+  // LLVM_DEBUG(errs() << "To: ");
+  // LLVM_DEBUG(To->printAsOperand(errs()));
+  // LLVM_DEBUG(errs() << "\n");
+  // LLVM_DEBUG(errs() << "TBB: ");
+  // LLVM_DEBUG(TBB->printAsOperand(errs()));
+  // LLVM_DEBUG(errs() << "\n");
+  // LLVM_DEBUG(errs() << "FBB: ");
+  // LLVM_DEBUG(FBB->printAsOperand(errs()));
+  // LLVM_DEBUG(errs() << "\n");
+  if (!TBB || TBB == To)
     TBB = MBB;
   else if (FBB == To)
     FBB = MBB;

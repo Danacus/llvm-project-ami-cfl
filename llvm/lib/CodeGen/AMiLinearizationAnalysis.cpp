@@ -37,6 +37,9 @@ MachineBasicBlock *AMiLinearizationAnalysis::nearestSuccessor(MachineBasicBlock 
   MachineBasicBlock *Closest = nullptr;
 
   for (auto *Succ : MBB->successors()) {
+    if (BlockIndex[Succ] < BlockIndex[MBB])
+      // Skip backedges
+      continue;
     if (BlockIndex[Succ] < ClosestIndex) {
       Closest = Succ;
       ClosestIndex = BlockIndex[Succ];
@@ -53,6 +56,9 @@ void AMiLinearizationAnalysis::linearize() {
     if (!SensitiveBranchBlocks.test(MBB->getNumber())) {
       // Not a secret-dependent branch
       for (auto *Succ : MBB->successors()) {
+        if (BlockIndex[Succ] < BlockIndex[MBB])
+          // Skip backedges
+          continue;
         auto *Next = Succ;
         auto *NextD = nearestDeferral(MBB);
         if (NextD && BlockIndex[NextD] < BlockIndex[Next]) {
@@ -83,6 +89,9 @@ void AMiLinearizationAnalysis::linearize() {
       LLVM_DEBUG(Next->dump());
 
       for (auto *Succ : MBB->successors()) {
+        if (BlockIndex[Succ] < BlockIndex[MBB])
+          // Skip backedges
+          continue;
         if (Succ != Next) {
           ActivatingEdges.insert({ MBB, Succ });
           DeferralEdges.insert({ Next, Succ });
@@ -136,9 +145,6 @@ void AMiLinearizationAnalysis::findSecretDependentBranches() {
 }
 
 void AMiLinearizationAnalysis::createActivatingRegions() {
-  LLVM_DEBUG(MDT->dump());
-  LLVM_DEBUG(MPDT->dump());
-
   for (auto &Edge : GhostEdges) {
     Edge.first->addSuccessor(Edge.second);
   }
@@ -149,6 +155,9 @@ void AMiLinearizationAnalysis::createActivatingRegions() {
 
   MDT->calculate(*MF);
   MPDT->getBase().recalculate(*MF);
+
+  LLVM_DEBUG(MDT->dump());
+  LLVM_DEBUG(MPDT->dump());
   
   SmallPtrSet<MachineBasicBlock *, 8> Blocks;
   for (auto &MBB : *MF)
@@ -224,13 +233,17 @@ bool AMiLinearizationAnalysis::runOnMachineFunction(MachineFunction &MF) {
   Blocks.clear();
   BlockIndex.clear();
 
+  auto &CO = getAnalysis<CompactOrder>();
   unsigned int Index = 0;
   // for (auto &Node : make_range(df_begin(MDT), df_end(MDT))) {
   // TODO: use proper compact order
-  for (auto &MBB : MF) {
-    // auto *MBB = Node->getBlock();
-    BlockIndex.insert({ &MBB, Index++ });
-    Blocks.push_back(&MBB);
+  // for (auto &MBB : MF) {
+  for (auto &Node : CO.Order) {
+    if (Node->IsLoop)
+      continue;
+    auto *MBB = Node->getBlock();
+    BlockIndex.insert({ MBB, Index++ });
+    Blocks.push_back(MBB);
   }
 
   findSecretDependentBranches();

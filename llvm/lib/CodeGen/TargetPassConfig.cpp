@@ -1491,7 +1491,7 @@ void TargetPassConfig::addOptimizedRegAlloc() {
     // Run post-ra machine LICM to hoist reloads / remats.
     //
     // FIXME: can this move into MachineLateOptimization?
-    addPass(&MachineLICMID);
+    // addPass(&MachineLICMID);
   }
 }
 

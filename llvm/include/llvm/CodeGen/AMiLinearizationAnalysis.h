@@ -3,6 +3,7 @@
 
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/SparseBitVector.h"
+#include "llvm/CodeGen/CompactOrder.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"
@@ -169,6 +170,7 @@ public:
     AU.addPreserved<MachinePostDominatorTree>();
     AU.addRequired<MachineDominanceFrontier>();
     AU.addPreserved<MachineDominanceFrontier>();
+    AU.addRequired<CompactOrder>();
     if (AnalysisOnly)
       AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);

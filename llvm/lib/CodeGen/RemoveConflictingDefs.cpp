@@ -54,10 +54,14 @@ bool RemoveConflictingDefs::runOnMachineFunction(MachineFunction &MF) {
     SmallVector<MachineOperand> Cond;
     TII->analyzeBranch(*Pred, TBB, FBB, Cond, false);
 
-    assert(TBB == MBB && "TBB should be the temporary block");
-
+    assert(TBB == MBB || FBB == MBB && "TBB or FBB should be the temporary block");
+  
     TII->removeBranch(*Pred);
-    TII->insertBranch(*Pred, Succ, FBB, Cond, DebugLoc());
+    if (TBB == MBB) {
+      TII->insertBranch(*Pred, Succ, FBB, Cond, DebugLoc());
+    } else {
+      TII->insertBranch(*Pred, TBB, Succ, Cond, DebugLoc());
+    }
     MBB->removeSuccessor(Succ);
     Pred->removeSuccessor(MBB);
     Pred->addSuccessor(Succ);
