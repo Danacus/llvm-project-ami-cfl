@@ -37,10 +37,11 @@ public:
 
   RISCVAMiLinearizeRegion();
 
-  template <RISCV::AMi::Qualifier Q>
-  void setQualifier(MachineInstr *I);
-  bool setBranchActivating(MachineBasicBlock &MBB, MachineBasicBlock *Target = nullptr);
-  void setBranchInstrActivating(MachineInstr *I, MachineBasicBlock *Target = nullptr);
+  template <RISCV::AMi::Qualifier Q> void setQualifier(MachineInstr *I);
+  bool setBranchActivating(MachineBasicBlock &MBB,
+                           MachineBasicBlock *Target = nullptr);
+  void setBranchInstrActivating(MachineBasicBlock::iterator I,
+                                MachineBasicBlock *Target = nullptr);
   bool isActivatingBranch(MachineBasicBlock &MBB);
   void findActivatingRegions();
   void handlePersistentInstr(MachineInstr *I);

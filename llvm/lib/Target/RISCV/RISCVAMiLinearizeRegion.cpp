@@ -57,6 +57,7 @@ void RISCVAMiLinearizeRegion::setQualifier(MachineInstr *I) {
 
 bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB,
                                                   MachineBasicBlock *Target) {
+  // LLVM_DEBUG(MBB.dump());
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
   if (I == MBB.end() || !TII->isUnpredicatedTerminator(*I))
@@ -86,21 +87,24 @@ bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB,
 
   // Handle a single unconditional branch.
   if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
-    setBranchInstrActivating(&*I, Target);
+    setBranchInstrActivating(I, Target);
     return false;
   }
 
   // Handle a single conditional branch.
   if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
-    setBranchInstrActivating(&*I, Target);
+    setBranchInstrActivating(I, Target);
     return false;
   }
 
   // Handle a conditional branch followed by an unconditional branch.
   if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
       I->getDesc().isUnconditionalBranch()) {
-    setBranchInstrActivating(&*I, Target);
-    setBranchInstrActivating(&*std::prev(I), Target);
+    // LLVM_DEBUG(errs() << "here\n");
+    // LLVM_DEBUG(I->dump());
+    // LLVM_DEBUG(std::prev(I)->dump());
+    setBranchInstrActivating(std::prev(I), Target);
+    setBranchInstrActivating(I, Target);
     return false;
   }
 
@@ -109,16 +113,17 @@ bool RISCVAMiLinearizeRegion::setBranchActivating(MachineBasicBlock &MBB,
 }
 
 void RISCVAMiLinearizeRegion::setBranchInstrActivating(
-    MachineInstr *I, MachineBasicBlock *Target) {
+    MachineBasicBlock::iterator I, MachineBasicBlock *Target) {
+  // LLVM_DEBUG(I->dump());
   MachineBasicBlock *Dest = TII->getBranchDestBlock(*I);
   if (!Target || Target == Dest) {
     if (I->getDesc().isConditionalBranch())
-      setQualifier<llvm::RISCV::AMi::Activating>(I);
+      setQualifier<llvm::RISCV::AMi::Activating>(&*I);
 
     if (I->getDesc().isUnconditionalBranch()) {
-      // HACK: Since a.jal behaves like an activating call, we need to use a.beq zero, zero
-      BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
-              TII->get(RISCV::ABEQ))
+      // HACK: Since a.jal behaves like an activating call, we need to use a.beq
+      // zero, zero
+      BuildMI(*I->getParent(), I, DebugLoc(), TII->get(RISCV::ABEQ))
           .addReg(RISCV::X0)
           .addReg(RISCV::X0)
           .addMBB(Dest);
@@ -196,39 +201,81 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
   ALA = &getAnalysis<AMiLinearizationAnalysis>().getResult();
 
-  for (auto &Pair : ALA->ActivatingRegions) {
-    auto &Region = Pair.getSecond();
-    if (Region.Branch && Region.Exit) {
-      // Make fallthrough explicit if we need to make it activating
-      if (Region.Branch->succ_size() == 1 &&
-          Region.Branch->getFirstTerminator() == Region.Branch->end() &&
-          Region.Branch->getFallThrough() == Region.Exit)
-        TII->insertUnconditionalBranch(
-            *Region.Branch, Region.Branch->getFallThrough(), DebugLoc());
+  for (auto &MBB : MF) {
+    bool IsSensitive = ALA->SensitiveBranchBlocks.test(MBB.getNumber());
+    auto &AE = ALA->OutgoingActivatingEdges[&MBB];
+    auto &GE = ALA->OutgoingGhostEdges[&MBB];
 
-      setBranchActivating(*Region.Branch, Region.Exit);
+    // Make sure that if there are ghost edges and the branch is
+    // secret-dependent, all non-ghost edges are activating, otherwise we cannot
+    // handle this case
+    assert((GE.empty() || AE.size() == MBB.succ_size() || !IsSensitive) &&
+           "Invalid linearization, leakage cannot be mitigated");
+
+    LLVM_DEBUG(MBB.dump());
+
+    MachineBasicBlock *TBB;
+    MachineBasicBlock *FBB;
+    SmallVector<MachineOperand> Cond;
+    TII->analyzeBranch(MBB, TBB, FBB, Cond, true);
+
+    if (!FBB && MBB.canFallThrough() &&
+        (!GE.empty() || AE.contains(MBB.getFallThrough()))) {
+      // Make fallthrough explicit if we need to make it activating
+      TII->insertUnconditionalBranch(MBB, MBB.getFallThrough(), DebugLoc());
     }
-    // for (auto *Succ : Region.Branch->successors()) {
-    //   if (Succ != Region.Entry) {
-    //     Region.Branch->removeSuccessor(Succ);
-    //   }
-    // }
-    handleRegion(&Region);
+
+    if ((AE.size() == 1 && IsSensitive && !AE.contains(TBB) /* case c */) ||
+        (GE.size() == 1 && AE.contains(TBB) && Cond.size() == 3) /* case h */) {
+      // Need to flip the branch
+      if (!FBB)
+        FBB = MBB.getFallThrough();
+      TII->removeBranch(MBB);
+      SmallVector<MachineOperand> InvCond = SmallVector<MachineOperand>(Cond);
+      TII->reverseBranchCondition(InvCond);
+      TII->insertBranch(MBB, FBB, TBB, InvCond, DebugLoc());
+      auto *Temp = TBB;
+      TBB = FBB;
+      FBB = Temp;
+    }
   }
 
-  for (auto &Edge : ALA->GhostEdges) {
-    if (!Edge.first->isSuccessor(Edge.second)) {
-      TII->insertUnconditionalBranch(*Edge.first, Edge.second, DebugLoc());
-      Edge.first->addSuccessor(Edge.second);
+  for (auto &MBB : MF) {
+    auto &AE = ALA->OutgoingActivatingEdges[&MBB];
+    auto &GE = ALA->OutgoingGhostEdges[&MBB];
+
+    // Handle activating edges
+    for (auto *T : AE) {
+      setBranchActivating(MBB, T);
+
+      // Technically the successor should be removed, however, we have to keep
+      // these edges to ensure proper emission of labels.
+      if (MBB.isSuccessor(T))
+        MBB.removeSuccessor(T);
     }
+
+    // Handle ghost edges
+    for (auto *T : GE) {
+      if (!MBB.isSuccessor(T)) {
+        MBB.addSuccessor(T);
+
+        if (MBB.getFallThrough(true) != T)
+          TII->insertUnconditionalBranch(MBB, T, DebugLoc());
+      }
+    }
+  }
+
+  // Handle persistent instructions and ghost loads
+  for (auto &Pair : ALA->ActivatingRegions) {
+    auto &Region = Pair.getSecond();
+    handleRegion(&Region);
   }
 
   LLVM_DEBUG(MF.dump());
   return true;
 }
 
-RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion()
-    : MachineFunctionPass(ID) {
+RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion() : MachineFunctionPass(ID) {
   initializeRISCVAMiLinearizeRegionPass(*PassRegistry::getPassRegistry());
 }
 

@@ -115,6 +115,7 @@ struct LinearizationResult {
   using RegionSet = SmallPtrSet<ActivatingRegion *, 16>;
   using Edge = std::pair<MachineBasicBlock *, MachineBasicBlock *>;
   using EdgeSet = SmallSet<Edge, 16>;
+  using BlockSet = SmallPtrSet<MachineBasicBlock *, 16>;
 
   SparseBitVector<128> SensitiveBranchBlocks;
   EdgeSet GhostEdges;
@@ -122,6 +123,8 @@ struct LinearizationResult {
   EdgeSet ActivatingEdges;
   DenseMap<Edge, ActivatingRegion> ActivatingRegions;
   DenseMap<MachineBasicBlock *, RegionSet> RegionMap;
+  DenseMap<MachineBasicBlock *, BlockSet> OutgoingActivatingEdges;
+  DenseMap<MachineBasicBlock *, BlockSet> OutgoingGhostEdges;
 
   void clear() {
     SensitiveBranchBlocks.clear();
@@ -130,6 +133,8 @@ struct LinearizationResult {
     ActivatingEdges.clear();
     ActivatingRegions.clear();
     RegionMap.clear();
+    OutgoingActivatingEdges.clear();
+    OutgoingGhostEdges.clear();
   }
 
   void print(raw_ostream &OS) const {
@@ -204,6 +209,7 @@ private:
   void undoCFGChanges();
   void findSecretDependentBranches();
   void createActivatingRegions();
+  void updateEdgeMaps();
 
 protected:
   iterator_range<bounded_domtree_iterator>

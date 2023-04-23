@@ -13,7 +13,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "remove-persistent-defs"
+#define DEBUG_TYPE "remove-conflicting-defs"
 
 char RemoveConflictingDefs::ID = 0;
 char &llvm::RemoveConflictingDefsPassID = RemoveConflictingDefs::ID;

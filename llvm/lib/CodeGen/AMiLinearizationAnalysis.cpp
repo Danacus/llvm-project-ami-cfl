@@ -21,6 +21,7 @@ bool LinearizationAnalysisBase::run() {
   LLVM_DEBUG(dump());
 
   createActivatingRegions();
+  updateEdgeMaps();
 
   LLVM_DEBUG(MF->dump());
   LLVM_DEBUG(MDT->dump());
@@ -127,6 +128,15 @@ void LinearizationAnalysisBase::createActivatingRegions() {
       if (MDT->dominates(Entry, Exiting))
         assert(MPDT->dominates(Exit, Entry) && "Activating region not SESE");
     }
+  }
+}
+
+void LinearizationAnalysisBase::updateEdgeMaps() {
+  for (auto &Edge : Result.ActivatingEdges) {
+    Result.OutgoingActivatingEdges[Edge.first].insert(Edge.second);
+  }
+  for (auto &Edge : Result.GhostEdges) {
+    Result.OutgoingGhostEdges[Edge.first].insert(Edge.second);
   }
 }
 
