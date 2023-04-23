@@ -154,6 +154,8 @@ void RISCVInstrInfo::transferSecret(const MachineInstr &MI, MachineOperand &MO, 
             
     if (MI.getOperand(1).isIdenticalTo(MO))
       NewDefs.insert({ MI.getOperand(0).getReg(), SecretMask >> 1 });
+    else
+      NewDefs.insert({ MI.getOperand(0).getReg(), SecretMask });
 
     break;   
   }

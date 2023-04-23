@@ -5,6 +5,7 @@
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/Register.h"
@@ -164,17 +165,19 @@ template <> struct DenseMapInfo<SecretDef> {
 class FlowGraph {
   MachineFunction &MF;
   MachineDominatorTree *MDT;
+  MachinePostDominatorTree *MPDT;
   ReachingDefAnalysis *RDA;
   MachineRegisterInfo &MRI;
 
+  // DenseMap<MachineBasicBlock *, SmallPtrSet<MachineInstr *, 8>> ControlDeps;
+  DenseMap<MachineInstr *, SmallPtrSet<MachineBasicBlock *, 8>> ControlDeps;
+
 public:
-  FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA = nullptr, MachineDominatorTree *MDT = nullptr)
-      : MF(MF), MDT(MDT), RDA(RDA), MRI(MF.getRegInfo()) {}
+  FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA = nullptr,
+            MachineDominatorTree *MDT = nullptr, MachinePostDominatorTree *MPDT = nullptr);
   void getSources(SmallSet<SecretDef, 8> &Defs,
                   DenseMap<SecretDef, uint64_t> &Secrets) const;
-  void getUses(SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses) const;
-  void getReachingDefs(SecretDef &SD,
-                       SmallPtrSet<MachineInstr *, 8> &Defs) const;
+  void getUses(SecretDef &SD, SmallPtrSet<MachineInstr *, 8> &Uses);
 };
 
 class SecretUse {
@@ -189,8 +192,8 @@ private:
 
 public:
   SecretUse()
-      : Def(SecretDef(SecretDef::SDK_Empty)), User(nullptr), Operands(OperandsSet()),
-        SecretMask(0) {}
+      : Def(SecretDef(SecretDef::SDK_Empty)), User(nullptr),
+        Operands(OperandsSet()), SecretMask(0) {}
   SecretUse(SecretDef Def, MachineInstr *User, OperandsSet Operands,
             uint64_t SecretMask)
       : Def(Def), User(User), Operands(Operands), SecretMask(SecretMask) {}
@@ -213,7 +216,7 @@ public:
 class TrackSecretsAnalysis : public MachineFunctionPass {
 public:
   static char ID;
-  
+
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
@@ -236,9 +239,11 @@ public:
       AU.addRequired<ReachingDefAnalysis>();
       AU.addRequired<MachineDominatorTree>();
     }
+    AU.addRequired<MachinePostDominatorTree>();
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
+
 private:
   FlowGraph *Graph = nullptr;
   SecretsMap Secrets;

@@ -1,3 +1,4 @@
+#include "llvm/ADT/SmallBitVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -157,7 +158,7 @@ void FlowGraph::getSources(SmallSet<SecretDef, 8> &SecretDefs,
 }
 
 void FlowGraph::getUses(SecretDef &SD,
-                        SmallPtrSet<MachineInstr *, 8> &Uses) const {
+                        SmallPtrSet<MachineInstr *, 8> &Uses) {
   switch (SD.getKind()) {
   case SecretDef::SDK_SecretRegisterDef: {
     if (RDA) {
@@ -176,6 +177,17 @@ void FlowGraph::getUses(SecretDef &SD,
         Uses.insert(&MI);
       }
     }
+
+    for (auto *MBB : ControlDeps[SD.getMI()]) {
+      for (MachineInstr &MI : *MBB) {
+        Uses.insert(&MI);
+        LLVM_DEBUG(errs() << "Handle control dependency from ");
+        LLVM_DEBUG(errs() << SD.getMI());
+        LLVM_DEBUG(errs() << "to ");
+        LLVM_DEBUG(errs() << MI);
+      }
+    }
+
     break;
   }
   case SecretDef::SDK_Argument: {
@@ -225,24 +237,58 @@ void FlowGraph::getUses(SecretDef &SD,
   }
 }
 
-// NOTE: Why does this function exist?
-void FlowGraph::getReachingDefs(SecretDef &SD,
-                                SmallPtrSet<MachineInstr *, 8> &Defs) const {
-  switch (SD.getKind()) {
-  case SecretDef::SDK_SecretRegisterDef: {
-    if (RDA) {
-      RDA->getGlobalReachingDefs(SD.getMI(), SD.getReg().asMCReg(), Defs);
-    } else {
-      if (MachineOperand *MO = MRI.getOneDef(SD.getReg())) {
-        Defs.insert(MO->getParent());
-      } else {
-        llvm_unreachable("expected single def for vreg");
+FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA, MachineDominatorTree *MDT, MachinePostDominatorTree *MPDT)
+      : MF(MF), MDT(MDT), MPDT(MPDT), RDA(RDA), MRI(MF.getRegInfo()) {
+  const auto &ST = MF.getSubtarget();
+  const auto *TII = ST.getInstrInfo();
+
+  for (auto &MBB : MF) {
+    if (MBB.succ_size() > 1) {
+      for (auto &MI : MBB) {
+        if (MI.isConditionalBranch()) {
+          SmallVector<MachineInstr *> DefMIs;
+          for (auto &MO : MI.operands()) {
+            if (!MO.isReg())
+              continue;
+            if (RDA) {
+              SmallPtrSet<MachineInstr *, 8> Defs;
+              RDA->getGlobalReachingDefs(&MI, MO.getReg(), Defs);
+              for (auto *D : Defs) {
+                DefMIs.push_back(D);
+              }
+            } else {
+              auto *D = MRI.getVRegDef(MO.getReg());
+              if (D)
+                DefMIs.push_back(D);
+            }
+          }
+          
+          // auto *Target = TII->getBranchDestBlock(MI);
+          auto *Target = MPDT->getBase().getNode(&MBB)->getIDom()->getBlock();
+          SmallVector<MachineBasicBlock *, 4> WorkSet;
+          for (auto *Succ : MBB.successors())
+            WorkSet.push_back(Succ);
+          while (!WorkSet.empty()) {
+            auto *Current = WorkSet.pop_back_val();
+            if (Current == Target)
+              continue;
+
+            for (auto *D : DefMIs) {
+              ControlDeps[D].insert(Current);
+            
+              LLVM_DEBUG(errs() << "Control dependency from ");
+              LLVM_DEBUG(errs() << *D);
+              LLVM_DEBUG(errs() << " to ");
+              LLVM_DEBUG(Current->printAsOperand(errs()));
+              LLVM_DEBUG(errs() << "\n");
+            }
+
+            for (auto &Succ : Current->successors())
+              WorkSet.push_back(Succ);
+          }
+        }
       }
     }
-    break;
-  }
-  default:
-    break;
   }
 }
 
@@ -284,9 +330,9 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   SecretUses.clear();
 
   if (IsSSA) {
-    Graph = new FlowGraph(MF);
+    Graph = new FlowGraph(MF, nullptr, nullptr, &getAnalysis<MachinePostDominatorTree>());
   } else {
-    Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>(), &getAnalysis<MachineDominatorTree>());
+    Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>(), &getAnalysis<MachineDominatorTree>(), &getAnalysis<MachinePostDominatorTree>());
   }
 
   LLVM_DEBUG(MF.dump());
@@ -310,6 +356,12 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
       for (auto MO : SU.operands()) {
         handleUse(*Use, MO, Secrets[Current], WorkSet, Secrets);
+      }
+
+      if (SU.operands().empty()) {
+        // Implicit dependency
+        MachineOperand Temp = MachineOperand::CreateImm(0);
+        handleUse(*Use, Temp, Secrets[Current], WorkSet, Secrets);
       }
     }
   }
