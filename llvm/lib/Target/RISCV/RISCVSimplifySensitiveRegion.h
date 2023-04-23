@@ -48,7 +48,7 @@ public:
     AU.addRequired<SensitiveRegionAnalysis>();
     // AU.addPreserved<SensitiveRegionAnalysis>();
     AU.addPreserved<TrackSecretsAnalysis>();
-    AU.addRequired<PersistencyAnalysisPass>();
+    // AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     // AU.addRequiredTransitive<MachineRegionInfoPass>();
     // AU.addPreserved<MachineRegionInfoPass>();

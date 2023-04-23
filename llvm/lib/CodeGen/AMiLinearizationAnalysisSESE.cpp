@@ -98,15 +98,15 @@ void LinearizationAnalysisSESE::linearizeBranch(
     MachineBasicBlock *NewSucc = nullptr;
 
     if (Exiting->succ_size() == 2) {
-      llvm_unreachable("Only simple SESE regions are supported");
-      // assert(!GhostEdges.contains({Exiting, Region->getExit()}) &&
-      //        "Relinearziation not supported by SESE version");
-      // for (auto *Succ : Exiting->successors()) {
-      //   if (Succ != Region->getExit()) {
-      //     // If Succ is not the exit, it must be another block within the SESE region
-      //     NewSucc = Succ;
-      //   }
-      // }
+      // llvm_unreachable("Only simple SESE regions are supported");
+      assert(!Result.GhostEdges.contains({Exiting, Region->getExit()}) &&
+             "Relinearziation not supported by SESE version");
+      for (auto *Succ : Exiting->successors()) {
+        if (Succ != Region->getExit()) {
+          // If Succ is not the exit, it must be another block within the SESE region
+          NewSucc = Succ;
+        }
+      }
     } else if (Exiting->succ_size() == 1) {
       // Add Ghost Edge
       if (!Exiting->isSuccessor(Target) &&
@@ -115,18 +115,24 @@ void LinearizationAnalysisSESE::linearizeBranch(
         Exiting->addSuccessor(Target);
       }
 
-      // Remove Activating Edge from the CFG, since they don't count as control flow edge
-      if (MBB->isSuccessor(Target))
-        MBB->removeSuccessor(Target);
-
-      // Update Dominator Trees
-      MDT->calculate(*MF);
-      MPDT->getBase().recalculate(*MF);
       NewSucc = Target;
     }
 
-    if (NewSucc != Region->getExit())
-      linearizeBranch(Exiting, NewSucc, Region->getExit());
+    // Remove Activating Edge from the CFG, since they don't count as control flow edge
+    if (MBB->isSuccessor(Target))
+      MBB->removeSuccessor(Target);
+
+    // Update Dominator Trees
+    MDT->calculate(*MF);
+    MPDT->getBase().recalculate(*MF);
+
+    if (NewSucc != Region->getExit()) {
+      for (auto &Succ : Exiting->successors()) {
+        if (Succ != NewSucc)
+          if (!Result.ActivatingEdges.contains({MBB, Succ}))
+            Result.ActivatingEdges.insert({MBB, Succ});
+      }
+    }
   }
 
   if (MBB->isSuccessor(Target)) {

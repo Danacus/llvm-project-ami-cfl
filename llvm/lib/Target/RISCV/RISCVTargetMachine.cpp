@@ -380,7 +380,6 @@ void RISCVPassConfig::addPreEmitPass2() {
     addPass(createTrackSecretsAnalysisPass(false));
 
     if (!AMiGeneralLinearization) {
-      addPass(createRISCVSimplifySensitiveRegionPass());
       addPass(createSensitiveRegionAnalysisPass(false));
       addPass(createAMiLinearizationAnalysisPass(true, ALM_SESE));
     } else {
@@ -417,7 +416,7 @@ void RISCVPassConfig::addPostSSADestruction() {
     addPass(createTrackSecretsAnalysisPass(true));
 
     if (!AMiGeneralLinearization) {
-      addPass(createRISCVSimplifySensitiveRegionPass());
+      // addPass(createRISCVSimplifySensitiveRegionPass());
       addPass(createSensitiveRegionAnalysisPass(true));
       addPass(createAMiLinearizationAnalysisPass(true, ALM_SESE));
     } else {
@@ -443,7 +442,6 @@ void RISCVPassConfig::addPreRegAlloc() {
   if (EnableMolnarLinearization == cl::BOU_TRUE) {
     addPass(createTrackSecretsAnalysisPass(true));
     addPass(createSensitiveRegionAnalysisPass(true));
-    addPass(createPersistencyAnalysisPass(true));
     addPass(createRISCVSimplifySensitiveRegionPass());
     addPass(createRISCVLinearizeBranchPass());
     addPass(createRISCVMolnarLinearizeRegionPass());

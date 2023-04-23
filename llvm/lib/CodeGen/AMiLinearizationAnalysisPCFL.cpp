@@ -62,7 +62,7 @@ void LinearizationAnalysisPCFL::linearize() {
   }
 
   for (auto *MBB : Blocks) {
-    LLVM_DEBUG(MBB->dump());
+    // LLVM_DEBUG(MBB->dump());
 
     if (!Result.SensitiveBranchBlocks.test(MBB->getNumber())) {
       // Not a secret-dependent branch
@@ -97,7 +97,7 @@ void LinearizationAnalysisPCFL::linearize() {
         Result.GhostEdges.insert({MBB, Next});
       }
       assert(Next && "Expected successor");
-      LLVM_DEBUG(Next->dump());
+      // LLVM_DEBUG(Next->dump());
 
       for (auto *Succ : MBB->successors()) {
         if (BlockIndex[Succ] < BlockIndex[MBB])
@@ -124,7 +124,7 @@ void LinearizationAnalysisPCFL::linearize() {
     for (auto &Pair : ToRemove)
       Result.DeferralEdges.erase(Pair);
 
-    LLVM_DEBUG(dump());
+    // LLVM_DEBUG(dump());
   }
 
   assert(Result.DeferralEdges.empty() && "Unexpected failure");
