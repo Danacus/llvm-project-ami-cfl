@@ -250,8 +250,8 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
 
       // Technically the successor should be removed, however, we have to keep
       // these edges to ensure proper emission of labels.
-      if (MBB.isSuccessor(T))
-        MBB.removeSuccessor(T);
+      // if (MBB.isSuccessor(T))
+      //   MBB.removeSuccessor(T);
     }
 
     // Handle ghost edges
