@@ -22,15 +22,14 @@ class InsertConflictingDefs : public MachineFunctionPass {
   MachineRegisterInfo *MRI;
 
   LiveIntervals *LIS;
+  LinearizationResult *ALA;
 
   DenseMap<ActivatingRegion *, MachineBasicBlock *> ConstraintMBBMap;
-
-  bool SimpleSESE;
 
 public:
   static char ID;
 
-  InsertConflictingDefs(bool SimpleSESE);
+  InsertConflictingDefs();
 
   MachineBasicBlock *createConstraintMBB(MachineFunction &MF,
                                          MachineBasicBlock *From,
@@ -41,13 +40,8 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    if (SimpleSESE) {
-      AU.addRequired<AMiLinearizationAnalysisSESE>();
-      AU.addPreserved<AMiLinearizationAnalysisSESE>();
-    } else {
-      AU.addRequired<AMiLinearizationAnalysis>();
-      AU.addPreserved<AMiLinearizationAnalysis>();
-    }
+    AU.addRequired<AMiLinearizationAnalysis>();
+    AU.addPreserved<AMiLinearizationAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     AU.addPreserved<PersistencyAnalysisPass>();
     AU.addUsedIfAvailable<LiveIntervals>();

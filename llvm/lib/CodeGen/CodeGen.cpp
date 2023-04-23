@@ -145,8 +145,9 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
 
   initializeTrackSecretsAnalysisPass(Registry);
   initializeSensitiveRegionAnalysisPass(Registry);
+  // initializeAMiLinearizationAnalysisPCFLPass(Registry);
+  // initializeAMiLinearizationAnalysisSESEPass(Registry);
   initializeAMiLinearizationAnalysisPass(Registry);
-  initializeAMiLinearizationAnalysisSESEPass(Registry);
   initializeCreateSensitiveRegionsPass(Registry);
   initializePersistencyAnalysisPassPass(Registry);
   initializeAddMimicryConstraintsPass(Registry);

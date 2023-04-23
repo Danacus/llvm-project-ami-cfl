@@ -20,14 +20,13 @@ char AddMimicryConstraints::ID = 0;
 char &llvm::AddMimicryConstraintsPassID = AddMimicryConstraints::ID;
 
 void AddMimicryConstraints::addConstraints(MachineInstr *MI) {
-  auto &ALA = getAnalysis<AMiLinearizationAnalysis>();
   auto *MBB = MI->getParent();
 
   MachineFunction &MF = *MBB->getParent();
   LLVM_DEBUG(MI->dump());
 
   // For each activating region that contains this instruction
-  for (auto *AR : ALA.RegionMap[MBB]) {
+  for (auto *AR : ALA->RegionMap[MBB]) {
     if (!AR->Branch || !AR->Exit) {
       // Top level region, no need to add constraints
       continue;
@@ -98,11 +97,11 @@ bool AddMimicryConstraints::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
 
   auto &PA = getAnalysis<PersistencyAnalysisPass>();
-  auto &ALA = getAnalysis<AMiLinearizationAnalysis>();
+  ALA = &getAnalysis<AMiLinearizationAnalysis>().getResult();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
   assert(LIS && "LIS must be available");
 
-  for (auto &Pair : ALA.ActivatingRegions) {
+  for (auto &Pair : ALA->ActivatingRegions) {
     auto &Region = Pair.getSecond();
     if (Region.Branch && Region.Exit) {
       auto PersistentInstrs = PA.getPersistentInstructions(&Region);

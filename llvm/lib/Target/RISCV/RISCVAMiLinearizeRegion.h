@@ -32,11 +32,10 @@ public:
 
   const RISCVInstrInfo *TII;
   const RISCVRegisterInfo *TRI;
-  AMiLinearizationAnalysis *ALA;
+  LinearizationResult *ALA;
   PersistencyAnalysisPass *PA;
-  bool SimpleSESE;
 
-  RISCVAMiLinearizeRegion(bool SimpleSESE);
+  RISCVAMiLinearizeRegion();
 
   template <RISCV::AMi::Qualifier Q>
   void setQualifier(MachineInstr *I);
@@ -54,11 +53,7 @@ public:
     AU.addRequiredTransitive<MachineDominatorTree>();
     AU.addRequiredTransitive<MachinePostDominatorTree>();
     AU.addRequiredTransitive<MachineDominanceFrontier>();
-    if (SimpleSESE) {
-      AU.addRequired<AMiLinearizationAnalysisSESE>();
-    } else {
-      AU.addRequired<AMiLinearizationAnalysis>();
-    }
+    AU.addRequired<AMiLinearizationAnalysis>();
     AU.addRequired<PersistencyAnalysisPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

@@ -163,7 +163,7 @@ class InlineSpiller : public Spiller {
   MachineLoopInfo &Loops;
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
-  AMiLinearizationAnalysis *ALA;
+  LinearizationResult *ALA;
   AddMimicryConstraints *AMC;
   InsertConflictingDefs *ICD;
   const TargetInstrInfo &TII;
@@ -204,13 +204,16 @@ public:
         LSS(Pass.getAnalysis<LiveStacks>()),
         MDT(Pass.getAnalysis<MachineDominatorTree>()),
         Loops(Pass.getAnalysis<MachineLoopInfo>()), VRM(VRM),
-        MRI(MF.getRegInfo()), ALA(Pass.getAnalysisIfAvailable<AMiLinearizationAnalysis>()),
+        MRI(MF.getRegInfo()),
         AMC(Pass.getAnalysisIfAvailable<AddMimicryConstraints>()),
         ICD(Pass.getAnalysisIfAvailable<InsertConflictingDefs>()),
         TII(*MF.getSubtarget().getInstrInfo()),
         TRI(*MF.getSubtarget().getRegisterInfo()),
         MBFI(Pass.getAnalysis<MachineBlockFrequencyInfo>()),
-        HSpiller(Pass, MF, VRM), VRAI(VRAI) {}
+        HSpiller(Pass, MF, VRM), VRAI(VRAI) {
+      if (Pass.getAnalysisIfAvailable<AMiLinearizationAnalysis>())
+        ALA = &Pass.getAnalysisIfAvailable<AMiLinearizationAnalysis>()->getResult();
+    }
 
   void spill(LiveRangeEdit &) override;
   void postOptimization() override;

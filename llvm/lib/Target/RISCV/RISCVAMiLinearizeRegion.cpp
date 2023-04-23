@@ -116,8 +116,7 @@ void RISCVAMiLinearizeRegion::setBranchInstrActivating(
       setQualifier<llvm::RISCV::AMi::Activating>(I);
 
     if (I->getDesc().isUnconditionalBranch()) {
-      // HACK: Since a.jal doesn't behave like a call, we need to use a.beq
-      // zero, zero I might fix this in Proteus instead
+      // HACK: Since a.jal behaves like an activating call, we need to use a.beq zero, zero
       BuildMI(*I->getParent(), I->getIterator(), DebugLoc(),
               TII->get(RISCV::ABEQ))
           .addReg(RISCV::X0)
@@ -192,18 +191,12 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   TRI = ST.getRegisterInfo();
   PA = &getAnalysis<PersistencyAnalysisPass>();
 
-  DenseMap<AMiLinearizationAnalysis::Edge, ActivatingRegion>
-      *ActivatingRegions = nullptr;
+  // DenseMap<AMiLinearizationAnalysis::Edge, ActivatingRegion>
+  //     *ActivatingRegions = nullptr;
 
-  if (SimpleSESE) {
-    ActivatingRegions =
-        &getAnalysis<AMiLinearizationAnalysisSESE>().ActivatingRegions;
-  } else {
-    ActivatingRegions =
-        &getAnalysis<AMiLinearizationAnalysis>().ActivatingRegions;
-  }
+  ALA = &getAnalysis<AMiLinearizationAnalysis>().getResult();
 
-  for (auto &Pair : *ActivatingRegions) {
+  for (auto &Pair : ALA->ActivatingRegions) {
     auto &Region = Pair.getSecond();
     if (Region.Branch && Region.Exit) {
       // Make fallthrough explicit if we need to make it activating
@@ -223,15 +216,7 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
     handleRegion(&Region);
   }
 
-  AMiLinearizationAnalysis::EdgeSet *GhostEdges = nullptr;
-
-  if (SimpleSESE) {
-    GhostEdges = &getAnalysis<AMiLinearizationAnalysisSESE>().GhostEdges;
-  } else {
-    GhostEdges = &getAnalysis<AMiLinearizationAnalysis>().GhostEdges;
-  }
-
-  for (auto &Edge : *GhostEdges) {
+  for (auto &Edge : ALA->GhostEdges) {
     if (!Edge.first->isSuccessor(Edge.second)) {
       TII->insertUnconditionalBranch(*Edge.first, Edge.second, DebugLoc());
       Edge.first->addSuccessor(Edge.second);
@@ -242,8 +227,8 @@ bool RISCVAMiLinearizeRegion::runOnMachineFunction(MachineFunction &MF) {
   return true;
 }
 
-RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion(bool SimpleSESE)
-    : MachineFunctionPass(ID), SimpleSESE(SimpleSESE) {
+RISCVAMiLinearizeRegion::RISCVAMiLinearizeRegion()
+    : MachineFunctionPass(ID) {
   initializeRISCVAMiLinearizeRegionPass(*PassRegistry::getPassRegistry());
 }
 
@@ -257,8 +242,8 @@ INITIALIZE_PASS_END(RISCVAMiLinearizeRegion, DEBUG_TYPE, "AMi Linearize Region",
 
 namespace llvm {
 
-FunctionPass *createRISCVAMiLinearizeRegionPass(bool SimpleSESE) {
-  return new RISCVAMiLinearizeRegion(SimpleSESE);
+FunctionPass *createRISCVAMiLinearizeRegionPass() {
+  return new RISCVAMiLinearizeRegion();
 }
 
 } // namespace llvm

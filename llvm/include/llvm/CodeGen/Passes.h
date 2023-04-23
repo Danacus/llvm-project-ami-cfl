@@ -190,8 +190,9 @@ namespace llvm {
   // extern char &SensitiveRegionAnalysisPhysRegID;
   extern char &AddMimicryConstraintsPassID;
   extern char &InsertConflictingDefsPassID;
+  // extern char &AMiLinearizationAnalysisPCFLID;
+  // extern char &AMiLinearizationAnalysisSESEID;
   extern char &AMiLinearizationAnalysisID;
-  extern char &AMiLinearizationAnalysisSESEID;
   extern char &RemoveConflictingDefsPassID;
   extern char &PersistencyAnalysisPassID;
   extern char &RemoveBranchPseudosPassID;
@@ -204,9 +205,10 @@ namespace llvm {
   FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA = true);
   FunctionPass *createSensitiveRegionAnalysisPass(bool IsSSA = true);
   FunctionPass *createPersistencyAnalysisPass(bool IsSSA = true);
-  FunctionPass *createAMiLinearizationAnalysisPass(bool AnalysisOnly = true);
-  FunctionPass *createAMiLinearizationAnalysisSESEPass(bool AnalysisOnly = true);
-  FunctionPass *createInsertConflictingDefsPass(bool SimpleSESE);
+  // FunctionPass *createAMiLinearizationAnalysisPCFLPass(bool AnalysisOnly = true);
+  // FunctionPass *createAMiLinearizationAnalysisSESEPass(bool AnalysisOnly = true);
+  FunctionPass *createAMiLinearizationAnalysisPass(bool AnalysisOnly = true, int Method = 0);
+  FunctionPass *createInsertConflictingDefsPass();
   FunctionPass *createCompactOrderPass();
 
   /// FastRegisterAllocation Pass - This pass register allocates as fast as

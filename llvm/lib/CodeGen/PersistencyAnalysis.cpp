@@ -104,8 +104,7 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
-
-  ALA = &getAnalysis<AMiLinearizationAnalysis>();
+  ALA = &getAnalysis<AMiLinearizationAnalysis>().getResult();
 
   if (!IsSSA) {
     RDA = &getAnalysis<ReachingDefAnalysis>();

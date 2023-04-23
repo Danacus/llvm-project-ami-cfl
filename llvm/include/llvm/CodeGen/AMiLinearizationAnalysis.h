@@ -1,20 +1,24 @@
 #ifndef LLVM_CODEGEN_AMI_LINEARIZATION_H
 #define LLVM_CODEGEN_AMI_LINEARIZATION_H
 
-#include "llvm/ADT/DenseMapInfo.h"
-#include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/CompactOrder.h"
 #include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"
-#include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
-#include "llvm/CodeGen/MachineRegionInfo.h"
-#include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/SensitiveRegion.h"
+#include "llvm/Support/GenericDomTreeConstruction.h"
+
 
 using namespace llvm;
 
 namespace llvm {
+
+enum LinearizationMethod {
+  ALM_PCFL = 0,    
+  ALM_SESE,    
+};
 
 struct ActivatingRegion {
   using BlockSet = SmallPtrSet<MachineBasicBlock *, 8>;
@@ -107,13 +111,85 @@ public:
   /*implicit*/ bounded_domtree_iterator(super I) : super(I) {}
 };
 
-class AMiLinearizationAnalysis : public MachineFunctionPass {
-public:
+struct LinearizationResult {
   using RegionSet = SmallPtrSet<ActivatingRegion *, 16>;
   using Edge = std::pair<MachineBasicBlock *, MachineBasicBlock *>;
   using EdgeSet = SmallSet<Edge, 16>;
 
-private:
+  SparseBitVector<128> SensitiveBranchBlocks;
+  EdgeSet GhostEdges;
+  EdgeSet DeferralEdges;
+  EdgeSet ActivatingEdges;
+  DenseMap<Edge, ActivatingRegion> ActivatingRegions;
+  DenseMap<MachineBasicBlock *, RegionSet> RegionMap;
+
+  void clear() {
+    SensitiveBranchBlocks.clear();
+    GhostEdges.clear();
+    DeferralEdges.clear();
+    ActivatingEdges.clear();
+    ActivatingRegions.clear();
+    RegionMap.clear();
+  }
+
+  void print(raw_ostream &OS) const {
+    OS << "Ghost edges:\n";
+
+    for (auto &Edge : GhostEdges) {
+      OS << "<";
+      Edge.first->printAsOperand(OS);
+      OS << " " << Edge.first->getName();
+      OS << ", ";
+      Edge.second->printAsOperand(OS);
+      OS << " " << Edge.second->getName();
+      OS << ">\n";
+    }
+
+    OS << "Activating edges:\n";
+
+    for (auto &Edge : ActivatingEdges) {
+      OS << "<";
+      Edge.first->printAsOperand(OS);
+      OS << " " << Edge.first->getName();
+      OS << ", ";
+      Edge.second->printAsOperand(OS);
+      OS << " " << Edge.second->getName();
+      OS << ">\n";
+    }
+
+    if (DeferralEdges.size() > 0) {
+      OS << "Deferral edges:\n";
+
+      for (auto &Edge : DeferralEdges) {
+        OS << "<";
+        Edge.first->printAsOperand(OS);
+        OS << " " << Edge.first->getName();
+        OS << ", ";
+        Edge.second->printAsOperand(OS);
+        OS << " " << Edge.second->getName();
+        OS << ">\n";
+      }
+    }
+
+    OS << "----------------------\n";
+
+    OS << "Activating regions:\n";
+
+    for (auto &Pair : ActivatingRegions) {
+      Pair.getSecond().print(OS);
+      OS << "------------\n";
+    }
+  }
+
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  void dump() const { print(dbgs()); }
+#endif
+};
+
+} // namespace llvm
+
+class LinearizationAnalysisBase {
+protected:
   TrackSecretsAnalysis *TSA;
   MachineDominatorTree *MDT;
   MachinePostDominatorTree *MPDT;
@@ -122,39 +198,70 @@ private:
   bool AnalysisOnly;
   DenseMap<MachineBasicBlock *, unsigned int> BlockIndex;
   SmallVector<MachineBasicBlock *> Blocks;
+  LinearizationResult Result;
 
-public:
-  SparseBitVector<128> SensitiveBranchBlocks;
-  EdgeSet GhostEdges;
-  EdgeSet DeferralEdges;
-  EdgeSet UncondEdges;
-  EdgeSet ActivatingEdges;
-  DenseMap<Edge, ActivatingRegion> ActivatingRegions;
-  DenseMap<MachineBasicBlock *, RegionSet> RegionMap;
-
-  static char ID;
-
-  AMiLinearizationAnalysis(bool AnalysisOnly = true);
-
+private:
   void undoCFGChanges();
   void findSecretDependentBranches();
   void createActivatingRegions();
-  void
-  findActivatingRegionExitings(MachineBasicBlock *Entry,
-                               MachineBasicBlock *Target,
-                               SmallVectorImpl<MachineBasicBlock *> &Exitings);
-  MachineBasicBlock *chooseUnconditionalSuccessor(
-      MachineBasicBlock *MBB,
-      iterator_range<std::vector<MachineBasicBlock *>::iterator> Choices);
-  void linearizeBranch(MachineBasicBlock *MBB, MachineBasicBlock *UncondSucc, MachineBasicBlock *Target);
-  void linearize();
-  MachineBasicBlock *nearestSuccessor(MachineBasicBlock *MBB);
-  MachineBasicBlock *nearestDeferral(MachineBasicBlock *MBB);
 
+protected:
   iterator_range<bounded_domtree_iterator>
   regionDomTreeIterator(MachineBasicBlock *Entry, MachineBasicBlock *Exit) {
     return iterator_range<bounded_domtree_iterator>(
         bounded_domtree_iterator(MDT, Entry, Exit), bounded_domtree_iterator());
+  }
+
+  virtual void linearize() = 0;
+
+public:
+  LinearizationAnalysisBase(const LinearizationAnalysisBase &) = default;
+  LinearizationAnalysisBase(LinearizationAnalysisBase &&) = default;
+  LinearizationAnalysisBase &
+  operator=(const LinearizationAnalysisBase &) = default;
+  LinearizationAnalysisBase &operator=(LinearizationAnalysisBase &&) = default;
+  LinearizationAnalysisBase(TrackSecretsAnalysis *TSA,
+                            MachineDominatorTree *MDT,
+                            MachinePostDominatorTree *MPDT,
+                            MachineDominanceFrontier *MDF, MachineFunction *MF,
+                            bool AnalysisOnly)
+      : TSA(TSA), MDT(MDT), MPDT(MPDT), MDF(MDF), MF(MF),
+        AnalysisOnly(AnalysisOnly) {}
+  virtual ~LinearizationAnalysisBase() = default;
+
+  LinearizationResult &getResult() {
+    return Result;
+  }
+
+  bool run();
+
+  void print(raw_ostream &OS) const {
+    Result.print(OS);
+  }
+
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  void dump() const { print(dbgs()); }
+#endif
+};
+
+class AMiLinearizationAnalysis : public MachineFunctionPass {
+public:
+  using RegionSet = LinearizationResult::RegionSet;
+  using Edge = LinearizationResult::Edge;
+  using EdgeSet = LinearizationResult::EdgeSet;
+
+private:
+  LinearizationAnalysisBase *Analysis = nullptr;
+  bool AnalysisOnly;
+  LinearizationMethod Method;
+
+public:
+  static char ID;
+
+  AMiLinearizationAnalysis(bool AnalysisOnly = true, LinearizationMethod Method = ALM_PCFL);
+
+  LinearizationResult &getResult() {
+    return Analysis->getResult();
   }
 
   void print(raw_ostream &OS, const Module *) const override;
@@ -170,13 +277,14 @@ public:
     AU.addPreserved<MachinePostDominatorTree>();
     AU.addRequired<MachineDominanceFrontier>();
     AU.addPreserved<MachineDominanceFrontier>();
-    AU.addRequired<CompactOrder>();
+    if (Method == ALM_PCFL)
+      AU.addRequired<CompactOrder>();
+    if (Method == ALM_SESE)
+      AU.addRequired<SensitiveRegionAnalysis>();
     if (AnalysisOnly)
       AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 };
 
-} // namespace llvm
-
-#endif // LLVM_CODEGEN_AMI_LINEARIZATIOn_H
+#endif

@@ -132,6 +132,10 @@ SmallVector<CompactNode *, 4> CompactOrder::compactOrder(CompactNode *Entry) {
 bool CompactOrder::runOnMachineFunction(MachineFunction &MF) {
   MLI = &getAnalysis<MachineLoopInfo>();
   Order.clear();
+  LLVM_DEBUG(errs() << "Post order:\n");
+  Order = postOrder(new CompactNode(&*MF.begin()));
+  LLVM_DEBUG(dump());
+  LLVM_DEBUG(errs() << "Compact order:\n");
   Order = compactOrder(new CompactNode(&*MF.begin()));
   LLVM_DEBUG(dump());
   return false;

@@ -20,6 +20,7 @@
 #include "TargetInfo/RISCVTargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
@@ -381,16 +382,16 @@ void RISCVPassConfig::addPreEmitPass2() {
     if (!AMiGeneralLinearization) {
       addPass(createRISCVSimplifySensitiveRegionPass());
       addPass(createSensitiveRegionAnalysisPass(false));
-      addPass(createAMiLinearizationAnalysisSESEPass(true));
+      addPass(createAMiLinearizationAnalysisPass(true, ALM_SESE));
     } else {
       addPass(createCompactOrderPass());
-      addPass(createAMiLinearizationAnalysisPass(true));
+      addPass(createAMiLinearizationAnalysisPass(true, ALM_PCFL));
     }
     // addPass(createAMiLinearizationAnalysisPass(true));
     // addPass(createSensitiveRegionAnalysisPass(false));
     addPass(createPersistencyAnalysisPass(false));
     // addPass(createRISCVLinearizeBranchPass());
-    addPass(createRISCVAMiLinearizeRegionPass(!AMiGeneralLinearization));
+    addPass(createRISCVAMiLinearizeRegionPass());
     addPass(&RemoveBranchPseudosPassID);
   }
 
@@ -418,17 +419,17 @@ void RISCVPassConfig::addPostSSADestruction() {
     if (!AMiGeneralLinearization) {
       addPass(createRISCVSimplifySensitiveRegionPass());
       addPass(createSensitiveRegionAnalysisPass(true));
-      addPass(createAMiLinearizationAnalysisSESEPass(true));
+      addPass(createAMiLinearizationAnalysisPass(true, ALM_SESE));
     } else {
       addPass(createCompactOrderPass());
-      addPass(createAMiLinearizationAnalysisPass(true));
+      addPass(createAMiLinearizationAnalysisPass(true, ALM_PCFL));
     }
     // addPass(createAMiLinearizationAnalysisPass(true));
     // addPass(createSensitiveRegionAnalysisPass(true));
     // addPass(&CreateSensitiveRegionsID);
     // addPass(&InsertPersistentDefsPassID);
     // addPass(&AddMimicryConstraintsPassID);
-    addPass(createInsertConflictingDefsPass(!AMiGeneralLinearization));
+    addPass(createInsertConflictingDefsPass());
   }
 }
 

@@ -27,6 +27,7 @@ add_llvm_component_library(LLVMCodeGen
   AggressiveAntiDepBreaker.cpp
   AllocationOrder.cpp
   AMiLinearizationAnalysis.cpp
+  AMiLinearizationAnalysisPCFL.cpp
   AMiLinearizationAnalysisSESE.cpp
   Analysis.cpp
   AssignmentTrackingAnalysis.cpp

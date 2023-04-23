@@ -1,7 +1,7 @@
 #ifndef LLVM_CODEGEN_ADD_MIMICRY_CONSTRAINTS
 #define LLVM_CODEGEN_ADD_MIMICRY_CONSTRAINTS
 
-#include "llvm/CodeGen/AMiLinearizationAnalysis.h"
+#include "llvm/CodeGen/AMiLinearizationAnalysisPCFL.h"
 #include "llvm/CodeGen/FindSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -19,6 +19,7 @@ class AddMimicryConstraints : public MachineFunctionPass {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   MachineRegisterInfo *MRI;
+  LinearizationResult *ALA;
 
   LiveIntervals *LIS;
 

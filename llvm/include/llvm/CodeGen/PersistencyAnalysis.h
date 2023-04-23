@@ -1,7 +1,7 @@
 #ifndef LLVM_CODEGEN_PERSISTENCY_ANALYSIS_H
 #define LLVM_CODEGEN_PERSISTENCY_ANALYSIS_H
 
-#include "llvm/CodeGen/AMiLinearizationAnalysis.h"
+#include "llvm/CodeGen/AMiLinearizationAnalysisPCFL.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -21,7 +21,7 @@ public:
 private:
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  AMiLinearizationAnalysis *ALA;
+  LinearizationResult *ALA;
   ReachingDefAnalysis *RDA;
 
   RegionInstrMap PersistentStores;
