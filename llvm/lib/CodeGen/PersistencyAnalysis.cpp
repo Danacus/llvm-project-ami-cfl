@@ -13,9 +13,10 @@ using namespace llvm;
 
 #define DEBUG_TYPE "persistency-analysis"
 
-void PersistencyAnalysisPass::propagatePersistency(
-    const MachineFunction &MF, MachineInstr &MI, const MachineOperand &MO,
-    const ActivatingRegion *MR) {
+void PersistencyAnalysisPass::propagatePersistency(const MachineFunction &MF,
+                                                   MachineInstr &MI,
+                                                   const MachineOperand &MO,
+                                                   const ActivatingRegion *MR) {
   LLVM_DEBUG(errs() << "propagatePersistency\n");
   LLVM_DEBUG(MI.dump());
   LLVM_DEBUG(MO.dump());
@@ -66,8 +67,6 @@ void PersistencyAnalysisPass::propagatePersistency(
       for (auto *DI : Defs) {
         if (MR->contains(DI))
           WorkSet.push_back(DI);
-        else
-          PersistentRegionInputMap[MR].insert(DI);
       }
     }
   }
@@ -91,7 +90,11 @@ void PersistencyAnalysisPass::analyzeRegion(const MachineFunction &MF,
       }
 
       LeakedOperands.clear();
-      TII->constantTimeLeakage(MI, LeakedOperands);
+      // If MI is a conditional branch and the block is secret, this is actually
+      // an activating instruction, so it won't leak anything.
+      if (!MI.isConditionalBranch() ||
+          !ALA->SensitiveBranchBlocks.test(MBB->getNumber()))
+        TII->constantTimeLeakage(MI, LeakedOperands);
 
       for (auto &MO : LeakedOperands) {
         propagatePersistency(MF, MI, MO, MR);
