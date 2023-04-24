@@ -2,7 +2,7 @@
 #define LLVM_TARGET_RISCV_MOLNAR_LINEARIZE_REGION_H
 
 #include "RISCVInstrInfo.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"

@@ -2,7 +2,7 @@
 #define LLVM_TARGET_RISCV_SIMPLIFY_SENSITIVE_REGION_H
 
 #include "RISCVInstrInfo.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineOperand.h"

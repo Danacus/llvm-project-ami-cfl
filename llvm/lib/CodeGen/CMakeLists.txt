@@ -69,7 +69,6 @@ add_llvm_component_library(LLVMCodeGen
   FaultMaps.cpp
   FEntryInserter.cpp
   FinalizeISel.cpp
-  FindSecrets.cpp
   SensitiveRegion.cpp
   PersistencyAnalysis.cpp
   RemoveConflictingDefs.cpp
@@ -244,6 +243,7 @@ add_llvm_component_library(LLVMCodeGen
   TargetRegisterInfo.cpp
   TargetSchedule.cpp
   TargetSubtargetInfo.cpp
+  TrackSecrets.cpp
   TwoAddressInstructionPass.cpp
   TypePromotion.cpp
   UnreachableBlockElim.cpp

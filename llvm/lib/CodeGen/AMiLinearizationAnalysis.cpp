@@ -48,15 +48,8 @@ void LinearizationAnalysisBase::undoCFGChanges() {
 }
 
 void LinearizationAnalysisBase::findSecretDependentBranches() {
-  auto &Secrets = TSA->SecretUses;
-
   // Mark blocks with secret dependent branches
-  for (auto &Secret : Secrets) {
-    if (!(Secret.second.getSecretMask() & 1u))
-      continue;
-
-    auto *User = Secret.second.getUser();
-
+  for (auto *User : TSA->SecretUses) {
     // We still need those registers
     // TODO: Does this code belong here? Can is be removed?
     for (auto &MO : User->uses()) {

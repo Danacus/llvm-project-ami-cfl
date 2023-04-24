@@ -3,7 +3,7 @@
 
 #include "RISCVInstrInfo.h"
 #include "llvm/CodeGen/AMiLinearizationAnalysisSESE.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"

@@ -3,7 +3,7 @@
 
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/SparseBitVector.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"

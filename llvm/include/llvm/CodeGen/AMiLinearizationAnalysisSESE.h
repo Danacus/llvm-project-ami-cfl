@@ -4,7 +4,7 @@
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/AMiLinearizationAnalysis.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"

@@ -1,7 +1,7 @@
 #ifndef LLVM_CODEGEN_REMOVE_SECRET_PSEUDOS
 #define LLVM_CODEGEN_REMOVE_SECRET_PSEUDOS
 
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"

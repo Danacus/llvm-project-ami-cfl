@@ -2,7 +2,7 @@
 #define LLVM_CODEGEN_ADD_MIMICRY_CONSTRAINTS
 
 #include "llvm/CodeGen/AMiLinearizationAnalysisPCFL.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"

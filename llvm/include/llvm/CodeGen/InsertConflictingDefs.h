@@ -3,7 +3,7 @@
 
 #include "llvm/CodeGen/AMiLinearizationAnalysis.h"
 #include "llvm/CodeGen/AMiLinearizationAnalysisSESE.h"
-#include "llvm/CodeGen/FindSecrets.h"
+#include "llvm/CodeGen/TrackSecrets.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"

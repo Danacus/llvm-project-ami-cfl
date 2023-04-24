@@ -175,17 +175,12 @@ bool SensitiveRegionAnalysis::runOnMachineFunction(MachineFunction &MF) {
   RegionMap.clear();
   SensitiveBranches.clear();
 
-  auto &Secrets = TSA->SecretUses;
+  // auto &Secrets = TSA->SecretUses;
 
   SmallPtrSet<MachineBasicBlock *, 16> HandledBranches;
 
   // Mark blocks with secret dependent branches
-  for (auto &Secret : Secrets) {
-    if (!(Secret.second.getSecretMask() & 1u))
-      continue;
-
-    auto *User = Secret.second.getUser();
-
+  for (auto *User : TSA->SecretUses) {
     // We still need those registers
     // TODO: Does this code belong here? Can is be removed?
     for (auto &MO : User->uses()) {
