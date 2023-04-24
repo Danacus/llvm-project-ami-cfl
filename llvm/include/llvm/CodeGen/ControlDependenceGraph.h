@@ -189,7 +189,6 @@ private:
 };
 
 template <> struct GraphTraits<ControlDependenceNode *> {
-  // typedef ControlDependenceNode * NodeRef;
   using NodeRef = ControlDependenceNode *;
   typedef ControlDependenceNode::edge_iterator ChildIteratorType;
 

@@ -160,6 +160,7 @@ void initializeFixIrreduciblePass(PassRegistry &);
 void initializeFixupStatepointCallerSavedPass(PassRegistry&);
 void initializeFlattenCFGLegacyPassPass(PassRegistry &);
 void initializeFloat2IntLegacyPassPass(PassRegistry&);
+void initializeFlowGraphPrinterPass(PassRegistry &);
 void initializeForceFunctionAttrsLegacyPassPass(PassRegistry&);
 void initializeFuncletLayoutPass(PassRegistry&);
 void initializeGCMachineCodeAnalysisPass(PassRegistry&);

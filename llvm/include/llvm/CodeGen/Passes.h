@@ -204,6 +204,7 @@ namespace llvm {
 
   extern char &ControlDependenceGraphID;
   extern char &MachineCDGPrinterID;
+  extern char &FlowGraphPrinterID;
 
   FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA = true);
   FunctionPass *createSensitiveRegionAnalysisPass(bool IsSSA = true);

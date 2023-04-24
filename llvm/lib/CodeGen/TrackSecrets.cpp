@@ -1,5 +1,6 @@
 
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/CodeGen/ControlDependenceGraph.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TrackSecrets.h"
@@ -7,12 +8,19 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/GraphWriter.h"
 
 #define DEBUG_TYPE "track-secrets"
 
-void getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
-                SmallSet<FlowGraphNode, 8> &SecretDefs,
-                DenseMap<FlowGraphNode, uint64_t> &SecretMasks) {
+FlowGraph::~FlowGraph() {
+  for (auto &Pair : Nodes) {
+    delete Pair.getSecond();
+  }
+}
+
+void FlowGraph::getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
+                           SmallSet<FlowGraphNode *, 8> &SecretDefs,
+                           DenseMap<FlowGraph::Key, uint64_t> &SecretMasks) {
   Function &F = MF.getFunction();
   const Module *M = F.getParent();
   auto &MRI = MF.getRegInfo();
@@ -51,8 +59,8 @@ void getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
         if (!AS.consume_front(")"))
           continue;
 
-        auto Def = FlowGraphNode::CreateGlobal(GV);
-        SecretMasks[Def] = Mask;
+        auto *Def = getOrInsert(FlowGraphNode::CreateGlobal(GV));
+        SecretMasks[Def->inner()] = Mask;
         SecretDefs.insert(Def);
       }
     }
@@ -73,22 +81,24 @@ void getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
           // argument and we need to start tracking at the SECRET
           // pseudoinstruction
           if (Defs.empty()) {
-            auto Def = FlowGraphNode::CreateArgument(Reg);
-            SecretMasks[Def] = SecretMask;
+            auto *Def = getOrInsert(FlowGraphNode::CreateArgument(Reg));
+            SecretMasks[Def->inner()] = SecretMask;
             SecretDefs.insert(Def);
           }
 
           // If there are reaching defs, then we need to make sure to start
           // tracking at the reaching def and not the SECRET pseudoinstruction
           for (MachineInstr *DefMI : Defs) {
-            auto Def = FlowGraphNode::CreateRegisterDef(Reg, DefMI);
-            SecretMasks[Def] = SecretMask;
+            auto *Def =
+                getOrInsert(FlowGraphNode::CreateRegisterDef(Reg, DefMI));
+            SecretMasks[Def->inner()] = SecretMask;
             SecretDefs.insert(Def);
           }
         } else {
           if (MachineOperand *MO = MRI.getOneDef(Reg)) {
-            auto Def = FlowGraphNode::CreateRegisterDef(Reg, MO->getParent());
-            SecretMasks[Def] = SecretMask;
+            auto *Def = getOrInsert(
+                FlowGraphNode::CreateRegisterDef(Reg, MO->getParent()));
+            SecretMasks[Def->inner()] = SecretMask;
             SecretDefs.insert(Def);
           } else {
             llvm_unreachable("expected single def for vreg");
@@ -100,39 +110,54 @@ void getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
 }
 
 FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
-                     MachineDominatorTree *MDT,
-                     MachinePostDominatorTree *MPDT) {
+                     MachineDominatorTree *MDT, MachinePostDominatorTree *MPDT,
+                     ControlDependenceGraph *CDG) {
   auto &MRI = MF.getRegInfo();
-  SmallSet<FlowGraphNode, 8> TmpNodes;
-  SmallSet<FlowGraphNode, 8> WorkSet;
+  SmallSet<FlowGraphNode *, 8> TmpNodes;
+  SmallSet<FlowGraphNode *, 8> WorkSet;
   getSources(MF, RDA, WorkSet, SecretMasks);
-  while (!WorkSet.empty()) {
-    auto Current = *WorkSet.begin();
-    WorkSet.erase(Current);
 
-    if (!Nodes.count(Current)) {
+  auto *Root = getOrInsert(FlowGraphNode::CreateRoot());
+  setRoot(Root);
+  for (auto *Node : WorkSet) {
+    createEdge(Root, Node);
+  }
+
+  while (!WorkSet.empty()) {
+    auto *CurrentNode = *WorkSet.begin();
+    WorkSet.erase(CurrentNode);
+    auto &Current = CurrentNode->inner();
+
+    if (!CurrentNode->isVisited()) {
+      CurrentNode->setVisited();
+      LLVM_DEBUG(CurrentNode->dump());
+      LLVM_DEBUG(errs() << "\n");
       switch (Current.getKind()) {
-      case FlowGraphNode::FGNK_SecretGlobalUse:
-      case FlowGraphNode::FGNK_SecretRegisterUse: {
+      case FlowGraphNodeInner::FGNK_SecretGlobalUse:
+      case FlowGraphNodeInner::FGNK_SecretRegisterUse: {
         for (auto &Def : Current.getMI()->defs()) {
-          auto Node =
-              FlowGraphNode::CreateRegisterDef(Def.getReg(), Current.getMI());
-          createEdge(Current, Node);
+          auto *Node = getOrInsert(
+              FlowGraphNode::CreateRegisterDef(Def.getReg(), Current.getMI()));
+          createEdge(CurrentNode, Node);
           WorkSet.insert(Node);
         }
         break;
       }
-      case FlowGraphNode::FGNK_ControlDep: {    
+      case FlowGraphNodeInner::FGNK_ControlDep: {
         for (auto &Def : Current.getMI()->defs()) {
-          auto DNode = FlowGraphNode::CreateRegisterDef(Def.getReg(), Current.getMI());
-          createEdge(Current, DNode);
+          auto *DNode = getOrInsert(
+              FlowGraphNode::CreateRegisterDef(Def.getReg(), Current.getMI()));
+          LLVM_DEBUG(errs() << "\naaaaaa\n");
+          LLVM_DEBUG(CurrentNode->dump());
+          LLVM_DEBUG(DNode->dump());
+          createEdge(CurrentNode, DNode);
           WorkSet.insert(DNode);
         }
         break;
       }
-      case FlowGraphNode::FGNK_SecretRegisterDef: {
+      case FlowGraphNodeInner::FGNK_SecretRegisterDef: {
         TmpNodes.clear();
-          
+
         if (RDA) {
           SmallPtrSet<MachineInstr *, 8> GlobalUses;
           RDA->getGlobalUses(Current.getMI(), Current.getReg().asMCReg(),
@@ -143,48 +168,41 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                                return O.isReg() &&
                                       O.getReg() == Current.getReg();
                              }) != Use->uses().end()) {
-              auto Node =
-                  FlowGraphNode::CreateRegisterUse(Current.getReg(), Use);
+              auto *Node = getOrInsert(
+                  FlowGraphNode::CreateRegisterUse(Current.getReg(), Use));
               TmpNodes.insert(Node);
             }
           }
         } else {
           for (MachineInstr &MI : MRI.use_instructions(Current.getReg())) {
-            auto Node = FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI);
+            auto *Node = getOrInsert(
+                FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI));
             TmpNodes.insert(Node);
           }
         }
 
-        // Control dependencies, TODO: fix
-        for (auto &Node : TmpNodes) {
-          createEdge(Current, Node);
-          WorkSet.insert(Node);
-
-          if (Node.getMI()->isConditionalBranch()) {
-            auto *MBB = Node.getMI()->getParent();
-            auto *Target = MPDT->getBase().getNode(MBB)->getIDom()->getBlock();
-            SmallVector<MachineBasicBlock *, 4> WorkSet2;
-            for (auto *Succ : MBB->successors())
-              WorkSet2.push_back(Succ);
-            while (!WorkSet2.empty()) {
-              auto *CurrentBlock = WorkSet2.pop_back_val();
-              if (CurrentBlock == Target)
-                continue;
-
-              for (auto &MI : *CurrentBlock) {
-                auto NewNode = FlowGraphNode::CreateControlDep(Current.getReg(), &MI);
-                createEdge(Current, NewNode);
-                WorkSet.insert(NewNode);
-              }
-
-              for (auto &Succ : CurrentBlock->successors())
-                WorkSet2.push_back(Succ);
+        auto *CurrentMBB = Current.getMI()->getParent();
+        for (auto &MBB : MF) {
+          if (CDG->influences(CurrentMBB, &MBB)) {
+            for (auto &MI : MBB) {
+              auto *Node = getOrInsert(
+                  FlowGraphNode::CreateControlDep(Current.getReg(), &MI));
+              TmpNodes.insert(Node);
+              LLVM_DEBUG(Node->dump());
             }
           }
         }
+
+        LLVM_DEBUG(errs() << "\nhere\n");
+
+        for (auto *Node : TmpNodes) {
+          LLVM_DEBUG(Node->dump());
+          createEdge(CurrentNode, Node);
+          WorkSet.insert(Node);
+        }
         break;
       }
-      case FlowGraphNode::FGNK_Argument: {
+      case FlowGraphNodeInner::FGNK_Argument: {
         if (RDA) {
           TmpNodes.clear();
 
@@ -202,40 +220,27 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                 // If there is no closer reaching def, the argument is the
                 // reaching def if (Defs.empty()) {
                 if (Def < 0) {
-                  auto Node =
-                      FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI);
+                  auto *Node = getOrInsert(
+                      FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI));
                   TmpNodes.insert(Node);
                 }
               }
             }
           }
 
-          // Control dependencies, TODO: fix
-          for (auto &Node : TmpNodes) {
-            createEdge(Current, Node);
-            WorkSet.insert(Node);
-
-            if (Node.getMI()->isConditionalBranch()) {
-              auto *MBB = Node.getMI()->getParent();
-              auto *Target = MPDT->getBase().getNode(MBB)->getIDom()->getBlock();
-              SmallVector<MachineBasicBlock *, 4> WorkSet2;
-              for (auto *Succ : MBB->successors())
-                WorkSet2.push_back(Succ);
-              while (!WorkSet2.empty()) {
-                auto *CurrentBlock = WorkSet2.pop_back_val();
-                if (CurrentBlock == Target)
-                  continue;
-
-                for (auto &MI : *CurrentBlock) {
-                  auto NewNode = FlowGraphNode::CreateControlDep(Current.getReg(), &MI);
-                  createEdge(Current, NewNode);
-                  WorkSet.insert(NewNode);
-                }
-
-                for (auto &Succ : CurrentBlock->successors())
-                  WorkSet2.push_back(Succ);
+          auto *CurrentMBB = Current.getMI()->getParent();
+          for (auto &MBB : MF) {
+            if (CDG->influences(CurrentMBB, &MBB)) {
+              for (auto &MI : MBB) {
+                TmpNodes.insert(getOrInsert(
+                    FlowGraphNode::CreateControlDep(Current.getReg(), &MI)));
               }
             }
+          }
+
+          for (auto *Node : TmpNodes) {
+            createEdge(CurrentNode, Node);
+            WorkSet.insert(Node);
           }
         } else {
           llvm_unreachable("SecretArgument defs should not occur before "
@@ -243,7 +248,7 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
         }
         break;
       }
-      case FlowGraphNode::FGNK_Global: {
+      case FlowGraphNodeInner::FGNK_Global: {
         for (MachineBasicBlock &MB : MF) {
           for (MachineInstr &MI : MB) {
             auto *OP = std::find_if(
@@ -254,9 +259,9 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                              Current.getGlobalVariable()->getName();
                 });
             if (OP != MI.operands_end()) {
-              auto Node = FlowGraphNode::CreateGlobalUse(
-                  Current.getGlobalVariable(), &MI);
-              createEdge(Current, Node);
+              auto *Node = getOrInsert(FlowGraphNode::CreateGlobalUse(
+                  Current.getGlobalVariable(), &MI));
+              createEdge(CurrentNode, Node);
               WorkSet.insert(Node);
             }
           }
@@ -270,7 +275,8 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
   }
 }
 
-void findOperands(FlowGraphNode &Node, SmallVectorImpl<MachineOperand> &Ops,
+void findOperands(FlowGraphNodeInner &Node,
+                  SmallVectorImpl<MachineOperand> &Ops,
                   const TargetRegisterInfo *TRI) {
   auto HandleReg = [&](MachineOperand &MO, Register Reg) {
     if (!MO.isReg())
@@ -284,14 +290,14 @@ void findOperands(FlowGraphNode &Node, SmallVectorImpl<MachineOperand> &Ops,
 
   for (auto MO : Node.getMI()->operands()) {
     switch (Node.getKind()) {
-    case FlowGraphNode::FGNK_SecretRegisterUse:
-    case FlowGraphNode::FGNK_SecretRegisterDef:
-    case FlowGraphNode::FGNK_Argument: {
+    case FlowGraphNodeInner::FGNK_SecretRegisterUse:
+    case FlowGraphNodeInner::FGNK_SecretRegisterDef:
+    case FlowGraphNodeInner::FGNK_Argument: {
       HandleReg(MO, Node.getReg());
       break;
     }
-    case FlowGraphNode::FGNK_Global:
-    case FlowGraphNode::FGNK_SecretGlobalUse: {
+    case FlowGraphNodeInner::FGNK_Global:
+    case FlowGraphNodeInner::FGNK_SecretGlobalUse: {
       if (!MO.isGlobal())
         break;
       const GlobalValue *GV = MO.getGlobal();
@@ -308,41 +314,43 @@ void findOperands(FlowGraphNode &Node, SmallVectorImpl<MachineOperand> &Ops,
   }
 }
 
-DenseMap<FlowGraphNode, uint64_t> &
+DenseMap<FlowGraphNodeInner, uint64_t> &
 FlowGraph::compute(const TargetInstrInfo *TII, const TargetRegisterInfo *TRI) {
-  SmallSet<FlowGraphNode, 8> WorkSet;
+  SmallSet<FlowGraphNode *, 8> WorkSet;
   SmallVector<MachineOperand, 8> Ops;
   SmallSet<std::pair<Register, uint64_t>, 8> NewDefs;
 
   for (auto &Pair : SecretMasks) {
     if (Pair.getSecond())
-      WorkSet.insert(Pair.getFirst());
+      WorkSet.insert(Nodes[Pair.getFirst()]);
   }
 
   while (!WorkSet.empty()) {
-    auto Current = *WorkSet.begin();
-    WorkSet.erase(Current);
+    auto *CurrentNode = *WorkSet.begin();
+    WorkSet.erase(CurrentNode);
+    auto &Current = CurrentNode->inner();
 
     Ops.clear();
-    if (Current.getKind() == FlowGraphNode::FGNK_SecretRegisterUse ||
-        Current.getKind() == FlowGraphNode::FGNK_SecretGlobalUse) {
+    if (Current.getKind() == FlowGraphNodeInner::FGNK_SecretRegisterUse ||
+        Current.getKind() == FlowGraphNodeInner::FGNK_SecretGlobalUse) {
       findOperands(Current, Ops, TRI);
     }
 
-    for (auto &Use : Nodes[Current]) {
+    for (auto *UseNode : Nodes[Current]->successors()) {
+      auto &Use = UseNode->inner();
       auto Mask = SecretMasks[Current];
       uint64_t NewMask = 0;
 
       switch (Current.getKind()) {
-      case FlowGraphNode::FGNK_Argument:
-      case FlowGraphNode::FGNK_SecretRegisterDef:
-      case FlowGraphNode::FGNK_Global:
+      case FlowGraphNodeInner::FGNK_Argument:
+      case FlowGraphNodeInner::FGNK_SecretRegisterDef:
+      case FlowGraphNodeInner::FGNK_Global:
         assert(Use.isGlobalUse() || Use.isRegisterUse() ||
                Use.isControlDep() && "Invalid Flow Graph");
         NewMask = Mask;
         break;
-      case FlowGraphNode::FGNK_SecretRegisterUse:
-      case FlowGraphNode::FGNK_SecretGlobalUse:
+      case FlowGraphNodeInner::FGNK_SecretRegisterUse:
+      case FlowGraphNodeInner::FGNK_SecretGlobalUse:
         assert(Use.isRegisterDef() && "Invalid Flow Graph");
         assert(Use.getMI() == Current.getMI() && "Invalid Use-Def edge");
         // Transfer using TTI->transferSecret
@@ -356,7 +364,7 @@ FlowGraph::compute(const TargetInstrInfo *TII, const TargetRegisterInfo *TRI) {
           }
         }
         break;
-      case FlowGraphNode::FGNK_ControlDep:
+      case FlowGraphNodeInner::FGNK_ControlDep:
         assert(Use.isRegisterDef() && "Invalid Flow Graph");
         NewMask = Mask;
         break;
@@ -366,7 +374,7 @@ FlowGraph::compute(const TargetInstrInfo *TII, const TargetRegisterInfo *TRI) {
 
       if (NewMask != SecretMasks[Use]) {
         SecretMasks[Use] = NewMask;
-        WorkSet.insert(Use);
+        WorkSet.insert(UseNode);
       }
     }
   }
@@ -396,11 +404,13 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
 
   if (IsSSA) {
     Graph = new FlowGraph(MF, nullptr, nullptr,
-                          &getAnalysis<MachinePostDominatorTree>());
+                          &getAnalysis<MachinePostDominatorTree>(),
+                          &getAnalysis<ControlDependenceGraph>());
   } else {
     Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>(),
                           &getAnalysis<MachineDominatorTree>(),
-                          &getAnalysis<MachinePostDominatorTree>());
+                          &getAnalysis<MachinePostDominatorTree>(),
+                          &getAnalysis<ControlDependenceGraph>());
   }
 
   LLVM_DEBUG(Graph->dump());
@@ -436,3 +446,37 @@ FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA) {
 }
 
 } // namespace llvm
+
+static void writeFlowGraphToDotFile(MachineFunction &MF, FlowGraph *FG) {
+  std::string Filename = (".fg." + MF.getName() + ".dot").str();
+  errs() << "Writing '" << Filename << "'...";
+
+  std::error_code EC;
+  raw_fd_ostream File(Filename, EC, sys::fs::OF_Text);
+
+  if (!EC)
+    WriteGraph(File, FG, false);
+  else
+    errs() << "  error opening file for writing!";
+  errs() << '\n';
+}
+
+char FlowGraphPrinter::ID = 0;
+
+char &llvm::FlowGraphPrinterID = FlowGraphPrinter::ID;
+
+INITIALIZE_PASS(FlowGraphPrinter, "machine-flowgraph-printer",
+                "Machine FlowGraph Printer Pass", false, true)
+
+/// Default construct and initialize the pass.
+FlowGraphPrinter::FlowGraphPrinter() : MachineFunctionPass(ID) {
+  initializeMachineCDGPrinterPass(*PassRegistry::getPassRegistry());
+}
+
+bool FlowGraphPrinter::runOnMachineFunction(MachineFunction &MF) {
+  errs() << "Writing Machine CDG for function ";
+  errs().write_escaped(MF.getName()) << '\n';
+
+  writeFlowGraphToDotFile(MF, getAnalysis<TrackSecretsAnalysis>().getGraph());
+  return false;
+}
