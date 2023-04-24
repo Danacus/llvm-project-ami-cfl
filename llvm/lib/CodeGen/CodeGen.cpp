@@ -155,6 +155,9 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeRemoveConflictingDefsPass(Registry);
   initializeRemoveBranchPseudosPass(Registry);
   initializeRemoveSecretPseudosPass(Registry);
+
+  initializeControlDependenceGraphPass(Registry);
+  initializeMachineCDGPrinterPass(Registry);
 }
 
 void LLVMInitializeCodeGen(LLVMPassRegistryRef R) {

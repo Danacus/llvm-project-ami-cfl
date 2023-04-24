@@ -90,6 +90,30 @@ public:
   void verifyAnalysis() const override;
   void print(llvm::raw_ostream &OS, const Module *M = nullptr) const override;
 };
+
+//===-------------------------------------
+/// DominatorTree GraphTraits specialization so the DominatorTree can be
+/// iterable by generic graph iterators.
+///
+
+template <class Node, class ChildIterator>
+struct MachinePostDomTreeGraphTraitsBase {
+  using NodeRef = Node *;
+  using ChildIteratorType = ChildIterator;
+
+  static NodeRef getEntryNode(NodeRef N) { return N; }
+  static ChildIteratorType child_begin(NodeRef N) { return N->begin(); }
+  static ChildIteratorType child_end(NodeRef N) { return N->end(); }
+};
+
+template <class T> struct GraphTraits;
+
+template <> struct GraphTraits<MachinePostDominatorTree*>
+  : public GraphTraits<MachineDomTreeNode *> {
+  static NodeRef getEntryNode(MachinePostDominatorTree *DT) {
+    return DT->getRootNode();
+  }
+};
 } //end of namespace llvm
 
 #endif

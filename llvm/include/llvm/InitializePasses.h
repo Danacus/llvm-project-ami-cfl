@@ -101,6 +101,8 @@ void initializeConstantHoistingLegacyPassPass(PassRegistry&);
 void initializeConstantMergeLegacyPassPass(PassRegistry&);
 void initializeCorrelatedValuePropagationPass(PassRegistry&);
 void initializeCostModelAnalysisPass(PassRegistry&);
+void initializeControlDependenceGraphPass(PassRegistry &);
+void initializeMachineCDGPrinterPass(PassRegistry &);
 void initializeCrossDSOCFIPass(PassRegistry&);
 void initializeCycleInfoWrapperPassPass(PassRegistry &);
 void initializeCreateSensitiveRegionsPass(PassRegistry &);

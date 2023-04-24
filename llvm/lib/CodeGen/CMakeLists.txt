@@ -50,6 +50,7 @@ add_llvm_component_library(LLVMCodeGen
   CommandFlags.cpp
   CompactOrder.cpp
   ComplexDeinterleavingPass.cpp
+  ControlDependenceGraph.cpp
   CreateSensitiveRegions.cpp
   CriticalAntiDepBreaker.cpp
   DeadMachineInstructionElim.cpp

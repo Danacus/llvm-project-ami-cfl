@@ -154,6 +154,8 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
             TmpNodes.insert(Node);
           }
         }
+
+        // Control dependencies, TODO: fix
         for (auto &Node : TmpNodes) {
           createEdge(Current, Node);
           WorkSet.insert(Node);
@@ -207,6 +209,8 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
               }
             }
           }
+
+          // Control dependencies, TODO: fix
           for (auto &Node : TmpNodes) {
             createEdge(Current, Node);
             WorkSet.insert(Node);

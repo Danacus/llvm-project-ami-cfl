@@ -202,6 +202,9 @@ namespace llvm {
   extern char &CreateSensitiveRegionsID;
   extern char &CompactOrderPassID;
 
+  extern char &ControlDependenceGraphID;
+  extern char &MachineCDGPrinterID;
+
   FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA = true);
   FunctionPass *createSensitiveRegionAnalysisPass(bool IsSSA = true);
   FunctionPass *createPersistencyAnalysisPass(bool IsSSA = true);
