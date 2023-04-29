@@ -3,6 +3,7 @@ add_llvm_component_library(LLVMScalarOpts
   AlignmentFromAssumptions.cpp
   AnnotationRemarks.cpp
   BDCE.cpp
+  BranchEnhance.cpp
   CallSiteSplitting.cpp
   ConstantHoisting.cpp
   ConstraintElimination.cpp

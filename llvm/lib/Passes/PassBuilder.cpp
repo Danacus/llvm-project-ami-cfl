@@ -151,6 +151,7 @@
 #include "llvm/Transforms/Scalar/AlignmentFromAssumptions.h"
 #include "llvm/Transforms/Scalar/AnnotationRemarks.h"
 #include "llvm/Transforms/Scalar/BDCE.h"
+#include "llvm/Transforms/Scalar/BranchEnhance.h"
 #include "llvm/Transforms/Scalar/CallSiteSplitting.h"
 #include "llvm/Transforms/Scalar/ConstantHoisting.h"
 #include "llvm/Transforms/Scalar/ConstraintElimination.h"
