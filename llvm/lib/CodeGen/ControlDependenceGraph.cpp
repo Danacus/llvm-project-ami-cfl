@@ -123,8 +123,8 @@ const ControlDependenceNode *ControlDependenceNode::enclosingRegion() const {
 }
 
 ControlDependenceNode::EdgeType
-ControlDependenceGraphBase::getEdgeType(const MachineBasicBlock *A,
-                                        const MachineBasicBlock *B) {
+ControlDependenceGraphBase::getEdgeType(MachineBasicBlock *A,
+                                        MachineBasicBlock *B) {
   auto *MF = A->getParent();
   auto &ST = MF->getSubtarget();
   const auto *TII = ST.getInstrInfo();
@@ -132,17 +132,16 @@ ControlDependenceGraphBase::getEdgeType(const MachineBasicBlock *A,
   MachineBasicBlock *TBB;
   MachineBasicBlock *FBB;
   SmallVector<MachineOperand, 4> Cond;
-  auto *Fuck = const_cast<MachineBasicBlock *>(A);
-  TII->analyzeBranch(*Fuck, TBB, FBB, Cond);
+  TII->analyzeBranch(*A, TBB, FBB, Cond);
 
   if (Cond.size() > 0) {
     if (TBB == B) {
       return ControlDependenceNode::TRUE;
-    } else if (FBB == B) {
+    } 
+    if (FBB == B || (A->canFallThrough() && A->getFallThrough() == B)) {
       return ControlDependenceNode::FALSE;
-    } else {
-      assert(false && "Asking for edge type between unconnected basic blocks!");
-    }
+    }        
+    llvm_unreachable("Asking for edge type between unconnected basic blocks!");
   }
   return ControlDependenceNode::OTHER;
 }
@@ -291,6 +290,8 @@ void ControlDependenceGraphBase::insertRegions(MachinePostDominatorTree &pdt) {
     }
   }
 
+  SmallSet<ControlDependenceNode *, 4> ToRemove;
+
   // Make sure that each node has at most one true or false edge
   for (std::set<ControlDependenceNode *>::iterator N = nodes.begin(),
                                                    E = nodes.end();
@@ -304,6 +305,7 @@ void ControlDependenceGraphBase::insertRegions(MachinePostDominatorTree &pdt) {
     if (node->TrueChildren.size() > 1) {
       ControlDependenceNode *region = new ControlDependenceNode();
       nodes.insert(region);
+      ToRemove.clear();
       for (ControlDependenceNode::node_iterator C = node->true_begin(),
                                                 CE = node->true_end();
            C != CE; ++C) {
@@ -314,8 +316,11 @@ void ControlDependenceGraphBase::insertRegions(MachinePostDominatorTree &pdt) {
         region->addOther(child);
         child->addParent(region);
         child->removeParent(node);
-        node->removeTrue(child);
+        // node->removeTrue(child);
+        ToRemove.insert(child);
       }
+      for (auto *C : ToRemove)
+        node->removeTrue(C);
       node->addTrue(region);
       region->addParent(node);
     }
@@ -324,6 +329,7 @@ void ControlDependenceGraphBase::insertRegions(MachinePostDominatorTree &pdt) {
     if (node->FalseChildren.size() > 1) {
       ControlDependenceNode *region = new ControlDependenceNode();
       nodes.insert(region);
+      ToRemove.clear();
       for (ControlDependenceNode::node_iterator C = node->false_begin(),
                                                 CE = node->false_end();
            C != CE; ++C) {
@@ -331,8 +337,11 @@ void ControlDependenceGraphBase::insertRegions(MachinePostDominatorTree &pdt) {
         region->addOther(child);
         child->addParent(region);
         child->removeParent(node);
-        node->removeFalse(child);
+        // node->removeFalse(child);
+        ToRemove.insert(child);
       }
+      for (auto *C : ToRemove)
+        node->removeTrue(C);
       node->addFalse(region);
       region->addParent(node);
     }
@@ -365,9 +374,13 @@ bool ControlDependenceGraphBase::influences(MachineBasicBlock *A,
   std::deque<ControlDependenceNode *> worklist;
   worklist.insert(worklist.end(), n->parent_begin(), n->parent_end());
 
+  SmallPtrSet<ControlDependenceNode *, 8> Visited;
   while (!worklist.empty()) {
-    n = worklist.front();
+    auto *n = worklist.front();
     worklist.pop_front();
+    if (Visited.contains(n))
+      continue;
+    Visited.insert(n);
     if (n->getBlock() == A)
       return true;
     worklist.insert(worklist.end(), n->parent_begin(), n->parent_end());

@@ -128,6 +128,9 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
     WorkSet.erase(CurrentNode);
     auto &Current = CurrentNode->inner();
 
+    LLVM_DEBUG(CurrentNode->dump());
+    LLVM_DEBUG(errs() << "\n");
+
     if (!CurrentNode->isVisited()) {
       CurrentNode->setVisited();
       LLVM_DEBUG(CurrentNode->dump());
@@ -223,17 +226,17 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                   auto *Node = getOrInsert(
                       FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI));
                   TmpNodes.insert(Node);
-                }
-              }
-            }
-          }
 
-          auto *CurrentMBB = Current.getMI()->getParent();
-          for (auto &MBB : MF) {
-            if (CDG->influences(CurrentMBB, &MBB)) {
-              for (auto &MI : MBB) {
-                TmpNodes.insert(getOrInsert(
-                    FlowGraphNode::CreateControlDep(Current.getReg(), &MI)));
+                  auto *CurrentMBB = MI.getParent();
+                  for (auto &MBB : MF) {
+                    if (CDG->influences(CurrentMBB, &MBB)) {
+                      for (auto &MI : MBB) {
+                        TmpNodes.insert(getOrInsert(
+                            FlowGraphNode::CreateControlDep(Current.getReg(), &MI)));
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -273,6 +276,8 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
       }
     }
   }
+
+  LLVM_DEBUG(errs() << "done\n");
 }
 
 void findOperands(FlowGraphNodeInner &Node,

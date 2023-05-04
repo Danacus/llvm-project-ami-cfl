@@ -247,8 +247,8 @@ private:
   ControlDependenceNode *root;
   std::set<ControlDependenceNode *> nodes;
   std::map<const MachineBasicBlock *, ControlDependenceNode *> bbMap;
-  static ControlDependenceNode::EdgeType getEdgeType(const MachineBasicBlock *,
-                                                     const MachineBasicBlock *);
+  static ControlDependenceNode::EdgeType getEdgeType(MachineBasicBlock *,
+                                                     MachineBasicBlock *);
   void computeDependencies(MachineFunction &F, MachinePostDominatorTree &pdt);
   void insertRegions(MachinePostDominatorTree &pdt);
 };
