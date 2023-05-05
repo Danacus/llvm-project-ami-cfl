@@ -188,10 +188,10 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
         for (auto &MBB : MF) {
           if (CDG->influences(CurrentMBB, &MBB)) {
             for (auto &MI : MBB) {
-              auto *Node = getOrInsert(
-                  FlowGraphNode::CreateControlDep(Current.getReg(), &MI));
-              TmpNodes.insert(Node);
-              LLVM_DEBUG(Node->dump());
+              // auto *Node = getOrInsert(
+              //     FlowGraphNode::CreateControlDep(Current.getReg(), &MI));
+              // TmpNodes.insert(Node);
+              // LLVM_DEBUG(Node->dump());
             }
           }
         }
@@ -231,8 +231,8 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                   for (auto &MBB : MF) {
                     if (CDG->influences(CurrentMBB, &MBB)) {
                       for (auto &MI : MBB) {
-                        TmpNodes.insert(getOrInsert(
-                            FlowGraphNode::CreateControlDep(Current.getReg(), &MI)));
+                        // TmpNodes.insert(getOrInsert(
+                        //     FlowGraphNode::CreateControlDep(Current.getReg(), &MI)));
                       }
                     }
                   }
@@ -401,6 +401,8 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   TRI = ST.getRegisterInfo();
+
+  SecretUses.clear();
 
   if (Graph) {
     delete Graph;
