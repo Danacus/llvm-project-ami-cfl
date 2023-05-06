@@ -4,6 +4,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/CodeGen/ControlDependenceGraph.h"
 #include "llvm/CodeGen/LiveIntervals.h"
+#include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -370,11 +371,12 @@ private:
     To->addPred(From);
   }
 
-  bool isLiveAt(Register Reg, MachineBasicBlock *MBB, LiveIntervals *LIS) {
-    if (LIS) {
-      auto &LI = LIS->getInterval(Reg);
-      LI.dump();
-      auto IsLive = LIS->isLiveInToMBB(LI, MBB);
+  bool isLiveAt(Register Reg, MachineBasicBlock *MBB, LiveVariables *LV) {
+    if (LV) {
+      // auto &LI = LIS->getInterval(Reg);
+      // LI.dump();
+      // auto IsLive = LIS->isLiveInToMBB(LI, MBB);
+      auto IsLive = LV->isLiveIn(Reg, *MBB);
       if (IsLive)
         errs() << "Is live\n";
       else
@@ -389,7 +391,7 @@ private:
   }
 
   void handleControlDep(MachineInstr &BranchMI, ControlDependenceGraph *CDG,
-                        MachinePostDominatorTree *MPDT, LiveIntervals *LIS,
+                        MachinePostDominatorTree *MPDT, LiveVariables *LV,
                         const TargetInstrInfo *TII, Register DepReg,
                         SmallSet<FlowGraphNode *, 8> &Nodes);
 
@@ -398,7 +400,7 @@ public:
             MachineDominatorTree *MDT = nullptr,
             MachinePostDominatorTree *MPDT = nullptr,
             ControlDependenceGraph *CFG = nullptr,
-            LiveIntervals *LIS = nullptr);
+            LiveVariables *LV = nullptr);
   ~FlowGraph();
 
   DenseMap<Key, uint64_t> &compute(const TargetInstrInfo *TII,
@@ -513,7 +515,7 @@ public:
       AU.addRequired<ReachingDefAnalysis>();
       AU.addRequired<MachineDominatorTree>();
     } else {
-      AU.addRequired<LiveIntervals>();
+      AU.addRequired<LiveVariables>();
     }
     AU.addRequired<MachinePostDominatorTree>();
     AU.addRequired<ControlDependenceGraph>();

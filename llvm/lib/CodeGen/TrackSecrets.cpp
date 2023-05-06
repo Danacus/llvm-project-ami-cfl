@@ -12,6 +12,20 @@
 
 #define DEBUG_TYPE "track-secrets"
 
+static void writeFlowGraphToDotFile(MachineFunction &MF, FlowGraph *FG) {
+  std::string Filename = (".fg." + MF.getName() + ".dot").str();
+  errs() << "Writing '" << Filename << "'...";
+
+  std::error_code EC;
+  raw_fd_ostream File(Filename, EC, sys::fs::OF_Text);
+
+  if (!EC)
+    WriteGraph(File, FG, false);
+  else
+    errs() << "  error opening file for writing!";
+  errs() << '\n';
+}
+
 FlowGraph::~FlowGraph() {
   for (auto &Pair : Nodes) {
     delete Pair.getSecond();
@@ -111,7 +125,7 @@ void FlowGraph::getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
 
 void FlowGraph::handleControlDep(MachineInstr &BranchMI,
                                  ControlDependenceGraph *CDG, MachinePostDominatorTree *MPDT,
-                                 LiveIntervals *LIS, const TargetInstrInfo *TII,
+                                 LiveVariables *LV, const TargetInstrInfo *TII,
                                  Register DepReg,
                                  SmallSet<FlowGraphNode *, 8> &Nodes) {
   auto *CurrentMBB = BranchMI.getParent();
@@ -127,7 +141,7 @@ void FlowGraph::handleControlDep(MachineInstr &BranchMI,
       for (auto &MI : MBB) {
         if (std::find_if(MI.defs().begin(), MI.defs().end(),
                       [&](MachineOperand &MO) {
-                        return MO.isReg() && isLiveAt(MO.getReg(), PostDom, LIS);
+                        return MO.isReg() && isLiveAt(MO.getReg(), PostDom, LV);
                       }) != MI.defs().end()) {
           LLVM_DEBUG(errs() << "New control dep\n");
           LLVM_DEBUG(MI.dump());
@@ -144,7 +158,7 @@ void FlowGraph::handleControlDep(MachineInstr &BranchMI,
 
 FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                      MachineDominatorTree *MDT, MachinePostDominatorTree *MPDT,
-                     ControlDependenceGraph *CDG, LiveIntervals *LIS) {
+                     ControlDependenceGraph *CDG, LiveVariables *LV) {
   const auto &ST = MF.getSubtarget();
   const auto *TII = ST.getInstrInfo();
   auto &MRI = MF.getRegInfo();
@@ -210,7 +224,7 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                   FlowGraphNode::CreateRegisterUse(Current.getReg(), Use));
               TmpNodes.insert(Node);
               if (Use->isBranch()) {
-                handleControlDep(*Use, CDG, MPDT, LIS, TII, Current.getReg(), TmpNodes);
+                handleControlDep(*Use, CDG, MPDT, LV, TII, Current.getReg(), TmpNodes);
               }
             }
           }
@@ -221,7 +235,7 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
             TmpNodes.insert(Node);
 
             if (MI.isBranch()) {
-              handleControlDep(MI, CDG, MPDT, LIS, TII, Current.getReg(), TmpNodes);
+              handleControlDep(MI, CDG, MPDT, LV, TII, Current.getReg(), TmpNodes);
             }
           }
         }
@@ -258,7 +272,7 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                   TmpNodes.insert(Node);
 
                   if (MI.isBranch()) {
-                    handleControlDep(MI, CDG, MPDT, LIS, TII, Current.getReg(), TmpNodes);
+                    handleControlDep(MI, CDG, MPDT, LV, TII, Current.getReg(), TmpNodes);
                   }
                 }
               }
@@ -436,7 +450,7 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   if (IsSSA) {
     Graph = new FlowGraph(
         MF, nullptr, nullptr, &getAnalysis<MachinePostDominatorTree>(),
-        &getAnalysis<ControlDependenceGraph>(), &getAnalysis<LiveIntervals>());
+        &getAnalysis<ControlDependenceGraph>(), &getAnalysis<LiveVariables>());
   } else {
     Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>(),
                           &getAnalysis<MachineDominatorTree>(),
@@ -453,6 +467,7 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   for (auto *MI : SecretUses) {
     LLVM_DEBUG(MI->dump());
   }
+  LLVM_DEBUG(writeFlowGraphToDotFile(MF, getGraph()));
 
   return false;
 }
@@ -478,19 +493,6 @@ FunctionPass *createTrackSecretsAnalysisPass(bool IsSSA) {
 
 } // namespace llvm
 
-static void writeFlowGraphToDotFile(MachineFunction &MF, FlowGraph *FG) {
-  std::string Filename = (".fg." + MF.getName() + ".dot").str();
-  errs() << "Writing '" << Filename << "'...";
-
-  std::error_code EC;
-  raw_fd_ostream File(Filename, EC, sys::fs::OF_Text);
-
-  if (!EC)
-    WriteGraph(File, FG, false);
-  else
-    errs() << "  error opening file for writing!";
-  errs() << '\n';
-}
 
 char FlowGraphPrinter::ID = 0;
 
