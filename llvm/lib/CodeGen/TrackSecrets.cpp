@@ -109,9 +109,44 @@ void FlowGraph::getSources(MachineFunction &MF, ReachingDefAnalysis *RDA,
   }
 }
 
+void FlowGraph::handleControlDep(MachineInstr &BranchMI,
+                                 ControlDependenceGraph *CDG, MachinePostDominatorTree *MPDT,
+                                 LiveIntervals *LIS, const TargetInstrInfo *TII,
+                                 Register DepReg,
+                                 SmallSet<FlowGraphNode *, 8> &Nodes) {
+  auto *CurrentMBB = BranchMI.getParent();
+  auto *MF = CurrentMBB->getParent();
+  // MachineBasicBlock *TBB;
+  // MachineBasicBlock *FBB;
+  // SmallVector<MachineOperand> Cond;
+  // TII->analyzeBranch(*CurrentMBB, TBB, FBB, Cond);
+  MachineBasicBlock *PostDom = MPDT->getNode(CurrentMBB)->getIDom()->getBlock();
+
+  for (auto &MBB : *MF) {
+    if (CDG->influences(CurrentMBB, &MBB)) {
+      for (auto &MI : MBB) {
+        if (std::find_if(MI.defs().begin(), MI.defs().end(),
+                      [&](MachineOperand &MO) {
+                        return MO.isReg() && isLiveAt(MO.getReg(), PostDom, LIS);
+                      }) != MI.defs().end()) {
+          LLVM_DEBUG(errs() << "New control dep\n");
+          LLVM_DEBUG(MI.dump());
+          LLVM_DEBUG(PostDom->dump());
+          auto *Node =
+              getOrInsert(FlowGraphNode::CreateControlDep(DepReg, &MI));
+          Nodes.insert(Node);
+          LLVM_DEBUG(Node->dump());
+        }
+      }
+    }
+  }
+}
+
 FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                      MachineDominatorTree *MDT, MachinePostDominatorTree *MPDT,
-                     ControlDependenceGraph *CDG) {
+                     ControlDependenceGraph *CDG, LiveIntervals *LIS) {
+  const auto &ST = MF.getSubtarget();
+  const auto *TII = ST.getInstrInfo();
   auto &MRI = MF.getRegInfo();
   SmallSet<FlowGraphNode *, 8> TmpNodes;
   SmallSet<FlowGraphNode *, 8> WorkSet;
@@ -174,6 +209,9 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
               auto *Node = getOrInsert(
                   FlowGraphNode::CreateRegisterUse(Current.getReg(), Use));
               TmpNodes.insert(Node);
+              if (Use->isBranch()) {
+                handleControlDep(*Use, CDG, MPDT, LIS, TII, Current.getReg(), TmpNodes);
+              }
             }
           }
         } else {
@@ -181,17 +219,9 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
             auto *Node = getOrInsert(
                 FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI));
             TmpNodes.insert(Node);
-          }
-        }
 
-        auto *CurrentMBB = Current.getMI()->getParent();
-        for (auto &MBB : MF) {
-          if (CDG->influences(CurrentMBB, &MBB)) {
-            for (auto &MI : MBB) {
-              // auto *Node = getOrInsert(
-              //     FlowGraphNode::CreateControlDep(Current.getReg(), &MI));
-              // TmpNodes.insert(Node);
-              // LLVM_DEBUG(Node->dump());
+            if (MI.isBranch()) {
+              handleControlDep(MI, CDG, MPDT, LIS, TII, Current.getReg(), TmpNodes);
             }
           }
         }
@@ -227,14 +257,8 @@ FlowGraph::FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA,
                       FlowGraphNode::CreateRegisterUse(Current.getReg(), &MI));
                   TmpNodes.insert(Node);
 
-                  auto *CurrentMBB = MI.getParent();
-                  for (auto &MBB : MF) {
-                    if (CDG->influences(CurrentMBB, &MBB)) {
-                      for (auto &MI : MBB) {
-                        // TmpNodes.insert(getOrInsert(
-                        //     FlowGraphNode::CreateControlDep(Current.getReg(), &MI)));
-                      }
-                    }
+                  if (MI.isBranch()) {
+                    handleControlDep(MI, CDG, MPDT, LIS, TII, Current.getReg(), TmpNodes);
                   }
                 }
               }
@@ -410,14 +434,14 @@ bool TrackSecretsAnalysis::runOnMachineFunction(MachineFunction &MF) {
   }
 
   if (IsSSA) {
-    Graph = new FlowGraph(MF, nullptr, nullptr,
-                          &getAnalysis<MachinePostDominatorTree>(),
-                          &getAnalysis<ControlDependenceGraph>());
+    Graph = new FlowGraph(
+        MF, nullptr, nullptr, &getAnalysis<MachinePostDominatorTree>(),
+        &getAnalysis<ControlDependenceGraph>(), &getAnalysis<LiveIntervals>());
   } else {
     Graph = new FlowGraph(MF, &getAnalysis<ReachingDefAnalysis>(),
                           &getAnalysis<MachineDominatorTree>(),
                           &getAnalysis<MachinePostDominatorTree>(),
-                          &getAnalysis<ControlDependenceGraph>());
+                          &getAnalysis<ControlDependenceGraph>(), nullptr);
   }
 
   LLVM_DEBUG(Graph->dump());

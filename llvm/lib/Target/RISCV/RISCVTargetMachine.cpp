@@ -380,6 +380,7 @@ void RISCVPassConfig::addPreEmitPass2() {
     addPass(createTrackSecretsAnalysisPass(false));
 
     if (!AMiGeneralLinearization) {
+      // addPass(createRISCVSimplifySensitiveRegionPass());
       addPass(createSensitiveRegionAnalysisPass(false));
       addPass(createAMiLinearizationAnalysisPass(true, ALM_SESE));
     } else {

@@ -3,6 +3,7 @@
 
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/CodeGen/ControlDependenceGraph.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -178,7 +179,7 @@ public:
     }
   }
 
-  StringRef getKindLabel() const { 
+  StringRef getKindLabel() const {
     switch (getKind()) {
     case FGNK_Root:
       return "Root";
@@ -248,13 +249,9 @@ private:
 public:
   FlowGraphNode(FlowGraphNodeInner Inner) : Inner(Inner) {}
 
-  bool isVisited() {
-    return Visited;    
-  }
+  bool isVisited() { return Visited; }
 
-  void setVisited(bool Visited = true) {
-    this->Visited = Visited;    
-  }
+  void setVisited(bool Visited = true) { this->Visited = Visited; }
 
   void clearSuccs() { Succs.clear(); }
 
@@ -328,9 +325,7 @@ template <> struct GraphTraits<FlowGraphNode *> {
 
   static NodeRef getEntryNode(NodeRef N) { return N; }
 
-  static inline ChildIteratorType child_begin(NodeRef N) {
-    return N->begin();
-  }
+  static inline ChildIteratorType child_begin(NodeRef N) { return N->begin(); }
   static inline ChildIteratorType child_end(NodeRef N) { return N->end(); }
 
   typedef df_iterator<FlowGraphNode *> nodes_iterator;
@@ -338,9 +333,7 @@ template <> struct GraphTraits<FlowGraphNode *> {
   static nodes_iterator nodes_begin(NodeRef N) {
     return df_begin(getEntryNode(N));
   }
-  static nodes_iterator nodes_end(NodeRef N) {
-    return df_end(getEntryNode(N));
-  }
+  static nodes_iterator nodes_end(NodeRef N) { return df_end(getEntryNode(N)); }
 };
 
 template <> struct DenseMapInfo<FlowGraphNodeInner> {
@@ -377,10 +370,35 @@ private:
     To->addPred(From);
   }
 
+  bool isLiveAt(Register Reg, MachineBasicBlock *MBB, LiveIntervals *LIS) {
+    if (LIS) {
+      auto &LI = LIS->getInterval(Reg);
+      LI.dump();
+      auto IsLive = LIS->isLiveInToMBB(LI, MBB);
+      if (IsLive)
+        errs() << "Is live\n";
+      else
+        errs() << "Is not live\n";
+
+      return IsLive;
+    }
+
+    assert(Reg.isPhysical() &&
+           "expected Reg to be physical is LIS is unavailable");
+    return MBB->isLiveIn(Reg.asMCReg());
+  }
+
+  void handleControlDep(MachineInstr &BranchMI, ControlDependenceGraph *CDG,
+                        MachinePostDominatorTree *MPDT, LiveIntervals *LIS,
+                        const TargetInstrInfo *TII, Register DepReg,
+                        SmallSet<FlowGraphNode *, 8> &Nodes);
+
 public:
   FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA = nullptr,
             MachineDominatorTree *MDT = nullptr,
-            MachinePostDominatorTree *MPDT = nullptr, ControlDependenceGraph *CFG = nullptr);
+            MachinePostDominatorTree *MPDT = nullptr,
+            ControlDependenceGraph *CFG = nullptr,
+            LiveIntervals *LIS = nullptr);
   ~FlowGraph();
 
   DenseMap<Key, uint64_t> &compute(const TargetInstrInfo *TII,
@@ -407,13 +425,9 @@ public:
     return make_range(succ_begin(Node), succ_end(Node));
   }
 
-  FlowGraphNode *getRoot() {
-    return Root;    
-  }
+  FlowGraphNode *getRoot() { return Root; }
 
-  void setRoot(FlowGraphNode *Root) {
-    this->Root = Root;    
-  }
+  void setRoot(FlowGraphNode *Root) { this->Root = Root; }
 
   void print(raw_ostream &OS) const {
     OS << "FlowGraph:\n";
@@ -443,11 +457,8 @@ public:
 };
 
 template <>
-struct GraphTraits<FlowGraph *>
-    : public GraphTraits<FlowGraphNode *> {
-  static NodeRef getEntryNode(FlowGraph *FG) {
-    return FG->getRoot();
-  }
+struct GraphTraits<FlowGraph *> : public GraphTraits<FlowGraphNode *> {
+  static NodeRef getEntryNode(FlowGraph *FG) { return FG->getRoot(); }
 
   static nodes_iterator nodes_begin(FlowGraph *FG) {
     if (getEntryNode(FG))
@@ -461,16 +472,12 @@ struct GraphTraits<FlowGraph *>
   }
 };
 
-template <>
-struct DOTGraphTraits<FlowGraph *> : public DefaultDOTGraphTraits {
+template <> struct DOTGraphTraits<FlowGraph *> : public DefaultDOTGraphTraits {
   DOTGraphTraits(bool isSimple = false) : DefaultDOTGraphTraits(isSimple) {}
 
-  static std::string getGraphName(FlowGraph *Graph) {
-    return "FlowGraph";
-  }
+  static std::string getGraphName(FlowGraph *Graph) { return "FlowGraph"; }
 
-  std::string getNodeLabel(FlowGraphNode *Node,
-                           FlowGraph *Graph) {
+  std::string getNodeLabel(FlowGraphNode *Node, FlowGraph *Graph) {
     std::string Label;
     raw_string_ostream OS = raw_string_ostream(Label);
     Node->print(OS);
@@ -496,9 +503,7 @@ public:
 
   SmallPtrSet<MachineInstr *, 8> SecretUses;
 
-  FlowGraph *getGraph() {
-    return Graph;    
-  }
+  FlowGraph *getGraph() { return Graph; }
 
   TrackSecretsAnalysis(bool IsSSA = true);
   bool runOnMachineFunction(MachineFunction &MF) override;
@@ -507,6 +512,8 @@ public:
     if (!IsSSA) {
       AU.addRequired<ReachingDefAnalysis>();
       AU.addRequired<MachineDominatorTree>();
+    } else {
+      AU.addRequired<LiveIntervals>();
     }
     AU.addRequired<MachinePostDominatorTree>();
     AU.addRequired<ControlDependenceGraph>();

@@ -163,7 +163,7 @@ class InlineSpiller : public Spiller {
   MachineLoopInfo &Loops;
   VirtRegMap &VRM;
   MachineRegisterInfo &MRI;
-  LinearizationResult *ALA;
+  LinearizationResult *ALA = nullptr;
   AddMimicryConstraints *AMC;
   InsertConflictingDefs *ICD;
   const TargetInstrInfo &TII;
@@ -1053,8 +1053,8 @@ void InlineSpiller::insertSpill(Register NewVReg, bool isKill,
   assert(!MI->isTerminator() && "Inserting a spill after a terminator");
   MachineBasicBlock &MBB = *MI->getParent();
 
-  assert(ALA && "Expected ALA to be available");
-  if (ALA && ALA->RegionMap[&MBB].empty()) {
+  // assert(ALA && "Expected ALA to be available");
+  if (ALA && !ALA->RegionMap[&MBB].empty()) {
     Register GhostReg = Edit->createFrom(Original);
 
     BuildMI(MBB, std::next(MI), DebugLoc(),

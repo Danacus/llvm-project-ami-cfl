@@ -129,8 +129,8 @@ void LinearizationAnalysisSESE::linearizeBranch(
     if (NewSucc != Region->getExit()) {
       for (auto &Succ : Exiting->successors()) {
         if (Succ != NewSucc)
-          if (!Result.ActivatingEdges.contains({MBB, Succ}))
-            Result.ActivatingEdges.insert({MBB, Succ});
+          if (!Result.ActivatingEdges.contains({Exiting, Succ}))
+            Result.ActivatingEdges.insert({Exiting, Succ});
       }
     }
   }

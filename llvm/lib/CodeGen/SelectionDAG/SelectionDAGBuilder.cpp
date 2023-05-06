@@ -10790,7 +10790,8 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
       SecretMask = Arg.getAttribute(Attribute::Secret).getValueAsInt();
     auto SecretNode = DAG.getSecret(DAG.getEntryNode(), dl, InVals[i], InVals[i].getValueType(), SecretMask);
     InVals[i] = SecretNode;
-    // SDB->PendingExports.push_back(SecretNode);
+    auto Copy = DAG.getCopyToReg(DAG.getEntryNode(), dl, FuncInfo->CreateReg(SecretNode.getSimpleValueType()), SecretNode);
+    SDB->PendingExports.push_back(Copy);
 
     // If this argument is unused then remember its value. It is used to generate
     // debugging information.

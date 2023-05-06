@@ -53,7 +53,7 @@ void LinearizationAnalysisBase::findSecretDependentBranches() {
     // We still need those registers
     // TODO: Does this code belong here? Can is be removed?
     for (auto &MO : User->uses()) {
-      if (MO.isReg())
+      if (MO.isReg() && !MO.isDef())
         MO.setIsKill(false);
     }
 
