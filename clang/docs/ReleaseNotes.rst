@@ -395,6 +395,18 @@ C2x Feature Support
   Also documents the builtin appropriately. Note, a type definition in C++
   continues to be rejected.
 
+OpenCL Kernel Language Changes
+------------------------------
+
+- Improved diagnostics for C++ templates used in kernel arguments.
+- Removed redundant pragma for the ``arm-integer-dot-product`` extension.
+- Improved support of enqueued block for AMDGPU.
+- Added ``nounwind`` attribute implicitly to all functions.
+- Improved builtin functions support:
+
+  * Allow disabling default header-based feature/extension support by passing ``-D__undef_<feature>``.
+  * Fixed conditional definition of the depth image and ``read_write image3d`` builtins.
+
 Non-comprehensive list of changes in this release
 -------------------------------------------------
 - It's now possible to set the crash diagnostics directory through
@@ -581,9 +593,6 @@ Improvements to Clang's diagnostics
   language version and specifies in which version it will be a keyword. This
   supports both C and C++.
 
-- When diagnosing multi-level pack expansions of mismatched lengths, Clang will
-  now, in most cases, be able to point to the relevant outer parameter.
-
 - ``no_sanitize("...")`` on a global variable for known but not relevant
   sanitizers is now just a warning. It now says that this will be ignored
   instead of incorrectly saying no_sanitize only applies to functions and
@@ -706,6 +715,10 @@ Improvements to Clang's diagnostics
 Bug Fixes in This Version
 -------------------------
 
+- Fix crash when attempting to perform parenthesized initialization of an
+  aggregate with a base class with only non-public constructors.
+  (`#62296 <https://github.com/llvm/llvm-project/issues/62296>`_)
+
 Bug Fixes to Compiler Builtins
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -753,7 +766,7 @@ Bug Fixes to Attribute Support
   a function pointer.
 
 - In C mode, when ``e1`` has ``__attribute__((noreturn))`` but ``e2`` doesn't,
-  ``(c ? e1 : e2)`` is no longer considered noreturn.
+  ``(c ? e1 : e2)`` is no longer considered noreturn, fixing a miscompilation.
   (`#59792 <https://github.com/llvm/llvm-project/issues/59792>`_)
 
 - GNU attributes being applied prior to standard attributes would be handled
@@ -769,8 +782,9 @@ Bug Fixes to Attribute Support
 
 Bug Fixes to C++ Support
 ^^^^^^^^^^^^^^^^^^^^^^^^
-- Fix multi-level pack expansion of undeclared function parameters.
-  (`#56094 <https://github.com/llvm/llvm-project/issues/56094>`_)
+- No longer issue a pre-C++2b compatibility warning in ``-pedantic`` mode
+  regading overloaded `operator[]` with more than one parmeter or for static
+  lambdas. (`#61582 <https://github.com/llvm/llvm-project/issues/61582>`_)
 
 - Address the thread identification problems in coroutines.
   (`#47177 <https://github.com/llvm/llvm-project/issues/47177>`_,
@@ -807,6 +821,10 @@ Bug Fixes to C++ Support
 - Do not hide templated base members introduced via using-decl in derived class
   (useful specially for constrained members). (`#50886 <https://github.com/llvm/llvm-project/issues/50886>`_)
 
+- Fix default member initializers sometimes being ignored when performing
+  parenthesized aggregate initialization of templated types.
+  (`#62266 <https://github.com/llvm/llvm-project/issues/62266>`_)
+
 Concepts Specific Fixes:
 
 - Class member variables are now in scope when parsing a ``requires`` clause.
@@ -820,11 +838,6 @@ Concepts Specific Fixes:
 
 - Fixed an issue with concept requirement evaluation, where we incorrectly allowed implicit
   conversions to bool for a requirement.  (`#54524 <https://github.com/llvm/llvm-project/issues/54524>`_)
-
-- Respect constructor constraints during class template argument deduction (CTAD).
-  This is the suggested resolution to CWG DR2628.
-  (`#57646 <https://github.com/llvm/llvm-project/issues/57646>`_,
-  `#43829 <https://github.com/llvm/llvm-project/issues/43829>`_)
 
 - Fix a crash when emitting a concept-related diagnostic.
   (`#57415 <https://github.com/llvm/llvm-project/issues/57415>`_)
@@ -886,6 +899,8 @@ Miscellaneous Bug Fixes
 
 - Fix the bug of inserting the ``ZeroInitializationFixit`` before the template
   argument list of ``VarTemplateSpecializationDecl``.
+- Fix the bug where Clang emits constrained float intrinsics when specifying
+  ``-ffp-model=strict -ffp-model=fast``.
 
 Miscellaneous Clang Crashes Fixed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1006,6 +1021,9 @@ Windows Support
   by Linux distributions such as Fedora. Also improved such setups by
   avoiding to include ``/usr/include`` among the include paths when cross
   compiling with a cross sysroot based in ``/usr``.
+- Fix incorrect alignment attribute on the this parameter of certain
+  non-complete destructors when using the Microsoft ABI.
+  `Issue 60465 <https://github.com/llvm/llvm-project/issues/60465>`_.
 
 LoongArch Support
 ^^^^^^^^^^^^^^^^^
@@ -1042,6 +1060,7 @@ RISC-V Support
 - Note that the RISC-V Vector C intrinsics are still under development. The RVV
   C Intrinsic Task Group is working towards a ratified v1.0.
 - The rvv-intrinsic-doc provides `compatible headers <https://github.com/riscv-non-isa/rvv-intrinsic-doc/tree/master/auto-generated/rvv-v0p10-compatible-headers>`_ for transition from the previous implemented version to the current (v0.11) version.
+- Clang now supports `v0.11 RVV intrinsics <https://github.com/riscv-non-isa/rvv-intrinsic-doc/tree/v0.11.x>`_.
 
 CUDA/HIP Language Changes in Clang
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1058,6 +1077,18 @@ AIX Support
 * When using ``-shared``, the clang driver now invokes llvm-nm to create an
   export list if the user doesn't specify one via linker flag or pass an
   alternative export control option.
+* Driver work done for ``-pg`` to link with the right paths and files.
+
+- Improved support for `-bcdtors:mbr` and `-bcdtors:csect` linker flags
+  when linking with -fprofile-generate.
+
+- Enabled LTO support. Requires AIX 7.2 TL5 SP3 or newer, or AIX 7.3. LTO
+  support is implemented with the `libLTO.so` plugin. To specify a
+  different plugin, use the linker option `-bplugin:<path to plugin>`.
+  To pass options to the plugin, use the linker option `-bplugin_opt:<option>`.
+
+- ``-mcpu`` option's values are checked against a list of known CPUs. An error
+  is reported if the specified CPU model is not found.
 
 WebAssembly Support
 ^^^^^^^^^^^^^^^^^^^

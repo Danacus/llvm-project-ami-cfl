@@ -5348,14 +5348,16 @@ static void TryOrBuildParenListInitialization(
           //   The remaining elements are initialized with their default member
           //   initializers, if any
           auto *FD = cast<FieldDecl>(SubEntity.getDecl());
-          if (Expr *ICE = FD->getInClassInitializer(); ICE && !VerifyOnly) {
-            ExprResult DIE = S.BuildCXXDefaultInitExpr(FD->getLocation(), FD);
-            if (DIE.isInvalid())
-              return false;
-            S.checkInitializerLifetime(SubEntity, DIE.get());
-            InitExprs.push_back(DIE.get());
+          if (FD->hasInClassInitializer()) {
+            if (!VerifyOnly) {
+              ExprResult DIE = S.BuildCXXDefaultInitExpr(FD->getLocation(), FD);
+              if (DIE.isInvalid())
+                return false;
+              S.checkInitializerLifetime(SubEntity, DIE.get());
+              InitExprs.push_back(DIE.get());
+            }
             continue;
-          };
+          }
         }
         // Remaining class elements without default member initializers and
         // array elements are value initialized:
@@ -5420,8 +5422,9 @@ static void TryOrBuildParenListInitialization(
   } else if (auto *RT = Entity.getType()->getAs<RecordType>()) {
     const CXXRecordDecl *RD = cast<CXXRecordDecl>(RT->getDecl());
 
-    auto BaseRange = map_range(RD->bases(), [&S](auto &base) {
-      return InitializedEntity::InitializeBase(S.getASTContext(), &base, false);
+    auto BaseRange = map_range(RD->bases(), [&](auto &base) {
+      return InitializedEntity::InitializeBase(S.getASTContext(), &base, false,
+                                               &Entity);
     });
     auto FieldRange = map_range(RD->fields(), [](auto *field) {
       return InitializedEntity::InitializeMember(field);
@@ -9180,6 +9183,8 @@ ExprResult InitializationSequence::Perform(Sema &S,
                                         /*VerifyOnly=*/false, &CurInit);
       if (CurInit.get() && ResultType)
         *ResultType = CurInit.get()->getType();
+      if (shouldBindAsTemporary(Entity))
+        CurInit = S.MaybeBindToTemporary(CurInit.get());
       break;
     }
     }
