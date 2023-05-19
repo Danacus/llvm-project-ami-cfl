@@ -376,12 +376,7 @@ private:
       // auto &LI = LIS->getInterval(Reg);
       // LI.dump();
       // auto IsLive = LIS->isLiveInToMBB(LI, MBB);
-      auto IsLive = LV->isLiveIn(Reg, *MBB);
-      if (IsLive)
-        errs() << "Is live\n";
-      else
-        errs() << "Is not live\n";
-
+      auto IsLive = Reg.isVirtual() && LV->isLiveIn(Reg, *MBB);
       return IsLive;
     }
 
