@@ -9,6 +9,7 @@
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/ReachingDefAnalysis.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/Support/DOTGraphTraits.h"
@@ -372,12 +373,20 @@ private:
   }
 
   bool isLiveAt(Register Reg, MachineBasicBlock *MBB, LiveVariables *LV) {
+    auto &MRI = MBB->getParent()->getRegInfo();
+
     if (LV) {
-      // auto &LI = LIS->getInterval(Reg);
-      // LI.dump();
-      // auto IsLive = LIS->isLiveInToMBB(LI, MBB);
-      auto IsLive = Reg.isVirtual() && LV->isLiveIn(Reg, *MBB);
-      return IsLive;
+      if (Reg.isVirtual()) {
+        bool HasPhiUse =
+            std::find_if(MRI.use_instructions(Reg).begin(),
+                      MRI.use_instructions(Reg).end(), [&](MachineInstr &MI) {
+                        return MI.getParent() == MBB && MI.isPHI();
+                      }) != MRI.use_instructions(Reg).end();
+        auto IsLive = Reg.isVirtual() && (LV->isLiveIn(Reg, *MBB) || HasPhiUse);
+        return IsLive;
+      } else {
+        return MBB->isLiveIn(Reg.asMCReg());
+      }
     }
 
     assert(Reg.isPhysical() &&
@@ -394,8 +403,7 @@ public:
   FlowGraph(MachineFunction &MF, ReachingDefAnalysis *RDA = nullptr,
             MachineDominatorTree *MDT = nullptr,
             MachinePostDominatorTree *MPDT = nullptr,
-            ControlDependenceGraph *CFG = nullptr,
-            LiveVariables *LV = nullptr);
+            ControlDependenceGraph *CFG = nullptr, LiveVariables *LV = nullptr);
   ~FlowGraph();
 
   DenseMap<Key, uint64_t> &compute(const TargetInstrInfo *TII,

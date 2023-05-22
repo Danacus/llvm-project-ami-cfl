@@ -76,4 +76,7 @@ pythonenv*
 #==============================================================================#
 Makefile.local
 install
+install_release
 dist
+build
+build_release
