@@ -83,11 +83,15 @@ void LinearizationAnalysisBase::createActivatingRegions() {
   LLVM_DEBUG(MPDT->dump());
 
   SmallPtrSet<MachineBasicBlock *, 8> Blocks;
-  for (auto &MBB : *MF)
-    Blocks.insert(&MBB);
-  LinearizationResult::Edge Edge = {MDT->getRoot(), nullptr};
-  Result.ActivatingRegions.insert(
-      {Edge, ActivatingRegion(nullptr, MDT->getRoot(), nullptr, Blocks)});
+  if (MF->getFunction().hasFnAttribute(Attribute::Mimicable)) {
+    // Only add the top level region as activating region if the entire function
+    // can be called in mimicry mode.
+    for (auto &MBB : *MF)
+      Blocks.insert(&MBB);
+    LinearizationResult::Edge Edge = {MDT->getRoot(), nullptr};
+    Result.ActivatingRegions.insert(
+        {Edge, ActivatingRegion(nullptr, MDT->getRoot(), nullptr, Blocks)});
+  }
 
   for (auto &Edge : Result.ActivatingEdges) {
     auto *Branch = Edge.first;
@@ -195,7 +199,8 @@ namespace llvm {
 
 FunctionPass *createAMiLinearizationAnalysisPass(bool AnalysisOnly,
                                                  int Method) {
-  return new AMiLinearizationAnalysis(AnalysisOnly, (LinearizationMethod)Method);
+  return new AMiLinearizationAnalysis(AnalysisOnly,
+                                      (LinearizationMethod)Method);
 }
 
 } // namespace llvm

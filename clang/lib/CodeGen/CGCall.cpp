@@ -2186,6 +2186,8 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
       FuncAttrs.addAttribute(llvm::Attribute::NoDuplicate);
     if (TargetDecl->hasAttr<ConvergentAttr>())
       FuncAttrs.addAttribute(llvm::Attribute::Convergent);
+    if (TargetDecl->hasAttr<MimicableAttr>())
+      FuncAttrs.addAttribute(llvm::Attribute::Mimicable);
 
     if (const FunctionDecl *Fn = dyn_cast<FunctionDecl>(TargetDecl)) {
       AddAttributesFromFunctionProtoType(

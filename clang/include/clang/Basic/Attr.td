@@ -1825,6 +1825,13 @@ def Convergent : InheritableAttr {
   let SimpleHandler = 1;
 }
 
+def Mimicable : InheritableAttr {
+  let Spellings = [Clang<"mimicable">];
+  let Subjects = SubjectList<[Function]>;
+  let Documentation = [MimicableDocs];
+  let SimpleHandler = 1;
+}
+
 def NoInline : DeclOrStmtAttr {
   let Spellings = [Keyword<"__noinline__">, GCC<"noinline">,
                    CXX11<"clang", "noinline">, C2x<"clang", "noinline">,

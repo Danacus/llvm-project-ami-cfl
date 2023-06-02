@@ -83,6 +83,8 @@ def Cold : EnumAttr<"cold", [FnAttr]>;
 /// Can only be moved to control-equivalent blocks.
 def Convergent : EnumAttr<"convergent", [FnAttr]>;
 
+def Mimicable : EnumAttr<"mimicable", [FnAttr]>;
+
 /// Marks function as being in a hot path and frequently called.
 def Hot: EnumAttr<"hot", [FnAttr]>;
 

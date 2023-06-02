@@ -1346,6 +1346,13 @@ Sample usage:
   }];
 }
 
+def MimicableDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+Only functions annotated with ``mimicable`` may be called in mimicry mode.
+  }];
+}
+
 def NoSplitStackDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{

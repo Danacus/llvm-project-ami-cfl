@@ -119,6 +119,8 @@ bool PersistencyAnalysisPass::runOnMachineFunction(MachineFunction &MF) {
   PersistentRegionInputMap.clear();
 
   for (auto &Pair : ALA->ActivatingRegions) {
+    LLVM_DEBUG(errs() << "Activating Region:\n");
+    LLVM_DEBUG(Pair.getSecond().dump());
     analyzeRegion(MF, &Pair.getSecond());
   }
 

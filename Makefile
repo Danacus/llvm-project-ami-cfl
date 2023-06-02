@@ -4,16 +4,16 @@ CMAKE_FLAGS_LLVM =
 
 MAKEFILE_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-# BUILD_TYPE ?= Debug
-BUILD_TYPE ?= Release
+BUILD_TYPE ?= Debug
+# BUILD_TYPE ?= Release
 JOBS       ?= 16
 
 PACKAGE ?= morpheus
 
-# BUILDDIR     ?= $(MAKEFILE_DIR)build
-# INSTALLDIR   ?= $(MAKEFILE_DIR)install
-BUILDDIR     ?= $(MAKEFILE_DIR)build_release
-INSTALLDIR   ?= $(MAKEFILE_DIR)dist
+BUILDDIR     ?= $(MAKEFILE_DIR)build
+INSTALLDIR   ?= $(MAKEFILE_DIR)install
+# BUILDDIR     ?= $(MAKEFILE_DIR)build_release
+# INSTALLDIR   ?= $(MAKEFILE_DIR)dist
 
 DISTDIR        ?= $(MAKEFILE_DIR)dist
 DISTBUILDDIR   ?= $(DISTDIR)/build
