@@ -20,6 +20,59 @@ The following LLVM options can be used to configure control flow linearization m
 | -riscv-enable-molnar-linearization | true, **false**              | Enable linearization using Molnar's method, based on state-of-the-art research of Borrello et al. and Wu et al.                                                                                                                                                    |
 | -riscv-ami-general-linearization   | true, **false**              | When linearization using AMi is enabled, enable linearization of reducible control flow by using the method based on Partial Control Flow Linearization by Moll and Hack. If set to false, secret-dependent branches in the input IR are assumed to be structured. |
 
+## Example of Annotated Program
+
+Below is an example of an annotated program. Note that at the time of writing this README, support for the upcoming C2x standard must be enabled in clang with `-std=c2x`.
+
+```c
+// Macro to make annotation of types easier
+#define _secret_ [[clang::annotate_type("secret")]]
+
+// Only needed for linearization with Molnar's method, set to 0xffffffff initially
+#define CFL_VAR  __attribute__((section("cfl_data")))
+CFL_VAR unsigned int cfl_taken = (unsigned)-1;
+
+static int v;
+
+// This function is marked as mimicable, hence it can safely be called while in mimicry mode
+[[clang::noinline, clang::mimicable]]
+static void foo(int i) {
+  v++;
+}
+
+// This function takes a secret integer a and public integer b as input, and returns a secret integer
+int _secret_ ifthenloop(int _secret_ a, int b) {
+  v = 0;
+
+  if (a < b) {
+    int i;
+
+    #pragma clang loop unroll(disable)
+    for (i=0; i<3; i++) {
+      foo(i);
+    }
+  }
+
+  return v;
+}
+
+int main(void) {
+  // When linearized, both function calls should take the same number of cycles to execute
+  (void) ifthenloop(1, 2);
+  (void) ifthenloop(2, 1);
+
+  return 0;
+}
+```
+
+To compile and harden this example, the following command can be used:
+
+`clang -nostdlib -O3 --target=riscv32 -march=rv32im -std=c2x -mllvm -riscv-enable-ami-linearization=true -mllvm -riscv-ami-general-linearization=true main.c`
+
+Alternatively, `llc` can be invoked on IR code to generate RISC-V assembly:
+
+`llc -march=riscv32 -riscv-enable-ami-linearization=true -riscv-ami-general-linearization=true main.ll -o main.s`
+
 (original README below)
 
 # The LLVM Compiler Infrastructure
