@@ -1,3 +1,27 @@
+# LLVM Compiler with Control Flow Linearization using Architectural Mimicry (AMi)
+
+This repository contains LLVM 16 extended with:
+
+- Secrecy labels in clang, lowered to function parameter attributes in LLVM IR, and further lowered to the backend through the SelectionDAG.
+- Automatic control flow linearization making use of architectural mimicry (RISC-V backend).
+
+References:
+
+- "Compiler Support for Control-Flow Linearization Leveraging Hardware Defenses", master's thesis of Daan Vanoverloop (that's me!): TODO LINK
+- "Hardware Support to Accelerate Side-channel Resistant Programs / Architectural Mimicry" by Winderix et al.: TODO FIX TITLE AND LINK
+
+## Usage instructions
+
+The following LLVM options can be used to configure control flow linearization methods:
+
+| Option                             | Values (default in **bold**) | Description                                                                                                                                                                                                                                                        |
+|------------------------------------|------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| -riscv-enable-ami-linearization    | true, **false**              | Enable linearization using architectural mimicry (AMi)                                                                                                                                                                                                             |
+| -riscv-enable-molnar-linearization | true, **false**              | Enable linearization using Molnar's method, based on state-of-the-art research of Borrello et al. and Wu et al.                                                                                                                                                    |
+| -riscv-ami-general-linearization   | true, **false**              | When linearization using AMi is enabled, enable linearization of reducible control flow by using the method based on Partial Control Flow Linearization by Moll and Hack. If set to false, secret-dependent branches in the input IR are assumed to be structured. |
+
+(original README below)
+
 # The LLVM Compiler Infrastructure
 
 This directory and its sub-directories contain the source code for LLVM,
