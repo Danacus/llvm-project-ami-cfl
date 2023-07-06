@@ -7,8 +7,8 @@ This repository contains LLVM 16 extended with:
 
 References:
 
-- "Compiler Support for Control-Flow Linearization Leveraging Hardware Defenses", master's thesis of Daan Vanoverloop (that's me!): TODO LINK
-- "Hardware Support to Accelerate Side-channel Resistant Programs / Architectural Mimicry" by Winderix et al.: TODO FIX TITLE AND LINK
+- [Compiler Support for Control-Flow Linearization Leveraging Hardware Defenses](https://daan.vanoverloop.xyz/masters-thesis-ami-pcfl.pdf), master's thesis of Daan Vanoverloop (that's me!)
+- "Hardware Support to Accelerate Side-channel Resistant Programs" by Winderix et al. (under submission)
 
 ## Usage instructions
 
